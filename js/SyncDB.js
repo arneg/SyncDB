@@ -31,7 +31,11 @@ SyncDB.LocalField = Base.extend({
 	}
     }
 });
-SyncDB.LocalConfig = new SyncDB.LocalField("_syncdb", new Serialization...);
+SyncDB.LocalConfig = new SyncDB.LocalField("_syncdb",
+					   new Serialization.Types.Struct({
+						version : new Serialization.Types.Integer(),
+						schema : new SyncDB.Serialization.Schema(),
+					   }));
 SyncDB.Schema = Base.extend({
     hashCode : function() {
 	return 1;
@@ -155,7 +159,37 @@ SyncDB.LocalTable = Base.extend({
 	this.schema = schema;
     }
 });
-Sync.DB.Types = {
+SyncDB.Flags = {
+    Base : Base.extend({ }),
+};
+SyncDB.Flags.Unique = SyncDB.Flags.Base.extend({ 
+    is_unique : function() {
+	return 1;
+    }
+});
+SyncDB.Flags.Index = SyncDB.Flags.Base.extend({ 
+    is_indexed : function() {
+	return 1;
+    }
+});
+SyncDB.Flags.Auto = SyncDB.Flags.Base.extend({ });
+SyncDB.Flags.Sync = SyncDB.Flags.Base.extend({
+    is_synced : function() { 
+	return 1; 
+    }
+});
+function sha256(s) {
+    return "SHA256: " + s;
+}
+SyncDB.Flags.Hashed = SyncDB.Flags.Base.extend({
+    transform : function(f) {
+	return function(data) {
+	    return sha256(f(data));
+	}
+    }
+});
+SyncDB.Flags.AutoInc = SyncDB.Flags.Auto.extend({ });
+SyncDB.Types = {
     Base : Base.extend({
 	constructor : function() {
 	    this.flags = Array.prototype.concat.call(arguments);
@@ -183,22 +217,15 @@ Sync.DB.Types = {
 	get_key : function(namespace, o) {
 	    return namespace + "_" + o.toString();
 	}
-    })
+    }),
 };
-
+SyncDB.Types.Integer = SyncDB.Types.Base.extend({
+    function : get_parser() {
+	return new Serialization.Types.Integer();
+    },
+});
 SyncDB.Types.String : SyncDB.Types.Base.extend({
-});
-
-var o = new SyncDB.Table({
-    id : Integer(Index(), FullTextSearch()),
-    name : Foo()
-    foo : Integer(Index())
- });
-
-o.search({ id : .., name : "John" }, function(error, rows) {
-});
-o.search_id(23, function (error, row) {
-o.get_by_id(23, function (error, row) {
-});
-o.get_by_foo(23, function (error, row) {
+    function : get_parser() {
+	return new Serialization.Types.String();
+    },
 });
