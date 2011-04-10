@@ -88,25 +88,30 @@ SyncDB.MappingIndex = SyncDB.LocalField.extend({
     },
     get : function(index) {
 	if (!this.value) this.base(index);
-	return this.value[index];
+	if (!this.value || !this.value[index]) return [];
+	return [ this.value[index] ];
     }
 });
 SyncDB.MultiIndex = SyncDB.LocalField.extend({
     constructor : function(name, type, id) {
 	this.type = type;
 	this.id = id;
-	this.base(new Serialization.Mapping(this.type, this.is));
+	this.base(name, new serialization.Object(new serialization.SimpleSet()));
     },
     set : function(index, id) {
 	if (!this.value) 
 	    this.value = { };
-	this.value[index] = id;
+	if (!this.value[index]) {
+	    this.value[index] = { };
+	}
+	this.value[index][id] = { };
 	// adding something can be done cheaply, by appending the tuple
 	this.base();
     },
     get : function(index) {
 	if (!this.value) this.base();
-	return this.value[index];
+	if (!this.value || !this.value[index]) return [];
+	return UTIL.keys(this.value[index]);
     }
 });
 SyncDB.Serialization = {};
@@ -313,8 +318,10 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	});
     },
     index : function(name, field_type, key_type) {
-	if (key_type.is_unique)
+	if (field_type.is_unique)
 	    return new SyncDB.MappingIndex("_syncdb_I"+name, field_type, key_type);
+	else if (field_type.is_indexed) 
+	    return new SyncDB.MultiIndex("_syncdb_I"+name, field_type, key_type);
 	
 	return null;
     },
@@ -334,9 +341,30 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	    if (type.is_cached)
 		return UTIL.make_method(this, function(value, callback) {
 		    // probe the index and check sync.
-		    var id = index.get(value);
-		    if (id) {
-			return f(id, callback);
+		    var ids = index.get(value);
+		    console.log("ids: %o\n", ids);
+		    if (ids.length) {
+			if (ids.length == 1) {
+			    return f(ids[0], callback);
+			}
+			var failed = 0;
+			var c = 0;
+			var aggregate = function(error, row) {
+			    if (error) {
+				if (!failed) {
+				    failed = 1;
+				    callback(error, row);
+				}
+				return;
+			    }
+			    ids[c++] = row;
+			    if (c == ids.length) callback(0, ids);
+			};
+			// here comes your event aggregator!
+			for (var i = 0; i < ids.length; i++) {
+			    f(ids[i], aggregate);
+			}
+			return;
 		    } 
 
 		    return callback(new SyncDB.Error.NoSync());
@@ -344,9 +372,9 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	    else if (type.is_synced) 
 		return UTIL.make_method(this, function(value, callback) {
 		    // probe the index and check sync.
-		    var id = index.get(value);
-		    if (id) {
-			return f(id, callback);
+		    var ids = index.get(value);
+		    if (ids.length) {
+			return f(ids[0], callback);
 		    } return callback(new SyncDB.Error.NotFound());
 		});
 	}
