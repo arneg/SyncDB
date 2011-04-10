@@ -1,0 +1,19 @@
+JS      ================
+     SyncDB.LocalTable
+         - add support for indexing
+            * a mapping (int and string are okay to use for js objects directly)
+            * store this serialized in a different global localStorage slot. this
+              would be a subclass of SyncDB.LocalField
+     SyncDB.MeteorTable(Meteor.Channel)
+         - use multiplexing transport
+         - protocol would be RPC
+
+ PIKE    ================
+     schema = SyncDB.Schema("contacts", {
+         // here be dragons
+         "id" : SyncDB.Types.Integer(SyncDB.Flags.Key()),
+         "fullname" : SyncDB.Types.String(SyncDB.MySQL.Join("id", "contacts.id"), SyncDB.MySQL.Fetch("users.fullname")),
+         "email" : SyncDB.Types.String(),
+         "interests" : SyncDB.Types.Array(SyncDB.Types.String(), SyncDB.MySQL.Fetch("user_interests.interest"), SyncDB.MySQL.Join("id", "user_interests.user_id")),
+     });
+     SyncDB.MeteorTable(name, schema, SyncDB.MySQL.Table(mysql_connection);
