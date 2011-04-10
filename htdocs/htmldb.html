@@ -1,5 +1,25 @@
-<script type="text/javascript" src="js/SyncDB.js"></script>
-<script type="text/javascript"><!--
-//-->
+<script type="text/javascript" src="../js/ppp/Base.js"></script>
+<script type="text/javascript" src="../js/ppp/utf8.js"></script>
+<script type="text/javascript" src="../js/ppp/util.js"></script>
+<script type="text/javascript" src="../js/ppp/serialization.js"></script>
+<script type="text/javascript" src="../js/sha256.js"></script>
+<script type="text/javascript" src="../js/SyncDB.js"></script>
+<script type="text/javascript">
+    var db = new SyncDB.LocalTable("test", 
+	new SyncDB.Schema({
+	    id : new SyncDB.Types.Integer(new SyncDB.Flags.Key()),
+	    name : new SyncDB.Types.String(),
+	})
+    );
+    function indices(obj) {
+	var a = [];
+	for (var x in obj) {
+	    a.push(x);
+	}
+
+	return a;
+    }
+</script>
 <body>
 <h1>Use the javascript console!</h1>
+
