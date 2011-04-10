@@ -1,3 +1,15 @@
+CONCEPTS ====================
+Schema hashing:
+    * use the atom encoding for the schema
+    * sign code (the schema using the private key
+		 of the distributer)
+    * check signature, by hashing the schema and
+      checking the signature using public key of
+      distributer
+
+// THIS is called entanglement
+
+
 JS      ================
      SyncDB.LocalTable
          - add support for indexing
@@ -15,14 +27,20 @@ JS      ================
          "fullname" : SyncDB.Types.String(SyncDB.MySQL.Join("id", "contacts.id"), SyncDB.MySQL.Fetch("users.fullname")),
          "email" : SyncDB.Types.String(SyncDB.Flags.Hash(SHA256)),
          "interests" : SyncDB.Types.Array(SyncDB.Types.String(), SyncDB.MySQL.Fetch("user_interests.interest"), SyncDB.MySQL.Join("id", "user_interests.user_id")),
+	 "lifespan" : SyncDB.Types.Range(SyncDB.Types.Date(), SyncDB.MySQL.Fetch("contacts.birth", "contacts.death"))
      });
-     SyncDB.MeteorTable(name, schema, SyncDB.MySQL.Table(mysql_connection);
+     SyncDB.MeteorTable(name, schema, SyncDB.MySQL.Table(mysql_connection));
+     SyncDB.MeteorTable(name, schema, SyncDB.CurveCP.Table("sldkjfsldkjfalksdjflksjadfkljsadrwerklwejf.webhaven.eu:4404"));
 
      class Undef {
 	inherit Base;
 
 	Base `|(Base o) {
 	    return Or(this, o);
+	}
+
+	Base `&(Base o) {
+	    return And(this, o);
 	}
      }
 
@@ -32,11 +50,32 @@ JS      ================
 	    diff_type = Mapping(Integer(), type|Undef);
 	}
 	Serialization.Atom diff(array a, array b) {
-	    mapping m1 = mkmapping(enumerate(sizeof(a)), a);
-	    mapping m2 = mkmapping(enumerate(sizeof(b)), b);
-	    mapping diff = m2 - m1;
+	    mapping diff = ([]);
+	    int i;
+
+	    for (i = 0; i < min(sizeof(a), sizeof(b)); i++) {
+		if (a[i] != b[i]) diff[i] = b[i];
+	    }
+
+	    if (sizeof(a) < sizeof(b)) {
+		for (i; i < sizeof(b), i++) diff[i] = b[i];
+	    } else {
+		diff[i] = undef;
+	    }
 
 	    return diff_type->encode(diff);
+	}
+
+	array apply(array a, Serialization.Atom atom) {
+	    mapping diff = diff_type->decode(atom);
+	    array indices = sort(indices(diff));
+	    for (int i = 0; i < sizeof(indices); i++) {
+		if (diff[i] == undef) {
+		    return a[0..i-1];
+		}
+		a[i] = diff[i];
+	    }
+	    return a;
 	}
      }
     
