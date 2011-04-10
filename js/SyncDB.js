@@ -284,7 +284,9 @@ SyncDB.Table = Base.extend({
 		else console.log("   is key.\n");
 
 		this["get_by_"+field] = this.generate_get(field, schema[field]);
-		this["set_by_"+field] = this.generate_set(field, schema[field]);
+
+		if (schema[field].is_unique)
+		    this["set_by_"+field] = this.generate_set(field, schema[field]);
 	    }
 	}
     },
@@ -407,10 +409,14 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 		console.log("index missing: %o, %o", name, type);
 		return null;
 	    }
-	    return UTIL.make_method(this, function(value, row, callback) {
-		index.set(value, row[key]);
-		return f(row[key], row, callback);
-	    });
+	    
+	    if (type.is_unique)
+		return UTIL.make_method(this, function(value, row, callback) {
+		    index.set(value, row[key]);
+		    return f(row[key], row, callback);
+		});
+	    else 
+	        return null;
 	}
     }
 });
