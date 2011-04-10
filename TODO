@@ -13,7 +13,37 @@ JS      ================
          // here be dragons
          "id" : SyncDB.Types.Integer(SyncDB.Flags.Key()),
          "fullname" : SyncDB.Types.String(SyncDB.MySQL.Join("id", "contacts.id"), SyncDB.MySQL.Fetch("users.fullname")),
-         "email" : SyncDB.Types.String(),
+         "email" : SyncDB.Types.String(SyncDB.Flags.Hash(SHA256)),
          "interests" : SyncDB.Types.Array(SyncDB.Types.String(), SyncDB.MySQL.Fetch("user_interests.interest"), SyncDB.MySQL.Join("id", "user_interests.user_id")),
      });
      SyncDB.MeteorTable(name, schema, SyncDB.MySQL.Table(mysql_connection);
+
+     class Undef {
+	inherit Base;
+
+	Base `|(Base o) {
+	    return Or(this, o);
+	}
+     }
+
+     class List {
+	Base diff_type;
+	void create(Base type) {
+	    diff_type = Mapping(Integer(), type|Undef);
+	}
+	Serialization.Atom diff(array a, array b) {
+	    mapping m1 = mkmapping(enumerate(sizeof(a)), a);
+	    mapping m2 = mkmapping(enumerate(sizeof(b)), b);
+	    mapping diff = m2 - m1;
+
+	    return diff_type->encode(diff);
+	}
+     }
+    
+     object o = Serialization.String();
+     o->diff("foo", "bar") == Atom("_diff_string", "bar");
+     o->apply("foo", o->diff("foo", "bar")) == "bar";
+     object o = Serialization.List();
+     o->diff(({ 0, 3, 4, 5 }), ({ 4, 3, 4, 9, 10 })) == Atom("_list_diff", ([ 0 : 4, 3 : 9, 4 : 10 ]));
+     o->diff(({ 0, 3, 4, 5 }), ({ 4, 3, 4 })) == Atom("_list_diff", ([ 0 : 4, 3 : Serialization.undef, 4 : Serialization.undef ]));
+
