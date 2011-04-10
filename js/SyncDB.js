@@ -410,13 +410,10 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 		return null;
 	    }
 	    
-	    if (type.is_unique)
-		return UTIL.make_method(this, function(value, row, callback) {
-		    index.set(value, row[key]);
-		    return f(row[key], row, callback);
-		});
-	    else 
-	        return null;
+	    return UTIL.make_method(this, function(value, row, callback) {
+		index.set(value, row[key]);
+		return f(row[key], row, callback);
+	    });
 	}
     }
 });
