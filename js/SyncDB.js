@@ -342,7 +342,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	} else if (type.is_indexed) {
 	    var index = this.I[name];
 	    if (!index) throw("Could not find index "+name);
-	    if (type.is_cached)
+	    if (!type.is_unique)
 		return UTIL.make_method(this, function(value, callback) {
 		    // probe the index and check sync.
 		    var ids = index.get(value);
