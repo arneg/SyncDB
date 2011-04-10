@@ -377,7 +377,11 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 		    var ids = index.get(value);
 		    if (ids.length) {
 			return f(ids[0], callback);
-		    } return callback(new SyncDB.Error.NotFound());
+		    } 
+		    if (type.is_unique) 
+			return callback(new SyncDB.Error.NotFound());
+		    else
+			return callback(0, []);
 		});
 	}
 
