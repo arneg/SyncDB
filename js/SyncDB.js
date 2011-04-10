@@ -221,7 +221,7 @@ SyncDB.Table = Base.extend({
     generate_get : function(name, type) {
 	var get = this.get(name, type);
 	var db = this.db;	
-	if (!get) return null
+	if (!get) throw("could not generate get()\n");
 	return function(value, callback) {
 	    if (!callback) callback = SyncDB.getcb;
 	    get(value, function(error, row) {
@@ -239,7 +239,7 @@ SyncDB.Table = Base.extend({
     generate_set : function(name, type) {
 	var set = this.set(name, type);
 	var db = this.db;
-	if (!set) return null
+	if (!set) throw("could not generate get()\n");
 	return function(key, row, callback) {
 	    if (!callback) callback = SyncDB.setcb;
 	    row[name] = key;
@@ -339,7 +339,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	    return f;
 	} if (type.is_indexed) {
 	    var index = this["index_"+name];
-	    if (!index) return null;
+	    if (!index) throw("Could not find index "+name);
 	    if (type.is_cached)
 		return UTIL.make_method(this, function(value, callback) {
 		    // probe the index and check sync.
