@@ -8,7 +8,7 @@
     var db = new SyncDB.LocalTable("test", 
 	new SyncDB.Schema({
 	    id : new SyncDB.Types.Integer(new SyncDB.Flags.Key()),
-	    name : new SyncDB.Types.String(),
+	    name : new SyncDB.Types.String(new SyncDB.Flags.Cached()),
 	})
     );
     function indices(obj) {
