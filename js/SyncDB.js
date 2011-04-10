@@ -371,7 +371,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 
 		    return callback(new SyncDB.Error.NoSync());
 		});
-	    else if (type.is_synced) 
+	    else// if (type.is_synced) 
 		return UTIL.make_method(this, function(value, callback) {
 		    // probe the index and check sync.
 		    var ids = index.get(value);
