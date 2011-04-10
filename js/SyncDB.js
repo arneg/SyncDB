@@ -1,9 +1,17 @@
 SyncDB = {
     Error : {
-	NoSync : Base.extend({ }),
-	Set : Base.extend({ }),
-	NoIndex : Base.extend({ }),
-	NotFound : Base.extend({ })
+	NoSync : Base.extend({ 
+	    toString : function () { return "NoSync"; },
+	}),
+	Set : Base.extend({ 
+	    toString : function () { return "Set"; },
+			  }),
+	NoIndex : Base.extend({ 
+	    toString : function () { return "NoIndex"; },
+			      }),
+	NotFound : Base.extend({ 
+	    toString : function () { return "NotFound"; },
+			       })
     },
     prune : function() {
 	for (var i = 0; i < localStorage.length; i ++) {
@@ -20,6 +28,7 @@ SyncDB = {
 	    console.log("SUCCESS: saved %o\n", row);
 	} else {
 	    console.log("FAIL: could not save %o\n", error);
+	    console.trace();
 	}
     },
     getcb : function(error, row) {
@@ -27,6 +36,7 @@ SyncDB = {
 	    console.log("FETCHED: %o\n", row);
 	} else {
 	    console.log("FAIL: could not fetch %o\n", error);
+	    console.trace();
 	}
     }
 };
@@ -58,8 +68,45 @@ SyncDB.LocalField = Base.extend({
 	if (this.value == undefined) {
 	    delete localStorage[this.name];
 	} else {
+	    console.log("name: %o, parser: %o, this: %o\n", this.name, this.parser, this);
 	    localStorage[this.name] = this.parser.encode(this.value).render();
 	}
+    }
+});
+SyncDB.MappingIndex = SyncDB.LocalField.extend({
+    constructor : function(name, type, id) {
+	this.type = type;
+	this.id = id;
+	this.base(name, new serialization.Object(this.id.parser()));
+    },
+    set : function(index, id) {
+	if (!this.value) 
+	    this.value = { };
+	this.value[index] = id;
+	// adding something can be done cheaply, by appending the tuple
+	this.base();
+    },
+    get : function(index) {
+	if (!this.value) this.base(index);
+	return this.value[index];
+    }
+});
+SyncDB.MultiIndex = SyncDB.LocalField.extend({
+    constructor : function(name, type, id) {
+	this.type = type;
+	this.id = id;
+	this.base(new Serialization.Mapping(this.type, this.is));
+    },
+    set : function(index, id) {
+	if (!this.value) 
+	    this.value = { };
+	this.value[index] = id;
+	// adding something can be done cheaply, by appending the tuple
+	this.base();
+    },
+    get : function(index) {
+	if (!this.value) this.base();
+	return this.value[index];
     }
 });
 SyncDB.Serialization = {};
@@ -112,12 +159,14 @@ SyncDB.Serialization.Schema = serialization.Object.extend({
 SyncDB.Schema = Base.extend({
     constructor : function(m) {
 	this.m = m;
+	this.key;
 	for (var name in m) if (m.hasOwnProperty(name)) {
+	    if (m[name].is_key) this.key = name;
 	    this[name] = m[name];
 	}
     },
     hashCode : function() {
-	return this.m ? UTIL.keys(this.m).length : 0;
+	return sha256_digest(this.parser().encode(this).render());
     },
     // maybe in the future, the schema will generate its own parser.
     parser : function() {
@@ -161,9 +210,13 @@ SyncDB.TableConfig = SyncDB.LocalField.extend({
     }
 });
 SyncDB.Table = Base.extend({
+    index : function() {
+	return null;
+    },
     generate_get : function(name, type) {
 	var get = this.get(name, type);
 	var db = this.db;	
+	if (!get) return null
 	return function(value, callback) {
 	    if (!callback) callback = SyncDB.getcb;
 	    get(value, function(error, row) {
@@ -181,6 +234,7 @@ SyncDB.Table = Base.extend({
     generate_set : function(name, type) {
 	var set = this.set(name, type);
 	var db = this.db;
+	if (!set) return null
 	return function(key, row, callback) {
 	    if (!callback) callback = SyncDB.setcb;
 	    row[name] = key;
@@ -207,11 +261,23 @@ SyncDB.Table = Base.extend({
 	this.parser = schema.parser();
 	this.db = db;
 	if (db) db.add_update_callback(UTIL.make_method(this, this.update));
-	//console.log("schema: %o\n", schema);
+	console.log("schema: %o\n", schema);
+	var key;
 	for (var field in schema) if (schema.hasOwnProperty(field)) {
-	    //console.log("scanning %s:%o.\n", field, schema[field]);
-	    if (schema[field].is_indexed || schema[field].is_key) {
-		//console.log("   is indexed.\n");
+	    if (schema[field].is_key) key = schema[field];
+	}
+
+	if (!key) throw(SyncDB.Error.Retard("Man, this schema wont work.\n"));
+
+	for (var field in schema) if (schema.hasOwnProperty(field)) {
+	    console.log("scanning %s:%o.\n", field, schema[field]);
+	    if (schema[field].is_key || schema[field].is_indexed) {
+		console.log("   is indexed.\n");
+
+		if (!schema[field].is_key)
+		    this["index_"+field] = this.index(field, schema[field], key);
+		else console.log("   is key.\n");
+
 		this["get_by_"+field] = this.generate_get(field, schema[field]);
 		this["set_by_"+field] = this.generate_set(field, schema[field]);
 	    }
@@ -223,43 +289,66 @@ SyncDB.Table = Base.extend({
 });
 SyncDB.LocalTable = SyncDB.Table.extend({
     constructor : function(name, schema, db) { 
-	this.base(name, schema, db);
 	this.config = new SyncDB.TableConfig("_syncdb_"+name);
 	if (this.config) {
 	    if (this.config.schema().hashCode() != schema.hashCode()) {
 		this.prune();
-	    } else return;
+	    } else {
+		this.base(name, schema, db);
+		return;
+	    }
 	}
 
 	this.config.schema(schema);
+	this.base(name, schema, db);
 	if (db) db.get_version(function(version) {
 	    if (version > this.version()) {
 		// update all missing fields, depending on sync. maybe all
 		//
+		// server would no which things are either
+		//  - fully synced
+		//  - cached (^^ works the same here)
+		//  - irrelevant
 	    }
 	});
     },
+    index : function(name, field_type, key_type) {
+	if (key_type.is_unique)
+	    return new SyncDB.MappingIndex("_syncdb_I"+name, field_type, key_type);
+	
+	return null;
+    },
     get : function(name, type) {
+	var key = this.config.schema().key;
+	var f = UTIL.make_method(this, function(value, callback) {
+	    var k = type.get_key(this.name, key, value);
+	    //console.log("trying to fetch %o from local storage %o.\n", key, [ this.name, name, value] );
+	    if (localStorage[k]) callback(0, this.parser.decode(serialization.parse_atom(localStorage[k])));
+	    else callback(new SyncDB.Error.NotFound());
+	});
 	if (type.is_key) {
-	    return UTIL.make_method(this, function(value, callback) {
-		var key = type.get_key(this.name, name, value);
-		console.log("trying to fetch %o from local storage %o.\n", key, [ this.name, name, value] );
-		if (localStorage[key]) callback(0, this.parser.decode(serialization.parse_atom(localStorage[key])));
-		else callback(new SyncDB.Error.NotFound());
-	    });
-	} else if (type.is_indexed) {
-	    return UTIL.make_method(this, function(value, callback) {
-		// probe the index and check sync.
-		var v;
-		var index = this.config.index(name);
-		if (!index) return callback(new SyncDB.Error.NoIndex(name), value);
-		v = index.get(value);
-		if (v || index.is_sync()) {
-		    return callback(0, v);
-		} 
+	    return f;
+	} if (type.is_indexed) {
+	    var index = this["index_"+name];
+	    if (!index) return null;
+	    if (type.is_cached)
+		return UTIL.make_method(this, function(value, callback) {
+		    // probe the index and check sync.
+		    var id = index.get(value);
+		    if (id) {
+			return f(id, callback);
+		    } 
 
-		return callback(new SyncDB.Error.NoSync());
-	    });
+		    return callback(new SyncDB.Error.NoSync());
+		});
+	    else if (type.is_synced) 
+		return UTIL.make_method(this, function(value, callback) {
+		    // probe the index and check sync.
+		    var id = index.get(value);
+		    if (id) {
+			return f(id, callback);
+		    } return callback(new SyncDB.Error.NotFound());
+		});
 	}
 
 	return null;
@@ -270,18 +359,30 @@ SyncDB.LocalTable = SyncDB.Table.extend({
     prune : function() { // delete everything
     },
     set : function(name, type) {
+	var key = this.config.schema().key;
+	var f = UTIL.make_method(this, function(value, row, callback) {
+	    console.log("parser: %o\n", this.parser);
+	    try {
+		localStorage[type.get_key(this.name, key, value)] = this.parser.encode(row).render();
+		callback(0, row);
+	    } catch(err) {
+		console.log("SET FAILED: %o", err);
+		callback(new SyncDB.Error.Set(this, row));
+	    }
+	});
 	if (type.is_key) {
-	    return UTIL.make_method(this, function(value, row, callback) {
-		try {
-		    localStorage[type.get_key(this.name, name, value)] = this.parser.encode(row).render();
-		    callback(0, row);
-		} catch(err) {
-		    console.log("%o", err);
-		    callback(new SyncDB.Error.Set(this, row));
-		}
-	    });
+	    return f;
 	} else if (type.is_indexed) {
 	    // check for name in index and store there. could fail if it is not found
+	    var index = this["index_"+name];
+	    if (!index) {
+		console.log("index missing: %o, %o", name, type);
+		return null;
+	    }
+	    return UTIL.make_method(this, function(value, row, callback) {
+		index.set(value, row[key]);
+		return f(row[key], row, callback);
+	    });
 	}
     }
 });
@@ -310,14 +411,17 @@ SyncDB.Flags.Index = SyncDB.Flags.Base.extend({
     },
     is_indexed : 1
 });
-SyncDB.Flags.Auto = SyncDB.Flags.Base.extend({ });
-SyncDB.Flags.Sync = SyncDB.Flags.Base.extend({
+SyncDB.Flags.Cached = SyncDB.Flags.Index.extend({
+    toString : function() {
+	return "Cached";
+    },
+    is_cached : 1
+});
+SyncDB.Flags.Sync = SyncDB.Flags.Index.extend({
     toString : function() {
 	return "Sync";
     },
-    is_synced : function() { 
-	return 1; 
-    }
+    is_synced :1
 });
 SyncDB.Flags.Hashed = SyncDB.Flags.Base.extend({
     toString : function() {
@@ -329,6 +433,7 @@ SyncDB.Flags.Hashed = SyncDB.Flags.Base.extend({
 	}
     }
 });
+SyncDB.Flags.Auto = SyncDB.Flags.Base.extend({ });
 SyncDB.Flags.AutoInc = SyncDB.Flags.Auto.extend({ });
 SyncDB.Types = {
     Base : Base.extend({
