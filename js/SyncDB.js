@@ -221,7 +221,7 @@ SyncDB.Table = Base.extend({
     generate_get : function(name, type) {
 	var get = this.get(name, type);
 	var db = this.db;	
-	if (!get) throw("could not generate get()\n");
+	if (!get) throw("could not generate get() for %o %o\n", name, type);
 	return function(value, callback) {
 	    if (!callback) callback = SyncDB.getcb;
 	    get(value, function(error, row) {
@@ -239,7 +239,7 @@ SyncDB.Table = Base.extend({
     generate_set : function(name, type) {
 	var set = this.set(name, type);
 	var db = this.db;
-	if (!set) throw("could not generate get()\n");
+	if (!set) throw([ "could not generate set() for %o %o\n", name, type] );
 	return function(key, row, callback) {
 	    if (!callback) callback = SyncDB.setcb;
 	    row[name] = key;
@@ -265,6 +265,7 @@ SyncDB.Table = Base.extend({
 	this.name = name;
 	this.parser = schema.parser();
 	this.db = db;
+	this.I = {};
 	if (db) db.add_update_callback(UTIL.make_method(this, this.update));
 	console.log("schema: %o\n", schema);
 	var key;
@@ -279,8 +280,9 @@ SyncDB.Table = Base.extend({
 	    if (schema[field].is_key || schema[field].is_indexed) {
 		console.log("   is indexed.\n");
 
-		if (!schema[field].is_key)
-		    this["index_"+field] = this.index(field, schema[field], key);
+		if (!schema[field].is_key) {
+		    this.I[field] = this.index(field, schema[field], key);
+		}
 		else console.log("   is key.\n");
 
 		this["get_by_"+field] = this.generate_get(field, schema[field]);
@@ -337,8 +339,8 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	});
 	if (type.is_key) {
 	    return f;
-	} if (type.is_indexed) {
-	    var index = this["index_"+name];
+	} else if (type.is_indexed) {
+	    var index = this.I[name];
 	    if (!index) throw("Could not find index "+name);
 	    if (type.is_cached)
 		return UTIL.make_method(this, function(value, callback) {
@@ -404,21 +406,18 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 		callback(new SyncDB.Error.Set(this, row));
 	    }
 	});
-	if (type.is_key) {
-	    return f;
-	} else if (type.is_indexed) {
-	    // check for name in index and store there. could fail if it is not found
-	    var index = this["index_"+name];
-	    if (!index) {
-		console.log("index missing: %o, %o", name, type);
-		return null;
-	    }
-	    
+	if (type.is_indexed || type.is_key) {
 	    return UTIL.make_method(this, function(value, row, callback) {
-		index.set(value, row[key]);
+		if (!row[name]) row[name] = value;
+		for (var i in this.I) {
+		    this.I[i].set(row[i], row[key]);
+		    console.log();
+		}
 		return f(row[key], row, callback);
 	    });
 	}
+
+	console.log("Could not generate set for %o %o", name, type);
     }
 });
 SyncDB.Flags = {
