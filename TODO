@@ -20,6 +20,7 @@ JS      ================
          - use multiplexing transport
          - protocol would be RPC
 
+
  PIKE    ================
      schema = SyncDB.Schema("contacts", {
          // here be dragons
@@ -85,4 +86,8 @@ JS      ================
      object o = Serialization.List();
      o->diff(({ 0, 3, 4, 5 }), ({ 4, 3, 4, 9, 10 })) == Atom("_list_diff", ([ 0 : 4, 3 : 9, 4 : 10 ]));
      o->diff(({ 0, 3, 4, 5 }), ({ 4, 3, 4 })) == Atom("_list_diff", ([ 0 : 4, 3 : Serialization.undef, 4 : Serialization.undef ]));
+
+ISSUES ============
+
+
 
