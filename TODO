@@ -89,5 +89,9 @@ JS      ================
 
 ISSUES ============
 
+Schema extension beyong string
+> my_array : new SyncDB.Types.Array(new SyncDB.Types.String())
+error: TypeError: Result of expression 'SyncDB.Types.Array' [undefined] is not a constructor.
+
 
 
