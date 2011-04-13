@@ -48,15 +48,15 @@ SyncDB.LocalField = Base.extend({
     },
     get : function() {
 	if (!this.value) {
-	    if (localStorage[this.name]) {
-		/*try { */
+	    try {
+		if (localStorage[this.name]) {
 		    this.value = this.parser.decode(serialization.parse_atom(localStorage[this.name]));
-		/*} catch(err) {
-		    console.log("ERROR: %o\n", err);
-		    throw(err);
-		}*/
-	    } else {
-		this.value = undefined;
+		} else {
+		    this.value = undefined;
+		}
+	    } catch(err) {
+		console.log("ERROR: %o\n", err);
+		throw(err);
 	    }
 	}
 	return this.value;
@@ -397,7 +397,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
     set : function(name, type) {
 	var key = this.config.schema().key;
 	var f = UTIL.make_method(this, function(value, row, callback) {
-	    console.log("parser: %o\n", this.parser);
+	    console.log("parser: %o, data: %o\n", this.parser, row);
 	    try {
 		localStorage[type.get_key(this.name, key, value)] = this.parser.encode(row).render();
 		callback(0, row);
