@@ -1,3 +1,4 @@
+// vim:foldmethod=syntax
 SyncDB = {
     Error : {
 	NoSync : Base.extend({ 
@@ -160,7 +161,6 @@ SyncDB.Serialization.Schema = serialization.Object.extend({
 	return new SyncDB.Schema(this.base(atom));
     }
 });
-
 SyncDB.Schema = Base.extend({
     constructor : function(m) {
 	this.m = m;
@@ -174,10 +174,11 @@ SyncDB.Schema = Base.extend({
 	return sha256_digest(this.parser().encode(this).render());
     },
     // maybe in the future, the schema will generate its own parser.
-    parser : function() {
+    parser : function(filter) {
 	var n = {};
 	for (var name in this.m) if (this.m.hasOwnProperty(name)) {
-	    n[name] = this.m[name].parser();
+	    if (!filter || filter(name, this.m[name]))
+		n[name] = this.m[name].parser();
 	}
 	return new serialization.Struct(n);
     }
@@ -215,6 +216,44 @@ SyncDB.TableConfig = SyncDB.LocalField.extend({
     }
 });
 SyncDB.Table = Base.extend({
+    constructor : function(name, schema, db) {
+	this.name = name;
+	this.schema = schema;
+	this.parser = schema.parser();
+	this.parser_in = schema.parser(function(name, type) {
+	    return !type.is_hidden;
+	});
+	this.parser_in = schema.parser(function(name, type) {
+	    return !type.is_hidden;
+	});
+	this.db = db;
+	this.I = {};
+	if (db) db.add_update_callback(UTIL.make_method(this, this.update));
+	console.log("schema: %o\n", schema);
+	var key;
+	for (var field in schema) if (schema.hasOwnProperty(field)) {
+	    if (schema[field].is_key) key = schema[field];
+	}
+
+	if (!key) throw(SyncDB.Error.Retard("Man, this schema wont work.\n"));
+
+	for (var field in schema) if (schema.hasOwnProperty(field)) {
+	    console.log("scanning %s:%o.\n", field, schema[field]);
+	    if (schema[field].is_key || schema[field].is_indexed) {
+		console.log("   is indexed.\n");
+
+		if (!schema[field].is_key) {
+		    this.I[field] = this.index(field, schema[field], key);
+		}
+		else console.log("   is key.\n");
+
+		this["get_by_"+field] = this.generate_get(field, schema[field]);
+
+		if (schema[field].is_unique)
+		    this["set_by_"+field] = this.generate_set(field, schema[field]);
+	    }
+	}
+    },
     index : function() {
 	return null;
     },
@@ -261,39 +300,108 @@ SyncDB.Table = Base.extend({
 	    set(key, row, callback);
 	};
     },
-    constructor : function(name, schema, db) {
-	this.name = name;
-	this.parser = schema.parser();
-	this.db = db;
-	this.I = {};
-	if (db) db.add_update_callback(UTIL.make_method(this, this.update));
-	console.log("schema: %o\n", schema);
-	var key;
-	for (var field in schema) if (schema.hasOwnProperty(field)) {
-	    if (schema[field].is_key) key = schema[field];
-	}
-
-	if (!key) throw(SyncDB.Error.Retard("Man, this schema wont work.\n"));
-
-	for (var field in schema) if (schema.hasOwnProperty(field)) {
-	    console.log("scanning %s:%o.\n", field, schema[field]);
-	    if (schema[field].is_key || schema[field].is_indexed) {
-		console.log("   is indexed.\n");
-
-		if (!schema[field].is_key) {
-		    this.I[field] = this.index(field, schema[field], key);
-		}
-		else console.log("   is key.\n");
-
-		this["get_by_"+field] = this.generate_get(field, schema[field]);
-
-		if (schema[field].is_unique)
-		    this["set_by_"+field] = this.generate_set(field, schema[field]);
-	    }
-	}
-    },
     version : function() {
 	return this.config.version();
+    },
+    add_update_callback : function(cb) {
+	// this gets triggered on set / delete
+    }
+});
+SyncDB.MeteorTable = SyncDB.Table.extend({
+    constructor : function(name, schema, channel, db) {
+	this.requests = {};	
+	this.atom_parser = new serialization.AtomParser();
+	this.base(name, schema, db);
+	var int = new serialization.Integer();
+	var s = new serialization.String();
+	this.in = {
+	    _get : new Serialization.Struct({
+		id : s,
+		row : this.parser_in
+	    }, "_get"),
+	    _update : new Serialization.Struct({
+		id : s,
+		row : this.parser_in
+	    }, "_update"),
+	    _error : new Serialization.Struct({
+		id : s,
+		error : s
+	    }, "_error"),
+	    _set : new Serialization.Struct({
+		id : s,
+		row : this.parser_in
+	    }, "_set")
+	};
+	this.out = {
+	    _get : new Serialization.Struct({
+		id : s,
+		// it does not make sense here to allow for
+		// a SELECT on hidden values. They should only
+		// be set by the client.
+		row : this.parser_in
+	    }, "_get"),
+	    _set : new Serialization.Struct({
+		id : s,
+		row : this.parser_out
+	    }, "_set")
+	};
+
+	channel.set_cb(UTIL.make_method(this, function(data) {
+	    var a = this.atom_parser.parse(data);
+	    for (var i = 0; i < a.length; i++) {
+		var o;
+		if (!this.in[a[i].type]) {
+		    meteor.debug("dont know how to handle %o", a[i]);
+		    continue;
+		}
+		try {
+		    o = this.in[a[i].type].decode(a[i]);
+		} catch (err) {
+		    meteor.debug("decoding %o failed: %o\n", a[i], err);
+		    continue;
+		}
+
+		if (a[i].type == "_update") {
+		    this.call_update_callback(o);
+		    continue;
+		}
+
+		var f = this.requests[o.id];
+
+		if (f) {
+		    if (a[i].type == "_error") {
+			f(o.error);	    
+		    } else {
+			f(0, o.row);	    
+		    }
+		} else meteor.debug("could not find reply handler for %o:%o\n", a[i].type, o);
+	    }
+	});
+    },
+    get_empty_in : function() {
+	var n = {};
+	for (var field in this.schema.m) {
+	    if (!this.schema.m[field].is_hidden) {
+		n[field] = false;
+	    }
+	}
+	return n;
+    },
+    register_request : function(id, callback) {
+	this.requests[id] = callback;
+    },
+    get : function(type, name) {
+	return UTIL.make_method(this, function(value, callback) {
+	    var id = UTIL.get_unique_key(5, this.requests);	
+	    var o = this.get_empty_in();
+	    o[name] = callback;
+	    this.channel.write(this.);
+	});
+    },
+    set : function(type, name) {
+	
+    },
+    update : function() {
     },
 });
 SyncDB.LocalTable = SyncDB.Table.extend({
@@ -419,6 +527,8 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 
 	console.log("Could not generate set for %o %o", name, type);
     }
+    update : function() {
+    },
 });
 SyncDB.Flags = {
     Base : Base.extend({ 
