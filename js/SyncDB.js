@@ -319,7 +319,7 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	this.base(name, schema, db);
 	var int = new serialization.Integer();
 	var s = new serialization.String();
-	this.in = {
+	this.incoming = {
 	    _get : new serialization.Struct({
 		id : s,
 		row : this.parser_in
@@ -355,12 +355,12 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	    var a = this.atom_parser.parse(data);
 	    for (var i = 0; i < a.length; i++) {
 		var o;
-		if (!this.in[a[i].type]) {
+		if (!this.incoming[a[i].type]) {
 		    meteor.debug("dont know how to handle %o", a[i]);
 		    continue;
 		}
 		try {
-		    o = this.in[a[i].type].decode(a[i]);
+		    o = this.incoming[a[i].type].decode(a[i]);
 		} catch (err) {
 		    meteor.debug("decoding %o failed: %o\n", a[i], err);
 		    continue;
