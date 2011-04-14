@@ -57,6 +57,7 @@ SyncDB.LocalField = Base.extend({
 		}
 	    } catch(err) {
 		console.log("ERROR: %o\n", err);
+		console.trace();
 		throw(err);
 	    }
 	}
@@ -376,12 +377,12 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 		    }
 		} else meteor.debug("could not find reply handler for %o:%o\n", a[i].type, o);
 	    }
-	});
+	}));
     },
-    get_empty_in : function() {
+    get_empty : function(cb) {
 	var n = {};
 	for (var field in this.schema.m) {
-	    if (!this.schema.m[field].is_hidden) {
+	    if (!cb || cb(this.schema.m[field])) {
 		n[field] = false;
 	    }
 	}
@@ -393,16 +394,22 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
     get : function(type, name) {
 	return UTIL.make_method(this, function(value, callback) {
 	    var id = UTIL.get_unique_key(5, this.requests);	
-	    var o = this.get_empty_in();
-	    o[name] = callback;
-	    this.channel.write(this.);
+	    var o = this.get_empty(function (type) { return !type.is_hidden; });
+	    o[name] = value;
+	    this.requests[id] = callback;
+	    this.channel.write(this.out._get.encode(o).render());
+	    return id;
 	});
     },
     set : function(type, name) {
-	
-    },
-    update : function() {
-    },
+	return UTIL.make_method(this, function(value, row, callback) {
+	    var id = UTIL.get_unique_key(5, this.requests);	
+	    row[name] = value;
+	    this.requests[id] = callback;
+	    this.channel.write(this.out._set.encode(row).render());
+	    return id;
+	});
+    }
 });
 SyncDB.LocalTable = SyncDB.Table.extend({
     constructor : function(name, schema, db) { 
@@ -526,9 +533,9 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	}
 
 	console.log("Could not generate set for %o %o", name, type);
-    }
-    update : function() {
     },
+    update : function() {
+    }
 });
 SyncDB.Flags = {
     Base : Base.extend({ 
