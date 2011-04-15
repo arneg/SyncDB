@@ -30,6 +30,7 @@ void encode_json() {
     return "SyncDB.Flags.Hash()";
 }
 
+#if 0
 // JS FOLLOWS:
 // ===========================================================
 // this happens automatically
@@ -129,3 +130,4 @@ add_event(row) {
 }
 
 
+#endif

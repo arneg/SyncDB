@@ -1,0 +1,2 @@
+inherit .Index;
+inherit .Unique;
