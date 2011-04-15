@@ -183,7 +183,7 @@ SyncDB.Schema = Base.extend({
 		n[name] = new serialization.Or(new serialization.False(),
 					       this.m[name].parser());
 	}
-	return new serialization.Struct(n);
+	return new serialization.Struct(n, "_schema");
     }
 });
 SyncDB.TableConfig = SyncDB.LocalField.extend({
@@ -226,8 +226,8 @@ SyncDB.Table = Base.extend({
 	this.parser_in = schema.parser(function(name, type) {
 	    return !type.is_hidden;
 	});
-	this.parser_in = schema.parser(function(name, type) {
-	    return !type.is_hidden;
+	this.parser_out = schema.parser(function(name, type) {
+	    return !type.is_hidden && !type.is_automatic;
 	});
 	this.db = db;
 	this.I = {};
@@ -347,8 +347,12 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	    }, "_get"),
 	    _set : new serialization.Struct({
 		id : s,
+		row : this.parser_in
+	    }, "_set"),
+	    _add : new serialization.Struct({
+		id : s,
 		row : this.parser_out
-	    }, "_set")
+	    }, "_add")
 	};
 
 	channel.set_cb(UTIL.make_method(this, function(data) {
@@ -411,9 +415,15 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	    var id = UTIL.get_unique_key(5, this.requests);	
 	    row[name] = value;
 	    this.requests[id] = callback;
-	    this.channel.write(this.out._set.encode({ row : row, id : id }).render());
+	    this.channel.send(this.out._set.encode({ row : row, id : id }).render());
 	    return id;
 	});
+    },
+    add : function(row, callback) {
+	var id = UTIL.get_unique_key(5, this.requests);
+	this.requests[id] = callback;
+	this.channel.send(this.out._add.encode({ row: row, id: id }).render());
+	return id;
     }
 });
 SyncDB.LocalTable = SyncDB.Table.extend({
@@ -450,7 +460,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	return null;
     },
     get : function(name, type) {
-	var key = this.config.schema().key;
+	var key = this.schema.key;
 	var f = UTIL.make_method(this, function(value, callback) {
 	    var k = type.get_key(this.name, key, value);
 	    //console.log("trying to fetch %o from local storage %o.\n", key, [ this.name, name, value] );
@@ -540,6 +550,29 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	console.log("Could not generate set for %o %o", name, type);
     },
     update : function() {
+    },
+    add : function(row, callback) { // TODO:: this should rather make the db a draft and store locally, i guess,
+				    // then send the _add (if this.db exists) and if that returns ok, remove draft status
+				    // (given no other pending modifications), but i'm lost in the get/set/draft logic.
+	var key = this.schema.key;
+	var f = UTIL.make_method(this, function(error, row) {
+	    if (!error) {
+		for (var i in this.I) {
+		    this.I[i].set(row[i], row[key]);
+		    console.log("set %o=%o(%o) in %o(%o)", row[i], row[key], key, this.I[i], i);
+		}
+		localStorage[this.schema[key].get_key(this.name, key, row[key])] = this.parser.encode(row).render();
+		console.log("stored in %o.", this.schema[key].get_key(this.name, key, row[key]));
+	    }
+
+	    callback(error, row);
+	});
+
+	if (this.db) {
+	    this.db.add(row, f);
+	} else {
+	    f(0, row);
+	}
     }
 });
 SyncDB.Flags = {
@@ -589,7 +622,9 @@ SyncDB.Flags.Hashed = SyncDB.Flags.Base.extend({
 	}
     }
 });
-SyncDB.Flags.Auto = SyncDB.Flags.Base.extend({ });
+SyncDB.Flags.Auto = SyncDB.Flags.Base.extend({ 
+    is_automatic: 1,
+});
 SyncDB.Flags.AutoInc = SyncDB.Flags.Auto.extend({ });
 SyncDB.Types = {
     Base : Base.extend({
