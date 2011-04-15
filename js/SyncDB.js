@@ -376,7 +376,7 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 		    }
 		} else meteor.debug("could not find reply handler for %o:%o\n", a[i].type, o);
 	    }
-	});
+	}));
     },
     get_empty_in : function() {
 	var n = {};
@@ -395,7 +395,7 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	    var id = UTIL.get_unique_key(5, this.requests);	
 	    var o = this.get_empty_in();
 	    o[name] = callback;
-	    this.channel.write(this.);
+	    this.channel.write(this.in._get.encode(value).render());
 	});
     },
     set : function(type, name) {
@@ -526,9 +526,9 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	}
 
 	console.log("Could not generate set for %o %o", name, type);
-    }
-    update : function() {
     },
+    update : function() {
+    }
 });
 SyncDB.Flags = {
     Base : Base.extend({ 
