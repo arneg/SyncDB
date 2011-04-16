@@ -8,7 +8,7 @@ SyncDB = {
     throwit : function(err) {
 	console.log("error: %o", err);
 	console.trace();
-	throwit(err);
+	throw(err);
     },
     Error : {
 	NoSync : Base.extend({ 
