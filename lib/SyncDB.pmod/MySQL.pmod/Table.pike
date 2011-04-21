@@ -1,12 +1,11 @@
-string dbname;
+constant TABLE = "foo";
+inherit SyncDB.Table;
+
 Sql.Sql con;
-SyncDB.Schema schema;
 
 void create(string dbname, Sql.Sql con, SyncDB.Schema schema) {
+    ::create(dbname, schema);
     mapping tables = ([ ]), fields = ([ ]);
-    this_program::dbname = dbname;
-    this_program::con = con;
-    this_program::schema = schema;
     // try to generate all the SQL queries and stored procedures
     //
     // 1. determine all tables. if its more than one with complex sum queries,
@@ -19,7 +18,6 @@ void create(string dbname, Sql.Sql con, SyncDB.Schema schema) {
 	    tables[type->table] += ({ field });
 	}
     }
-#endif
 
     foreach (schema->types; string field; object type) {
 	if (type->is_key || type->is_index) {
@@ -27,16 +25,23 @@ void create(string dbname, Sql.Sql con, SyncDB.Schema schema) {
 				 " %s=:fetchby: ", field_s, TABLE, field);
 	}
     }
+#endif
+
+    this_program::con = con;
 }
 
 
-void get(mapping keys, function(int(0..1),array(mapping)|mixed:void) cb) {
+void get(mapping keys, function(int(0..1),array(mapping)|mixed:void) cb2, mixed ... extra) {
     string sql = sprintf("SELECT * FROM %s WHERE 1=1", TABLE);
     int(0..1) noerr;
     array(mapping) rows;
     mixed err;
+    mixed cb(int(0..1) error, mixed bla) {
+	return cb2(error, bla, @extra);
+    };
     
-    if (!Array.all(map(map(map(indices(keys), Function.curry(`->)(schema)), `->, "flags"), `->, "indexable"), Array.any, !=, 0)) {
+    if (!Array.all(map(map(indices(keys), Function.curry(`[])(schema)), `->, "is_index"), `!=, 0)) {
+	werror("!! %O\n", indices(keys));
 	cb(1, "Need indexable field(s).\n"); // needs error type, i guess
 	return;
     }
@@ -71,42 +76,32 @@ void get(mapping keys, function(int(0..1),array(mapping)|mixed:void) cb) {
     }
 }
 
-void set(mapping keys, function(int(0..1),mapping|mixed:void) cb) {
+void set(mapping keys, function(int(0..1),mapping|mixed:void) cb2, mixed ... extra) {
     int(0..1) noerr;
     mixed err;
     mixed k;
     array rows;
     string sql = sprintf("UPDATE %s SET ", TABLE);
+    mixed cb(int(0..1) error, mixed bla) {
+	return cb2(error, bla, @extra);
+    };
 
-    {
-	mixed u;
-	foreach (keys; string field;) {
-	    if (Array.any(schema[field]->flags->unique, `!=, 0)
-		&& Array.any(schema[field]->flags->indexable, `!=, 0)) {
-		u = field;
-	    }
-	    if (Array.any(schema[field]->flags->key, !=, 0)) {
-		k = field;
-	    }
-	}
-
-	if (!k) k = u;
-    }
-
-    if (!k) {
+    if (!schema->key && !keys[schema->key]) {
 	cb(1, "Need unique indexable field (or key) to set.\n");
 	return;
     }
 
     foreach (keys; string field; mixed val) {
-	sql = sprintf("%s %s=%s", sql, field, schema[field]->encode_sql(val));
+	if (field != schema->key)
+	    sql = sprintf("%s %s=%s", sql, field, schema[field]->encode_sql(val));
     }
-    sql += ";";
+    
+    sql += sprintf(" WHERE %s=%s;", schema->key, schema[schema->key]->encode_sql(keys[schema->key]));
 
     err = catch {
 	con->query(sprintf("LOCK TABLES %s WRITE;", TABLE));
 	con->query(sql);
-	rows = con->query(sprintf("SELECT * FROM %s WHERE %s=%s;", TABLE, k, schema[k]->encode_sql(key[k])));
+	rows = con->query(sprintf("SELECT * FROM %s WHERE %s=%s;", TABLE, schema->key, schema[schema->key]->encode_sql(keys[schema->key])));
 	con->query("UNLOCK TABLES;");
 	noerr = 1;
     };
@@ -118,37 +113,48 @@ void set(mapping keys, function(int(0..1),mapping|mixed:void) cb) {
     }
 }
 
-void add(mapping row, function(int(0..1),mapping|mixed:void) cb) {
+void add(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... extra) {
     mixed err;
     int(0..1) noerr;
-    array keys = allocate(sizeof(row)), values = allocate(sizeof(row)), rows;
+    array keys = allocate(sizeof(row)), vals = allocate(sizeof(row)), rows;
     int cnt;
-    string k;
+    mixed cb(int(0..1) error, mixed bla) {
+	return cb2(error, bla, @extra);
+    };
 
-    {
-	string u;
-
-	foreach (keys; string field; mixed val) {
-	    keys[cnt] = field;
-	    vals[cnt] = schema[field]->encode_sql(val);
-	    if (Array.any(schema[field]->flags->index, `!=, 0)
-		&& Array.any(schema[field]->flags->unique, `!=, 0)) {
-		u = field;
-	    }
-	    if (Array.any(schema[field]->flags->key, `!=, 0)) {
-		k = field;
-	    }
-	}
-	if (!k) k = u;
+    foreach (row; string field; mixed val) {
+	keys[cnt] = field;
+	werror(">> %O %O %O\n", schema->m, field, schema[field]);
+	vals[cnt] = schema[field]->encode_sql(val);
     }
 
-    err = catch {
-	con->query(sprintf("LOCK TABLES %s WRITE;", TABLE));
-	con->query(sprintf("INSERT INTO %s (%s) VALUES(%s);", TABLE, keys * ",", vals * ","));
-	rows = con->query(sprintf("SELECT * FROM %s WHERE %s=%s;", TABLE, k, row[k]));
-	con->query("UNLOCK TABLES;");
-	noerr = 1;
-    } ;
+    // TODO:
+    // 	schema->key != shcema-»automatic
+    if (!schema->automatic) { 
+	if (!row[schema->key]) {
+	    cb(1, "Could not add your row, because it misses an indexed & unique field.\n");
+	    return;
+	}
+	err = catch {
+	    con->query(sprintf("LOCK TABLES %s WRITE;", TABLE));
+	    con->query(sprintf("INSERT INTO %s (%s) VALUES(%s);", TABLE, keys * ",", vals * ","));
+	    rows = con->query(sprintf("SELECT * FROM %s WHERE %s=%s;", TABLE, schema->key, row[schema->key]));
+	    con->query("UNLOCK TABLES;");
+	    noerr = 1;
+	} ;
+    } else if (schema->key != schema->automatic) {
+
+	error("RETARDO! (%O != %O)\n", schema->key, schema->automatic);
+    } else {
+	err = catch {
+	    con->query(sprintf("LOCK TABLES %s WRITE;", TABLE));
+	    con->query(sprintf("INSERT INTO %s (%s) VALUES(%s);", TABLE, keys * ",", vals * ","));
+	    rows = con->query(sprintf("SELECT * FROM %s WHERE %s=LAST_INSERT_ID();", TABLE, schema->automatic));
+	    con->query("UNLOCK TABLES;");
+	    noerr = 1;
+	} ;
+    }
+
 
     if (noerr) {
 	cb(0, sizeof(rows) ? sanitize_result(rows[0]) : 0);
@@ -162,7 +168,7 @@ array(mapping)|mapping sanitize_result(array(mapping)|mapping rows) {
 	mapping new = ([ ]);
 	foreach (rows; string field; mixed val) {
 	    if (has_value(field, '.')) continue;
-	    new[field] = rows[field];
+	    new[field] = schema[field]->decode_sql(rows[field]);
 	}
 
 	return new;
@@ -172,5 +178,12 @@ array(mapping)|mapping sanitize_result(array(mapping)|mapping rows) {
 
 }
 
+/*
 LocalTable(name, schema, MeteorTable(name, schema, channel[, db]))
 MeteorTable(MysqlTable(schema, dbname, sql))
+*/
+
+int main() {
+    write("All fine.\n");
+    return 0;
+}

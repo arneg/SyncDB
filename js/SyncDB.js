@@ -172,14 +172,16 @@ SyncDB.Schema = Base.extend({
 	}
     },
     hashCode : function() {
-	return sha256_digest(this.parser().encode(this).render());
+	//return sha256_digest(this.parser().encode(this).render());
+	return 1;
     },
     // maybe in the future, the schema will generate its own parser.
     parser : function(filter) {
 	var n = {};
 	for (var name in this.m) if (this.m.hasOwnProperty(name)) {
 	    if (!filter || filter(name, this.m[name]))
-		n[name] = this.m[name].parser();
+		n[name] = new serialization.Or(new serialization.False(),
+					       this.m[name].parser());
 	}
 	return new serialization.Struct(n);
     }
@@ -255,6 +257,7 @@ SyncDB.Table = Base.extend({
 	    }
 	}
     },
+    get_version : function() {},
     index : function() {
 	return null;
     },
@@ -266,7 +269,7 @@ SyncDB.Table = Base.extend({
 	    if (!callback) callback = SyncDB.getcb;
 	    get(value, function(error, row) {
 		if (!error) return callback(error, row);
-		if (!db || error.is_final()) return callback(error, row);
+		if (!db) return callback(error, row);
 		db["get_by_"+name](value, callback);
 		// we wont need to sync the result, otherwise we would already be
 		// finished.
@@ -311,37 +314,38 @@ SyncDB.Table = Base.extend({
 SyncDB.MeteorTable = SyncDB.Table.extend({
     constructor : function(name, schema, channel, db) {
 	this.requests = {};	
+	this.channel = channel;
 	this.atom_parser = new serialization.AtomParser();
 	this.base(name, schema, db);
 	var int = new serialization.Integer();
 	var s = new serialization.String();
-	this.incoming = {
-	    _get : new Serialization.Struct({
+	this.in = {
+	    _get : new serialization.Struct({
 		id : s,
 		row : this.parser_in
 	    }, "_get"),
-	    _update : new Serialization.Struct({
+	    _update : new serialization.Struct({
 		id : s,
 		row : this.parser_in
 	    }, "_update"),
-	    _error : new Serialization.Struct({
+	    _error : new serialization.Struct({
 		id : s,
 		error : s
 	    }, "_error"),
-	    _set : new Serialization.Struct({
+	    _set : new serialization.Struct({
 		id : s,
 		row : this.parser_in
 	    }, "_set")
 	};
 	this.out = {
-	    _get : new Serialization.Struct({
+	    _get : new serialization.Struct({
 		id : s,
 		// it does not make sense here to allow for
 		// a SELECT on hidden values. They should only
 		// be set by the client.
 		row : this.parser_in
 	    }, "_get"),
-	    _set : new Serialization.Struct({
+	    _set : new serialization.Struct({
 		id : s,
 		row : this.parser_out
 	    }, "_set")
@@ -351,12 +355,12 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	    var a = this.atom_parser.parse(data);
 	    for (var i = 0; i < a.length; i++) {
 		var o;
-		if (!this.incoming[a[i].type]) {
+		if (!this.in[a[i].type]) {
 		    meteor.debug("dont know how to handle %o", a[i]);
 		    continue;
 		}
 		try {
-		    o = this.incoming[a[i].type].decode(a[i]);
+		    o = this.in[a[i].type].decode(a[i]);
 		} catch (err) {
 		    meteor.debug("decoding %o failed: %o\n", a[i], err);
 		    continue;
@@ -391,22 +395,23 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
     register_request : function(id, callback) {
 	this.requests[id] = callback;
     },
-    get : function(type, name) {
+    get : function(name, type) {
 	return UTIL.make_method(this, function(value, callback) {
 	    var id = UTIL.get_unique_key(5, this.requests);	
 	    var o = this.get_empty(function (type) { return !type.is_hidden; });
+	    console.log("name: %o, value: %o\n", name, value);
 	    o[name] = value;
 	    this.requests[id] = callback;
-	    this.channel.write(this.out._get.encode(o).render());
+	    this.channel.send(this.out._get.encode({ row : o, id : id }).render());
 	    return id;
 	});
     },
-    set : function(type, name) {
+    set : function(name, type) {
 	return UTIL.make_method(this, function(value, row, callback) {
 	    var id = UTIL.get_unique_key(5, this.requests);	
 	    row[name] = value;
 	    this.requests[id] = callback;
-	    this.channel.write(this.out._set.encode(row).render());
+	    this.channel.write(this.out._set.encode({ row : row, id : id }).render());
 	    return id;
 	});
     }
