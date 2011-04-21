@@ -1,15 +1,22 @@
 <script type="text/javascript" src="../js/ppp/Base.js"></script>
 <script type="text/javascript" src="../js/ppp/utf8.js"></script>
 <script type="text/javascript" src="../js/ppp/util.js"></script>
+<script type="text/javascript" src="../js/ppp/mapping.js"></script>
+<script type="text/javascript" src="../js/ppp/mmp.js"></script>
+<script type="text/javascript" src="../js/ppp/meteor.js"></script>
 <script type="text/javascript" src="../js/ppp/serialization.js"></script>
 <script type="text/javascript" src="../js/sha256.js"></script>
 <script type="text/javascript" src="../js/SyncDB.js"></script>
 <script type="text/javascript">
-    var db = new SyncDB.LocalTable("test", 
-	new SyncDB.Schema({
+    var schema = new SyncDB.Schema({
 	    id : new SyncDB.Types.Integer(new SyncDB.Flags.Key()),
-	    name : new SyncDB.Types.String(new SyncDB.Flags.Cached()),
-	})
+	    foo : new SyncDB.Types.String(new SyncDB.Flags.Cached()),
+	});
+    var con = new meteor.Connection("/dbsync/server.pike", {});
+    var mplex = new meteor.Multiplexer(con);
+    var chan = mplex.get_channel("control");
+    var db = new SyncDB.LocalTable("test", schema,
+	new SyncDB.MeteorTable("test", schema, chan)
     );
     function indices(obj) {
 	var a = [];
@@ -19,6 +26,7 @@
 
 	return a;
     }
+    con.init();
 </script>
 <body>
 <h1>Use the javascript console!</h1>
