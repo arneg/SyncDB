@@ -183,7 +183,7 @@ SyncDB.Schema = Base.extend({
 		n[name] = new serialization.Or(new serialization.False(),
 					       this.m[name].parser());
 	}
-	return new serialization.Struct(n);
+	return new serialization.Struct(n, "_schema");
     }
 });
 SyncDB.TableConfig = SyncDB.LocalField.extend({
@@ -411,7 +411,7 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	    var id = UTIL.get_unique_key(5, this.requests);	
 	    row[name] = value;
 	    this.requests[id] = callback;
-	    this.channel.write(this.out._set.encode({ row : row, id : id }).render());
+	    this.channel.send(this.out._set.encode({ row : row, id : id }).render());
 	    return id;
 	});
     }
