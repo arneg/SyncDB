@@ -1,7 +1,7 @@
 inherit SyncDB.Table;
 
 Meteor.Channel channel;
-object in_get, in_set,
+object in_get, in_set, in_add,
        out_set, out_get, out_update, out_error;
 
 void create(string name, SyncDB.Schema schema, SyncDB.Table db) {
@@ -13,6 +13,10 @@ void create(string name, SyncDB.Schema schema, SyncDB.Table db) {
     ]));
     in_set = Serialization.Types.Struct("_set", ([
 	"row" : schema->parser_out(),
+	"id" : s,
+    ]));
+    in_add = Serialization.Types.Struct("_add", ([
+	"row" : schema->parser_in(),
 	"id" : s,
     ]));
     out_get = in_get;
@@ -69,6 +73,10 @@ void incoming(object session, Serialization.Atom a) {
     case "_set":
 	message = in_set->decode(a);
 	db->set(message->row, generate_reply, session, message);
+	break;
+    case "_add":
+	message = in_add->decode(a);
+	db->add(message->row, generate_reply, session, message);
 	break;
     }
 }
