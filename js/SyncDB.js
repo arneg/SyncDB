@@ -226,7 +226,7 @@ SyncDB.Table = Base.extend({
 	this.parser_in = schema.parser(function(name, type) {
 	    return !type.is_hidden;
 	});
-	this.parser_in = schema.parser(function(name, type) {
+	this.parser_out = schema.parser(function(name, type) {
 	    return !type.is_hidden;
 	});
 	this.db = db;
@@ -589,7 +589,9 @@ SyncDB.Flags.Hashed = SyncDB.Flags.Base.extend({
 	}
     }
 });
-SyncDB.Flags.Auto = SyncDB.Flags.Base.extend({ });
+SyncDB.Flags.Auto = SyncDB.Flags.Base.extend({ 
+    is_automatic: 1,
+});
 SyncDB.Flags.AutoInc = SyncDB.Flags.Auto.extend({ });
 SyncDB.Types = {
     Base : Base.extend({

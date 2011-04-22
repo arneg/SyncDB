@@ -12,7 +12,7 @@ void create(string name, SyncDB.Schema schema, SyncDB.Table db) {
 	"id" : s,
     ]));
     in_set = Serialization.Types.Struct("_set", ([
-	"row" : schema->parser_in(),
+	"row" : schema->parser_out(),
 	"id" : s,
     ]));
     out_get = in_get;
