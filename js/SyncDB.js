@@ -1,4 +1,9 @@
 // vim:foldmethod=syntax
+UTIL.Base = Base.extend({
+    M : function(f) {
+	return UTIL.make_method(this, f);
+    }
+});
 SyncDB = {
     Error : {
 	NoSync : Base.extend({ 
@@ -41,7 +46,164 @@ SyncDB = {
 	}
     }
 };
-SyncDB.LocalField = Base.extend({
+SyncDB.KeyValueMapping = UTIL.Base.extend({
+    constructor : function() {
+	this.m = {};
+    },
+    set : function(key, value, cb) {
+	this.m[key] = value;
+	cb(false, value);
+    },
+    get : function(key, cb) {
+	cb(false, this.m[key]);
+    },
+    remove : function(key, cb) {
+	cb(false, delete this.m[key]);
+    },
+    toString : function() {
+	return "SyncDB.KeyValueMapping";
+    }
+});
+if (UTIL.App.has_local_storage) {
+    SyncDB.KeyValueStorage = UTIL.Base.extend({
+	set : function(key, value, cb) {
+	    try {
+		localStorage[key] = value;
+	    } catch (err) {
+		cb(err);
+		return;
+	    }
+	    cb(false, value);
+	},
+	get : function(key, cb) {
+	    var value;
+	    try {
+		value = localStorage[key];
+	    } catch(err) {
+		cb(err);
+		return;
+	    }
+
+	    cb(false, value);
+	},
+	remove : function(key, cb) {
+	    var value;
+	    try {
+		value = delete localStorage[key];
+	    } catch (err) {
+		cb(err);
+		return;
+	    }
+
+	    cb(false, value);
+	},
+	toString : function() {
+	    return "SyncDB.KeyValueStorage";
+	}
+    });
+}
+if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
+    SyncDB.KeyValueDatabase = UTIL.Base.extend({
+	constructor : function(cb) {
+		console.log("will open db");
+		this.db = openDatabase("SyncDB", "1.0", "SyncDB", 5*1024*1024);
+		try {
+		    console.log("creating transaction.");
+		    this.db.transaction(this.M(function (tx) {
+			try {
+			    console.log("trying create");
+			    tx.executeSql("CREATE TABLE IF NOT EXISTS sLsA (key VARCHAR(255) PRIMARY KEY, value BLOB);", [],
+					  this.M(function(tx, data) {
+					    console.log("no error: %o", tx);
+					    this.M(cb)(false);
+					  }),
+					  this.M(function(tx, err) {
+					    console.log("error: %o", err);
+					    this.M(cb)(err);
+					  }));
+			    console.log("seems to have worked!");
+			} catch(err) {
+			    this.M(cb)(err);
+			}
+		    }));
+		} catch (err) {
+		    this.M(cb)(err);
+		}
+		console.log("db opened.");
+	},
+	q : [],
+	get : function(val, cb) {
+	    if (this.q) {
+		this.q.push(function() { this.get(val, cb); });
+	    } else {
+		this.db.transaction(function (tx) {
+		    tx.executeSql("SELECT * FROM sLsA WHERE key=?;", [val], function(tx, data) {
+			if (!data.rows.length) {
+			    cb(false, undefined);
+			} else if (data.rows.length == 1) {
+			    cb(false, data.rows.item(0).value);
+			} else {
+			    // FUCKUP
+			}
+		    }, function(tx, err) {
+			cb(err);
+		    });
+		});
+	    }
+	},
+	set : function(key, val, cb) {
+	    if (this.q) {
+		this.q.push(function() { this.set(key, val, cb); });
+	    } else {
+		this.db.transaction(function (tx) {
+		    tx.executeSql("INSERT OR REPLACE INTO sLsA (key, value) VALUES(?, ?);", [ key, val ],
+				  function(tx, data) {
+				    if (data.rowsAffected != 1) cb(true);
+				    else cb(false, val);
+				  },
+				  function (tx, err) {
+				    cb(err);
+				  });
+		});
+	    }
+	},
+	remove : function(key, cb) {
+	    if (this.q) {
+		this.q.push(function() { this.remove(key, cb); });
+	    } else {
+		this.db.transaction(function (tx) {
+		    tx.executeSql("DELETE FROM sLsA WHERE key=?;", [key],
+				  function (tx, data) {
+				      cb(false);
+				  },
+				  function (tx, err) {
+				      cb(err);
+				  }
+		    );
+		});
+	    }
+	},
+	toString : function() {
+	    return "SyncDB.KeyValueDatabase";
+	}
+    });
+    try {
+	SyncDB.LS = new SyncDB.KeyValueDatabase(function (err) {
+	    console.log("%o", err);
+	    if (err) {
+		SyncDB.LS = new (SyncDB.KeyValueStorage || SyncDB.KeyValueMapping)();
+	    }
+	    console.log("REMOVING q");
+	    var q = this.q;
+	    this.q = undefined;
+	    for (var i = 0; i < q.length; i++) {
+	       q[i].apply(SyncDB.LS);
+	    }
+	});
+    } catch (err) { }
+}
+if (!SyncDB.LS) SyncDB.LS = new(SyncDB.KeyValueStorage || SyncDB.KeyValueMapping)();
+SyncDB.LocalField = UTIL.Base.extend({
     constructor : function(name, parser) {
 	this.name = name;
 	this.parser = parser;
@@ -162,7 +324,7 @@ SyncDB.Serialization.Schema = serialization.Object.extend({
 	return new SyncDB.Schema(this.base(atom));
     }
 });
-SyncDB.Schema = Base.extend({
+SyncDB.Schema = UTIL.Base.extend({
     constructor : function(m) {
 	this.m = m;
 	this.key;
@@ -218,7 +380,27 @@ SyncDB.TableConfig = SyncDB.LocalField.extend({
 	return this.get().schema; 
     }
 });
-SyncDB.Table = Base.extend({
+// NOTE:
+//
+// 	localtables have seperate logic for chaining, some is also
+// 	in SyncDB.Table. This needs to be cleaned up. It should
+// 	not make a difference what we are chaining.
+//
+//	Consequently, if we want to do drafting for things that
+//	have not been synced up the chain, that means that in principle
+//	all database types (meteor, localdb, localstorage, mapping) need
+//	some kind of draft support. Since they can not depend on each other
+//	we have to make drafting 'explicit'. Creating a pure meteortable does
+//	not do any drafting, i.e. drafts are just stored in a mapping. LocalStorage
+//	and LocalDatabase create drafts in permanent storage. We could think about
+//	some kind of fallback using cookies for the meteortable.
+//
+//	Those temporary drafts should be available through some kind of standard
+//	interface. db.get_drafts() / db.drafts.select_by_email() / ...
+//	This should be created automatically by the SyncDB.Table class in the same way
+//	we are doing it for the other getters and setters. Also we need callbacks for
+//	events. They need to be handed down the chain.
+SyncDB.Table = UTIL.Base.extend({
     constructor : function(name, schema, db) {
 	this.name = name;
 	this.schema = schema;
@@ -231,7 +413,7 @@ SyncDB.Table = Base.extend({
 	});
 	this.db = db;
 	this.I = {};
-	if (db) db.add_update_callback(UTIL.make_method(this, this.update));
+	if (db) db.add_update_callback(this.M(this.update));
 	console.log("schema: %o\n", schema);
 	var key;
 	for (var field in schema) if (schema.hasOwnProperty(field)) {
@@ -355,7 +537,7 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	    }, "_insert")
 	};
 
-	channel.set_cb(UTIL.make_method(this, function(data) {
+	channel.set_cb(this.M(function(data) {
 	    var a = this.atom_parser.parse(data);
 	    for (var i = 0; i < a.length; i++) {
 		var o;
@@ -402,7 +584,7 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	this.requests[id] = callback;
     },
     select : function(name, type) {
-	return UTIL.make_method(this, function(value, callback) {
+	return this.M(function(value, callback) {
 	    var id = UTIL.get_unique_key(5, this.requests);	
 	    var o = this.get_empty(function (type) { return !type.is_hidden; });
 	    console.log("name: %o, value: %o\n", name, value);
@@ -413,7 +595,7 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	});
     },
     update : function(name, type) {
-	return UTIL.make_method(this, function(value, row, callback) {
+	return this.M(function(value, row, callback) {
 	    var id = UTIL.get_unique_key(5, this.requests);	
 	    row[name] = value;
 	    this.requests[id] = callback;
@@ -464,7 +646,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
     },
     select : function(name, type) {
 	var key = this.schema.key;
-	var f = UTIL.make_method(this, function(value, callback) {
+	var f = this.M(function(value, callback) {
 	    var k = type.get_key(this.name, key, value);
 	    //console.log("trying to fetch %o from local storage %o.\n", key, [ this.name, name, value] );
 	    if (localStorage[k]) callback(0, this.parser.decode(serialization.parse_atom(localStorage[k])));
@@ -476,7 +658,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	    var index = this.I[name];
 	    if (!index) throw("Could not find index "+name);
 	    if (!type.is_unique)
-		return UTIL.make_method(this, function(value, callback) {
+		return this.M(function(value, callback) {
 		    // probe the index and check sync.
 		    var ids = index.get(value);
 		    console.log("ids: %o\n", ids);
@@ -507,7 +689,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 		    return callback(new SyncDB.Error.NoSync());
 		});
 	    else// if (type.is_synced) 
-		return UTIL.make_method(this, function(value, callback) {
+		return this.M(function(value, callback) {
 		    // probe the index and check sync.
 		    var ids = index.get(value);
 		    if (ids.length) {
@@ -531,7 +713,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
     },
     update : function(name, type) {
 	var key = this.config.schema().key;
-	var f = UTIL.make_method(this, function(value, row, callback) {
+	var f = this.M(function(value, row, callback) {
 	    console.log("parser: %o, data: %o\n", this.parser, row);
 	    try {
 		localStorage[type.get_key(this.name, key, value)] = this.parser.encode(row).render();
@@ -542,7 +724,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	    }
 	});
 	if (type.is_indexed || type.is_key) {
-	    return UTIL.make_method(this, function(value, row, callback) {
+	    return this.M(function(value, row, callback) {
 		if (!row[name]) row[name] = value;
 		for (var i in this.I) {
 		    this.I[i].set(row[i], row[key]);
@@ -562,7 +744,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 				    // then send the _insert (if this.db exists) and if that returns ok, remove draft status
 				    // (given no other pending modifications), but i'm lost in the select/update/draft logic.
 	var key = this.schema.key;
-	var f = UTIL.make_method(this, function(error, row) {
+	var f = this.M(function(error, row) {
 	    if (!error) {
 		for (var i in this.I) {
 		    this.I[i].update(row[i], row[key]);
@@ -583,7 +765,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
     }
 });
 SyncDB.Flags = {
-    Base : Base.extend({ 
+    Base : UTIL.Base.extend({ 
 	toString : function() {
 	    return "Base";
 	}
@@ -634,7 +816,7 @@ SyncDB.Flags.Auto = SyncDB.Flags.Base.extend({
 });
 SyncDB.Flags.AutoInc = SyncDB.Flags.Auto.extend({ });
 SyncDB.Types = {
-    Base : Base.extend({
+    Base : UTIL.Base.extend({
 	constructor : function() {
 	    this.flags = Array.prototype.slice.apply(arguments);
 	    //console.log("creating %s with %d arguments.\n", this.toString(), arguments.length);
