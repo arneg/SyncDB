@@ -250,10 +250,10 @@ SyncDB.Table = Base.extend({
 		}
 		else console.log("   is key.\n");
 
-		this["get_by_"+field] = this.generate_get(field, schema[field]);
+		this["select_by_"+field] = this.generate_select(field, schema[field]);
 
 		if (schema[field].is_unique)
-		    this["set_by_"+field] = this.generate_set(field, schema[field]);
+		    this["update_by_"+field] = this.generate_update(field, schema[field]);
 	    }
 	}
     },
@@ -261,16 +261,16 @@ SyncDB.Table = Base.extend({
     index : function() {
 	return null;
     },
-    generate_get : function(name, type) {
-	var get = this.get(name, type);
+    generate_select : function(name, type) {
+	var select = this.select(name, type);
 	var db = this.db;	
-	if (!get) throw("could not generate get() for %o %o\n", name, type);
+	if (!select) throw("could not generate select() for %o %o\n", name, type);
 	return function(value, callback) {
 	    if (!callback) callback = SyncDB.getcb;
-	    get(value, function(error, row) {
+	    select(value, function(error, row) {
 		if (!error) return callback(error, row);
 		if (!db) return callback(error, row);
-		db["get_by_"+name](value, callback);
+		db["select_by_"+name](value, callback);
 		// we wont need to sync the result, otherwise we would already be
 		// finished.
 		//
@@ -279,16 +279,16 @@ SyncDB.Table = Base.extend({
 	    });
 	};
     },
-    generate_set : function(name, type) {
-	var set = this.set(name, type);
+    generate_update : function(name, type) {
+	var update = this.update(name, type);
 	var db = this.db;
-	if (!set) throw([ "could not generate set() for %o %o\n", name, type] );
+	if (!update) throw([ "could not generate update() for %o %o\n", name, type] );
 	return function(key, row, callback) {
 	    if (!callback) callback = SyncDB.setcb;
 	    row[name] = key;
 	    if (db) {
 		// save to local draft table
-		db["set_by_"+name](key, row, function(error, row) {
+		db["update_by_"+name](key, row, function(error, row) {
 		    // call function, delete draft
 
 		    if (error) {
@@ -296,19 +296,19 @@ SyncDB.Table = Base.extend({
 			return;
 		    }
 
-		    set(key, row, callback);
+		    update(key, row, callback);
 		});
 		return;
 	    }
 
-	    set(key, row, callback);
+	    update(key, row, callback);
 	};
     },
     version : function() {
 	return this.config.version();
     },
     add_update_callback : function(cb) {
-	// this gets triggered on set / delete
+	// this gets triggered on update / delete
     }
 });
 SyncDB.MeteorTable = SyncDB.Table.extend({
@@ -320,10 +320,10 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	var int = new serialization.Integer();
 	var s = new serialization.String();
 	this.incoming = {
-	    _get : new serialization.Struct({
+	    _select : new serialization.Struct({
 		id : s,
 		row : this.parser_in
-	    }, "_get"),
+	    }, "_select"),
 	    _update : new serialization.Struct({
 		id : s,
 		row : this.parser_in
@@ -332,27 +332,27 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 		id : s,
 		error : s
 	    }, "_error"),
-	    _set : new serialization.Struct({
+	    _update : new serialization.Struct({
 		id : s,
 		row : this.parser_in
-	    }, "_set")
+	    }, "_update")
 	};
 	this.out = {
-	    _get : new serialization.Struct({
+	    _select : new serialization.Struct({
 		id : s,
 		// it does not make sense here to allow for
 		// a SELECT on hidden values. They should only
 		// be set by the client.
 		row : this.parser_in
-	    }, "_get"),
-	    _set : new serialization.Struct({
+	    }, "_select"),
+	    _update : new serialization.Struct({
 		id : s,
 		row : this.parser_in
-	    }, "_set"),
-	    _add : new serialization.Struct({
+	    }, "_update"),
+	    _insert : new serialization.Struct({
 		id : s,
 		row : this.parser_out
-	    }, "_add")
+	    }, "_insert")
 	};
 
 	channel.set_cb(UTIL.make_method(this, function(data) {
@@ -370,10 +370,12 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 		    continue;
 		}
 
+		/*
 		if (a[i].type == "_update") {
 		    this.call_update_callback(o);
 		    continue;
 		}
+		*/
 
 		var f = this.requests[o.id];
 
@@ -399,30 +401,31 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
     register_request : function(id, callback) {
 	this.requests[id] = callback;
     },
-    get : function(name, type) {
+    select : function(name, type) {
 	return UTIL.make_method(this, function(value, callback) {
 	    var id = UTIL.get_unique_key(5, this.requests);	
 	    var o = this.get_empty(function (type) { return !type.is_hidden; });
 	    console.log("name: %o, value: %o\n", name, value);
 	    o[name] = value;
 	    this.requests[id] = callback;
-	    this.channel.send(this.out._get.encode({ row : o, id : id }).render());
+	    this.channel.send(this.out._select.encode({ row : o, id : id }).render());
 	    return id;
 	});
     },
-    set : function(name, type) {
+    update : function(name, type) {
 	return UTIL.make_method(this, function(value, row, callback) {
 	    var id = UTIL.get_unique_key(5, this.requests);	
 	    row[name] = value;
 	    this.requests[id] = callback;
-	    this.channel.send(this.out._set.encode({ row : row, id : id }).render());
+	    this.channel.send(this.out._update.encode({ row : row, id : id }).render());
+	    console.log("METEOR SET.");
 	    return id;
 	});
     },
-    add : function(row, callback) {
+    insert : function(row, callback) {
 	var id = UTIL.get_unique_key(5, this.requests);
 	this.requests[id] = callback;
-	this.channel.send(this.out._add.encode({ row: row, id: id }).render());
+	this.channel.send(this.out._insert.encode({ row: row, id: id }).render());
 	return id;
     }
 });
@@ -459,7 +462,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	
 	return null;
     },
-    get : function(name, type) {
+    select : function(name, type) {
 	var key = this.schema.key;
 	var f = UTIL.make_method(this, function(value, callback) {
 	    var k = type.get_key(this.name, key, value);
@@ -519,12 +522,14 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 
 	return null;
     },
+	     /*
     update : function() {
 	// this needs to be generated to update index tables and shit like that
     },
+    */
     prune : function() { // delete everything
     },
-    set : function(name, type) {
+    update : function(name, type) {
 	var key = this.config.schema().key;
 	var f = UTIL.make_method(this, function(value, row, callback) {
 	    console.log("parser: %o, data: %o\n", this.parser, row);
@@ -547,19 +552,21 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	    });
 	}
 
-	console.log("Could not generate set for %o %o", name, type);
+	console.log("Could not generate update for %o %o", name, type);
     },
+	     /*
     update : function() {
     },
-    add : function(row, callback) { // TODO:: this should rather make the db a draft and store locally, i guess,
-				    // then send the _add (if this.db exists) and if that returns ok, remove draft status
-				    // (given no other pending modifications), but i'm lost in the get/set/draft logic.
+    */
+    insert : function(row, callback) { // TODO:: this should rather make the db a draft and store locally, i guess,
+				    // then send the _insert (if this.db exists) and if that returns ok, remove draft status
+				    // (given no other pending modifications), but i'm lost in the select/update/draft logic.
 	var key = this.schema.key;
 	var f = UTIL.make_method(this, function(error, row) {
 	    if (!error) {
 		for (var i in this.I) {
-		    this.I[i].set(row[i], row[key]);
-		    console.log("set %o=%o(%o) in %o(%o)", row[i], row[key], key, this.I[i], i);
+		    this.I[i].update(row[i], row[key]);
+		    console.log("update %o=%o(%o) in %o(%o)", row[i], row[key], key, this.I[i], i);
 		}
 		localStorage[this.schema[key].get_key(this.name, key, row[key])] = this.parser.encode(row).render();
 		console.log("stored in %o.", this.schema[key].get_key(this.name, key, row[key]));
@@ -569,7 +576,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	});
 
 	if (this.db) {
-	    this.db.add(row, f);
+	    this.db.insert(row, f);
 	} else {
 	    f(0, row);
 	}

@@ -31,7 +31,7 @@ void create(string dbname, Sql.Sql con, SyncDB.Schema schema) {
 }
 
 
-void get(mapping keys, function(int(0..1),array(mapping)|mixed:void) cb2, mixed ... extra) {
+void select(mapping keys, function(int(0..1),array(mapping)|mixed:void) cb2, mixed ... extra) {
     string sql = sprintf("SELECT * FROM %s WHERE 1=1", TABLE);
     int(0..1) noerr;
     array(mapping) rows;
@@ -76,7 +76,7 @@ void get(mapping keys, function(int(0..1),array(mapping)|mixed:void) cb2, mixed 
     }
 }
 
-void set(mapping keys, function(int(0..1),mapping|mixed:void) cb2, mixed ... extra) {
+void update(mapping keys, function(int(0..1),mapping|mixed:void) cb2, mixed ... extra) {
     int(0..1) noerr;
     mixed err;
     mixed k;
@@ -87,7 +87,7 @@ void set(mapping keys, function(int(0..1),mapping|mixed:void) cb2, mixed ... ext
     };
 
     if (!schema->key && !keys[schema->key]) {
-	cb(1, "Need unique indexable field (or key) to set.\n");
+	cb(1, "Need unique indexable field (or key) to update.\n");
 	return;
     }
 
@@ -113,7 +113,7 @@ void set(mapping keys, function(int(0..1),mapping|mixed:void) cb2, mixed ... ext
     }
 }
 
-void add(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... extra) {
+void insert(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... extra) {
     mixed err;
     int(0..1) noerr;
     array keys = allocate(sizeof(row)), vals = allocate(sizeof(row)), rows;
@@ -132,7 +132,7 @@ void add(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... extr
     // 	schema->key != shcema-»automatic
     if (!schema->automatic) { 
 	if (!row[schema->key]) {
-	    cb(1, "Could not add your row, because it misses an indexed & unique field.\n");
+	    cb(1, "Could not insert your row, because it misses an indexed & unique field.\n");
 	    return;
 	}
 	err = catch {

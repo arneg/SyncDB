@@ -1,30 +1,32 @@
 inherit SyncDB.Table;
 
 Meteor.Channel channel;
-object in_get, in_set, in_add,
-       out_set, out_get, out_update, out_error;
+object in_select, in_update, in_insert,
+       out_update, out_select, out_error;
 
 void create(string name, SyncDB.Schema schema, SyncDB.Table db) {
     ::create(dbname, schema, db);
     object s = Serialization.Types.String();
-    in_get = Serialization.Types.Struct("_get", ([
+    in_select = Serialization.Types.Struct("_select", ([
 	"row" : schema->parser_out(),
 	"id" : s,
     ]));
-    in_set = Serialization.Types.Struct("_set", ([
+    in_update = Serialization.Types.Struct("_update", ([
 	"row" : schema->parser_out(),
 	"id" : s,
     ]));
-    in_add = Serialization.Types.Struct("_add", ([
+    in_insert = Serialization.Types.Struct("_insert", ([
 	"row" : schema->parser_in(),
 	"id" : s,
     ]));
-    out_get = in_get;
+    out_select = in_select;
+#if 0
     out_update = Serialization.Types.Struct("_update", ([
 	"row" : schema->parser_out(),
 	"id" : s,
     ]));
-    out_set = Serialization.Types.Struct("_set", ([
+#endif
+    out_update = Serialization.Types.Struct("_update", ([
 	"row" : schema->parser_out(),
 	"id" : s,
     ]));
@@ -44,14 +46,14 @@ void generate_reply(int err, array(mapping)|mapping row, object session, mapping
 	return;
     }
     if (mappingp(row)) {
-	session->send(out_set->encode(([ 
+	session->send(out_update->encode(([ 
 			    "id" : message->id,
 			    "row" : row
 			]))->render());
 	return;
     }
     if (arrayp(row)) {
-	session->send(out_get->encode(([ 
+	session->send(out_select->encode(([ 
 			    "id" : message->id,
 			    "row" : row[0]
 			]))->render());
@@ -65,18 +67,18 @@ void incoming(object session, Serialization.Atom a) {
 
     // catch here and reply with error!!!
     switch (a->type) {
-    case "_get": {
-	message = in_get->decode(a);
-	db->get(message->row, generate_reply, session, message);
+    case "_select": {
+	message = in_select->decode(a);
+	db->select(message->row, generate_reply, session, message);
 	break;
     }
-    case "_set":
-	message = in_set->decode(a);
-	db->set(message->row, generate_reply, session, message);
+    case "_update":
+	message = in_update->decode(a);
+	db->update(message->row, generate_reply, session, message);
 	break;
-    case "_add":
-	message = in_add->decode(a);
-	db->add(message->row, generate_reply, session, message);
+    case "_insert":
+	message = in_insert->decode(a);
+	db->insert(message->row, generate_reply, session, message);
 	break;
     }
 }
