@@ -58,13 +58,13 @@ SyncDB.KeyValueMapping = UTIL.Base.extend({
     is_permanent : false,
     set : function(key, value, cb) {
 	this.m[key] = value;
-	cb(false, value);
+	UTIL.call_later(cb, null, false, value);
     },
     get : function(key, cb) {
-	cb(false, this.m[key]);
+	UTIL.call_later(cb, null, false, this.m[key]);
     },
     remove : function(key, cb) {
-	cb(false, delete this.m[key]);
+	UTIL.call_later(cb, null, false, delete this.m[key]);
     },
     toString : function() {
 	return "SyncDB.KeyValueMapping";
@@ -75,34 +75,30 @@ if (UTIL.App.has_local_storage) {
 	set : function(key, value, cb) {
 	    try {
 		localStorage[key] = value;
+		UTIL.call_later(cb, null, false, value);
 	    } catch (err) {
-		cb(err);
-		return;
+		UTIL.call_later(cb, null, err);
 	    }
-	    cb(false, value);
 	},
 	is_permanent : true,
 	get : function(key, cb) {
 	    var value;
 	    try {
 		value = localStorage[key];
+		UTIL.call_later(cb, null, false, value);
 	    } catch(err) {
-		cb(err);
-		return;
+		UTIL.call_later(cb, null, err);
 	    }
 
-	    cb(false, value);
 	},
 	remove : function(key, cb) {
 	    var value;
 	    try {
 		value = delete localStorage[key];
+		UTIL.call_later(cb, null, false, value);
 	    } catch (err) {
-		cb(err);
-		return;
+		UTIL.call_later(cb, null, err);
 	    }
-
-	    cb(false, value);
 	},
 	toString : function() {
 	    return "SyncDB.KeyValueStorage";
@@ -650,7 +646,7 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 });
 SyncDB.LocalTable = SyncDB.Table.extend({
     constructor : function(name, schema, db) { 
-	this.config = new SyncDB.TableConfig("_syncdb_"+name).get(this.M(function() {
+	(this.config = new SyncDB.TableConfig("_syncdb_"+name)).get(this.M(function() {
 	    if (this.config.schema().hashCode() != schema.hashCode()) {
 		this.prune();
 	    }
