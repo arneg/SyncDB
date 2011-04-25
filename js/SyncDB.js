@@ -5,9 +5,14 @@ UTIL.Base = Base.extend({
     }
 });
 SyncDB = {
-    throwit : function(err) {
-	console.log("error: %o", err);
-	console.trace();
+    warn : function(err) {
+	// support sprintf like syntax here!
+	UTIL.log("SyncDB WARN: %o", err);
+	UTIL.trace();
+    },
+    error : function(err) {
+	UTIL.log("SyncDB ERROR: %o", err);
+	UTIL.trace();
 	throw(err);
     },
     Error : {
@@ -16,13 +21,13 @@ SyncDB = {
 	}),
 	Set : Base.extend({ 
 	    toString : function () { return "Set"; },
-			  }),
+	}),
 	NoIndex : Base.extend({ 
 	    toString : function () { return "NoIndex"; },
-			      }),
+	}),
 	NotFound : Base.extend({ 
 	    toString : function () { return "NotFound"; },
-			       })
+	})
     },
     prune : function() {
 	for (var i = 0; i < localStorage.length; i ++) {
@@ -36,10 +41,10 @@ SyncDB = {
     },
     setcb : function(error, row) {
 	if (!error) {
-	    console.log("SUCCESS: saved %o\n", row);
+	    UTIL.log("SUCCESS: saved %o\n", row);
 	} else {
-	    console.log("FAIL: could not save %o\n", error);
-	    console.trace();
+	    UTIL.log("FAIL: could not save %o\n", error);
+	    UTIL.trace();
 	}
     },
     getcb : function(error, row) {
@@ -51,6 +56,40 @@ SyncDB = {
 	}
     }
 };
+SyncDB.Filter = {};
+SyncDB.Filter.Base = UTIL.Base.extend({
+    constructor : function() {
+	this.args = Array.prototype.slice.apply(arguments);
+    },
+    low_get : function(index, key) {
+	if (UTIL.objectp(key)) {
+	    return key.index_lookup(index);
+	} else index.get(key);
+    }
+});
+SyncDB.Filter.And = SyncDB.Filter.Base.extend({
+    index_lookup : function(index) {
+	var results = this.low_get(index, this.args[0]);
+
+	for (var i = 1; i < this.args.length; i++) {
+	    if (!results.length) break;
+	    results = UTIL.array_and(this.low_get(index, this.args[i]), results);
+	}
+
+	return results;
+    }
+});
+SyncDB.Filter.Or = SyncDB.Filter.Base.extend({
+    index_lookup : function(index) {
+	var results = this.low_get(index, this.args[0]);
+
+	for (var i = 1; i < this.args.length; i++) {
+	    results = UTIL.array_or(this.low_get(index, this.args[i]), results);
+	}
+
+	return results;
+    }
+});
 SyncDB.KeyValueMapping = UTIL.Base.extend({
     constructor : function() {
 	this.m = {};
@@ -229,6 +268,7 @@ SyncDB.LocalField = UTIL.Base.extend({
 	this.parser = parser;
 	this.value = undefined;
 	this.def = def;
+	this.will_set = false;
 	SyncDB.LS.get(this.name, this.M(function(err, value) {
 		console.log("initialized field %s", this.name);
 		if (UTIL.stringp(value))
@@ -265,11 +305,18 @@ SyncDB.LocalField = UTIL.Base.extend({
 	    }
 	    this.value = arguments[0];
 	}
-	if (this.value == undefined) {
-	    SyncDB.LS.remove(this.name, function () {});
-	} else {
-	    SyncDB.LS.set(this.name, this.parser.encode(this.value).render(), function () {});
-	}
+	// We want to allow for looping over a repeated set call (e.g. MultiIndex)
+	if (this.will_set) return;
+	this.will_set = true;
+
+	UTIL.call_later(function() { 
+		this.will_set = false;
+		if (this.value == undefined) {
+		    SyncDB.LS.remove(this.name, function () {});
+		} else {
+		    SyncDB.LS.set(this.name, this.parser.encode(this.value).render(), function () {});
+		}
+	    }, this);
     }
 });
 SyncDB.MappingIndex = SyncDB.LocalField.extend({
@@ -280,7 +327,7 @@ SyncDB.MappingIndex = SyncDB.LocalField.extend({
     },
     set : function(index, id) {
 	if (!this.value) 
-	    SyncDB.throwit("You are too early!!");
+	    SyncDB.error("You are too early!!");
 	this.value[index] = id;
 	// adding something can be done cheaply, by appending the tuple
 	this.base();
@@ -288,7 +335,7 @@ SyncDB.MappingIndex = SyncDB.LocalField.extend({
     get : function(index) {
 	if (!this.value)
 	if (!this.value) 
-	    SyncDB.throwit("You are too early!!");
+	    SyncDB.error("You are too early!!");
 	if (!this.value[index]) return [];
 	return [ this.value[index] ];
     }
@@ -302,7 +349,7 @@ SyncDB.MultiIndex = SyncDB.LocalField.extend({
     },
     set : function(index, id) {
 	if (!this.value) 
-	    SyncDB.throwit("You are too early!!");
+	    SyncDB.error("You are too early!!");
 	if (!this.value[index]) {
 	    this.value[index] = { };
 	}
@@ -313,7 +360,7 @@ SyncDB.MultiIndex = SyncDB.LocalField.extend({
     },
     get : function(index) {
 	if (!this.value)
-	    SyncDB.throwit("You are too early!!");
+	    SyncDB.error("You are too early!!");
 	if (!this.value || !this.value[index]) return [];
 	return UTIL.keys(this.value[index]);
     }
@@ -471,7 +518,7 @@ SyncDB.Table = UTIL.Base.extend({
 	console.log("schema: %o\n", schema);
 	var key = schema.key;
 
-	if (!key) SyncDB.throwit(SyncDB.Error.Retard("Man, this schema wont work.\n"));
+	if (!key) SyncDB.error(SyncDB.Error.Retard("Man, this schema wont work.\n"));
 
 	for (var field in schema) if (schema.hasOwnProperty(field)) {
 	    console.log("scanning %s:%o.\n", field, schema[field]);
@@ -497,7 +544,7 @@ SyncDB.Table = UTIL.Base.extend({
     generate_select : function(name, type) {
 	var select = this.select(name, type);
 	var db = this.db;	
-	if (!select) SyncDB.throwit("could not generate select() for %o %o\n", name, type);
+	if (!select) SyncDB.error("could not generate select() for %o %o\n", name, type);
 	return function(value, callback) {
 	    if (!callback) callback = SyncDB.getcb;
 	    select(value, function(error, row) {
@@ -515,12 +562,13 @@ SyncDB.Table = UTIL.Base.extend({
     generate_update : function(name, type) {
 	var update = this.update(name, type);
 	var db = this.db;
-	if (!update) SyncDB.throwit([ "could not generate update() for %o %o\n", name, type] );
+	if (!update) SyncDB.error([ "could not generate update() for %o %o\n", name, type] );
 	return function(key, row, callback) {
 	    if (!callback) callback = SyncDB.setcb;
 	    row[name] = key;
 	    if (db) {
-		// save to local draft table
+		// save to local draft table and, erm also:
+		// somehow remember the ID so we can act on it later on
 		db["update_by_"+name](key, row, function(error, row) {
 		    // call function, delete draft
 
@@ -631,6 +679,7 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	}
 	return n;
     },
+    // TODO: this is used to hook up local implicit drafts that might have results pending.
     register_request : function(id, callback) {
 	this.requests[id] = callback;
     },
@@ -687,12 +736,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	return SyncDB.LS.is_permanent;
     },
     index : function(name, field_type, key_type) {
-	if (field_type.is_unique)
-	    return new SyncDB.MappingIndex("_syncdb_I"+name, field_type, key_type);
-	else if (field_type.is_indexed) 
-	    return new SyncDB.MultiIndex("_syncdb_I"+name, field_type, key_type);
-	
-	return null;
+	return field_type.get_index(name, field_type, key_type);
     },
     select : function(name, type) {
 	var f = this.M(function(value, callback) {
@@ -710,11 +754,11 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	    return f;
 	} else if (type.is_indexed) {
 	    var index = this.I[name];
-	    if (!index) SyncDB.throwit("Could not find index "+name);
+	    if (!index) SyncDB.error("Could not find index "+name);
 	    if (!type.is_unique)
 		return this.M(function(value, callback) {
 		    // probe the index and check sync.
-		    var ids = index.get(value);
+		    var ids = type.index_lookup(index, value);
 		    console.log("ids: %o\n", ids);
 		    if (ids.length) {
 			if (ids.length == 1) {
@@ -745,7 +789,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	    else// if (type.is_synced) 
 		return this.M(function(value, callback) {
 		    // probe the index and check sync.
-		    var ids = index.get(value);
+		    var ids = type.index_lookup(index, value);
 		    if (ids.length) {
 			return f(ids[0], callback);
 		    } 
@@ -765,6 +809,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
     */
     prune : function() { // delete everything
     },
+    // TODO: first, insert data, then put into INDEX!!!!
     update : function(name, type) {
 	var f = this.M(function(value, row, callback) {
 	    var key = this.config.schema().key;
@@ -783,7 +828,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 		var key = this.config.schema().key;
 		if (!row[name]) row[name] = value;
 		for (var i in this.I) {
-		    this.I[i].set(row[i], row[key]);
+		    type.index_insert(this.I[i], row[i], row[key]);
 		    console.log();
 		}
 		return f(row[key], row, callback);
@@ -831,7 +876,7 @@ SyncDB.Flags = {
 	toString : function() {
 	    return "Base";
 	}
-    }),
+    })
 };
 SyncDB.Flags.Unique = SyncDB.Flags.Base.extend({ 
     toString : function() {
@@ -874,7 +919,7 @@ SyncDB.Flags.Hashed = SyncDB.Flags.Base.extend({
     }
 });
 SyncDB.Flags.Auto = SyncDB.Flags.Base.extend({ 
-    is_automatic: 1,
+    is_automatic: 1
 });
 SyncDB.Flags.AutoIncrement = SyncDB.Flags.Auto.extend({
     get_val : function (db, name, type, cb) {
@@ -915,8 +960,20 @@ SyncDB.Types = {
 	},
 	get_key : function() {
 	    return Array.prototype.slice.apply(arguments).join("_");
+	},
+	get_index : function(name, key_type) {
+	    if (this.is_unique)
+		return new SyncDB.MappingIndex("_syncdb_I"+name, this, key_type);
+	    else if (this.is_indexed) 
+		return new SyncDB.MultiIndex("_syncdb_I"+name, this, key_type);
+	},
+	index_lookup : function(index, key) {
+	    return index.get(key);
+	},
+	index_insert : function(index, key, id) {
+	    return index.set(key, id);
 	}
-    }),
+    })
 };
 SyncDB.Types.Integer = SyncDB.Types.Base.extend({
     parser : function() {
@@ -932,4 +989,30 @@ SyncDB.Types.String = SyncDB.Types.Base.extend({
 	return new serialization.String();
     },
     toString : function() { return "String"; }
+});
+SyncDB.Types.Array = SyncDB.Types.Base.extend({
+    constructor : function(type) {
+	this.type = type;
+	this.base.apply(this, Array.prototype.slice.call(arguments, 1));
+	if (this.is_unique) SyncDB.error("Arrays cannot be unique, retard!");
+	if (type instanceof SyncDB.Types.Array)
+	    SyncDB.error("nested arrays are not implemented, yet. we want food!");
+    },
+    get_index : function(name, key_type) {
+	if (this.is_indexed) {
+	    return this.type.get_index(name, key_type);	    
+	}
+    },
+    index_insert : function(index, key, id) {
+	for (var i = 0; i < key.length; i++)
+	    index.set(key[i], id);
+    },
+    index_lookup : function(index, key) {
+	if (UTIL.arrayp(key)) {
+	    return UTIL.create(SyncDB.Filter.And, key);
+	} else if (UTIL.objectp(key)) {
+	    // complex types, e.g. AND, OR and shit like that
+	    return key.index_lookup(index);
+	} else return index.get(key);
+    }
 });
