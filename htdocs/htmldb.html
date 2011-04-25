@@ -9,7 +9,7 @@
 <script type="text/javascript" src="../js/SyncDB.js"></script>
 <script type="text/javascript">
     var schema = new SyncDB.Schema({
-	    id : new SyncDB.Types.Integer(new SyncDB.Flags.Key(), new SyncDB.Flags.Auto()),
+	    id : new SyncDB.Types.Integer(new SyncDB.Flags.Key(), new SyncDB.Flags.AutoIncrement()),
 	    foo : new SyncDB.Types.String(new SyncDB.Flags.Cached()),
 	});
     var con = new meteor.Connection("/dbsync/server.pike", {});

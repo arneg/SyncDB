@@ -368,8 +368,10 @@ SyncDB.Schema = UTIL.Base.extend({
     constructor : function(m) {
 	this.m = m;
 	this.key;
+	this.autos = [];
 	for (var name in m) if (m.hasOwnProperty(name)) {
 	    if (m[name].is_key) this.key = name;
+	    if (m[name].get_val) this.autos.push(name);
 	    this[name] = m[name];
 	}
     },
@@ -386,6 +388,22 @@ SyncDB.Schema = UTIL.Base.extend({
 					       this.m[name].parser());
 	}
 	return new serialization.Struct(n, "_schema");
+    },
+    get_auto_set : function(db, cb) {
+	var as = {};
+	var cnt = 1;
+	for (var i = 0; i < this.autos.length; ++i) {
+	    var name = this.autos[i];
+	    ++cnt;
+	    this.m[name].get_val(db, name, this.m[name], function(val) {
+		as[name] = val;
+		if (!--cnt) cb(as);
+	    });
+	}
+
+	if (!--cnt) {
+	    cb(as);
+	}
     }
 });
 SyncDB.TableConfig = SyncDB.LocalField.extend({
@@ -801,7 +819,10 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	if (this.db) {
 	    this.db.insert(row, f);
 	} else {
-	    f(0, row);
+	    this.schema.get_auto_set(this, function(as) {
+		for (var x in as) row[x] = as[x];
+		f(0, row);
+	    });
 	}
     }
 });
@@ -855,7 +876,15 @@ SyncDB.Flags.Hashed = SyncDB.Flags.Base.extend({
 SyncDB.Flags.Auto = SyncDB.Flags.Base.extend({ 
     is_automatic: 1,
 });
-SyncDB.Flags.AutoInc = SyncDB.Flags.Auto.extend({ });
+SyncDB.Flags.AutoIncrement = SyncDB.Flags.Auto.extend({
+    get_val : function (db, name, type, cb) {
+	var field = new SyncDB.LocalField("_syncdb_CNT_" + db.name + "_" + name, type.parser(), 1);
+	field.get(function(val) {
+		    field.set(type.increment(val));
+		    cb(val);
+		  });
+    }
+});
 SyncDB.Types = {
     Base : UTIL.Base.extend({
 	constructor : function() {
@@ -878,7 +907,7 @@ SyncDB.Types = {
 		//console.log("scanning %o\n", this.flags[i]);
 		for (var name in this.flags[i]) {
 		    //console.log(name);
-		    if (UTIL.has_prefix(name, "is_")) {
+		    if (UTIL.has_prefix(name, "is_") || UTIL.has_prefix(name, "get_")) {
 			if (!this.hasOwnProperty(name)) this[name] = this.flags[i][name];
 		    }
 		}
@@ -893,7 +922,10 @@ SyncDB.Types.Integer = SyncDB.Types.Base.extend({
     parser : function() {
 	return new serialization.Integer();
     },
-    toString : function() { return "Integer"; }
+    toString : function() { return "Integer"; },
+    increment : function(old) {
+	return old + 1;
+    }
 });
 SyncDB.Types.String = SyncDB.Types.Base.extend({
     parser : function() {
