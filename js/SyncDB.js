@@ -457,7 +457,7 @@ SyncDB.Table = UTIL.Base.extend({
 	console.log("schema: %o\n", schema);
 	var key = schema.key;
 
-	if (!key) throwit(SyncDB.Error.Retard("Man, this schema wont work.\n"));
+	if (!key) SyncDB.throwit(SyncDB.Error.Retard("Man, this schema wont work.\n"));
 
 	for (var field in schema) if (schema.hasOwnProperty(field)) {
 	    console.log("scanning %s:%o.\n", field, schema[field]);
@@ -483,7 +483,7 @@ SyncDB.Table = UTIL.Base.extend({
     generate_select : function(name, type) {
 	var select = this.select(name, type);
 	var db = this.db;	
-	if (!select) throwit("could not generate select() for %o %o\n", name, type);
+	if (!select) SyncDB.throwit("could not generate select() for %o %o\n", name, type);
 	return function(value, callback) {
 	    if (!callback) callback = SyncDB.getcb;
 	    select(value, function(error, row) {
@@ -501,7 +501,7 @@ SyncDB.Table = UTIL.Base.extend({
     generate_update : function(name, type) {
 	var update = this.update(name, type);
 	var db = this.db;
-	if (!update) throwit([ "could not generate update() for %o %o\n", name, type] );
+	if (!update) SyncDB.throwit([ "could not generate update() for %o %o\n", name, type] );
 	return function(key, row, callback) {
 	    if (!callback) callback = SyncDB.setcb;
 	    row[name] = key;
@@ -696,7 +696,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	    return f;
 	} else if (type.is_indexed) {
 	    var index = this.I[name];
-	    if (!index) throwit("Could not find index "+name);
+	    if (!index) SyncDB.throwit("Could not find index "+name);
 	    if (!type.is_unique)
 		return this.M(function(value, callback) {
 		    // probe the index and check sync.
