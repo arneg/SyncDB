@@ -55,6 +55,7 @@ SyncDB.KeyValueMapping = UTIL.Base.extend({
     constructor : function() {
 	this.m = {};
     },
+    is_permanent : false,
     set : function(key, value, cb) {
 	this.m[key] = value;
 	cb(false, value);
@@ -80,6 +81,7 @@ if (UTIL.App.has_local_storage) {
 	    }
 	    cb(false, value);
 	},
+	is_permanent : true,
 	get : function(key, cb) {
 	    var value;
 	    try {
@@ -136,6 +138,7 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 		}
 		console.log("db opened.");
 	},
+	is_permanent : true,
 	q : [],
 	get : function(val, cb) {
 	    if (this.q) {
@@ -665,6 +668,9 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	    });
 	}));
 	this.base(name, schema, db);
+    },
+    is_permanent : function() {
+	return SyncDB.LS.is_permanent;
     },
     index : function(name, field_type, key_type) {
 	if (field_type.is_unique)
