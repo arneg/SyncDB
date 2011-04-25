@@ -5,6 +5,11 @@ UTIL.Base = Base.extend({
     }
 });
 SyncDB = {
+    throw : function(err) {
+	console.log("error: %o", err);
+	console.trace();
+	throw(err);
+    },
     Error : {
 	NoSync : Base.extend({ 
 	    toString : function () { return "NoSync"; },
@@ -136,8 +141,9 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 	    if (this.q) {
 		this.q.push(function() { this.get(val, cb); });
 	    } else {
-		this.db.transaction(function (tx) {
-		    tx.executeSql("SELECT * FROM sLsA WHERE key=?;", [val], function(tx, data) {
+		this.q = [];
+		this.db.transaction(this.M(function (tx) {
+		    tx.executeSql("SELECT * FROM sLsA WHERE key=?;", [val], this.M(function(tx, data) {
 			if (!data.rows.length) {
 			    cb(false, undefined);
 			} else if (data.rows.length == 1) {
@@ -145,42 +151,57 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 			} else {
 			    // FUCKUP
 			}
-		    }, function(tx, err) {
+			this.replay();
+		    }), this.M(function(tx, err) {
 			cb(err);
-		    });
-		});
+			this.replay();
+		    }));
+		}));
 	    }
 	},
 	set : function(key, val, cb) {
 	    if (this.q) {
 		this.q.push(function() { this.set(key, val, cb); });
 	    } else {
-		this.db.transaction(function (tx) {
+		this.q = [];
+		this.db.transaction(this.M(function (tx) {
 		    tx.executeSql("INSERT OR REPLACE INTO sLsA (key, value) VALUES(?, ?);", [ key, val ],
-				  function(tx, data) {
+				  this.M(function(tx, data) {
 				    if (data.rowsAffected != 1) cb(true);
 				    else cb(false, val);
-				  },
-				  function (tx, err) {
+				    this.replay();
+				  }),
+				  this.M(function (tx, err) {
 				    cb(err);
-				  });
-		});
+				    this.replay();
+				  }));
+		}));
 	    }
 	},
 	remove : function(key, cb) {
 	    if (this.q) {
 		this.q.push(function() { this.remove(key, cb); });
 	    } else {
-		this.db.transaction(function (tx) {
+		this.q = [];
+		this.db.transaction(this.M(function (tx) {
 		    tx.executeSql("DELETE FROM sLsA WHERE key=?;", [key],
-				  function (tx, data) {
+				  this.M(function (tx, data) {
 				      cb(false);
-				  },
-				  function (tx, err) {
+				      this.replay();
+				  }),
+				  this.M(function (tx, err) {
 				      cb(err);
-				  }
+				      this.replay();
+				  })
 		    );
-		});
+		}));
+	    }
+	},
+	replay : function() {
+	    var q = this.q;
+	    this.q = undefined;
+	    for (var i = 0; i < q.length; i++) {
+		q[i].apply(this);
 	    }
 	},
 	toString : function() {
@@ -204,36 +225,51 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 }
 if (!SyncDB.LS) SyncDB.LS = new(SyncDB.KeyValueStorage || SyncDB.KeyValueMapping)();
 SyncDB.LocalField = UTIL.Base.extend({
-    constructor : function(name, parser) {
+    constructor : function(name, parser, def) {
 	this.name = name;
 	this.parser = parser;
+	this.value = undefined;
+	this.def = def;
+	SyncDB.LS.get(this.name, this.M(function(err, value) {
+		console.log("initialized field %s", this.name);
+		if (UTIL.stringp(value))
+		    this.value = this.parser.decode(serialization.parse_atom(value));
+		else {
+		    this.value = def;
+		    SyncDB.LS.set(this.name, this.parser.encode(this.value).render(), function() {});
+		}
+		this.def = undefined;
+	}));
 	//console.log("name: %s, parser: %o\n", name, parser);
     },
-    get : function() {
+    get : function(cb) {
 	if (!this.value) {
-	    try {
-		if (localStorage[this.name]) {
-		    this.value = this.parser.decode(serialization.parse_atom(localStorage[this.name]));
+	    SyncDB.LS.get(this.name, this.M(function(err, value) {
+		if (err) {
+		    cb(undefined);
 		} else {
-		    this.value = undefined;
+		    if (UTIL.stringp(value))
+			this.value = this.parser.decode(serialization.parse_atom(value));
+		    cb(this.value);
 		}
-	    } catch(err) {
-		console.log("ERROR: %o\n", err);
-		console.trace();
-		throw(err);
-	    }
+	    }));
+	    return this;
 	}
-	return this.value;
+	cb(this.value);
+	return this;
     },
     set : function() {
+	console.log("name: %o, parser: %o, this: %o\n", this.name, this.parser, this);
 	if (arguments.length) {
+	    if (this.def) {
+		this.def = undefined;
+	    }
 	    this.value = arguments[0];
 	}
 	if (this.value == undefined) {
-	    delete localStorage[this.name];
+	    SyncDB.LS.remove(this.name, function () {});
 	} else {
-	    console.log("name: %o, parser: %o, this: %o\n", this.name, this.parser, this);
-	    localStorage[this.name] = this.parser.encode(this.value).render();
+	    SyncDB.LS.set(this.name, this.parser.encode(this.value).render(), function () {});
 	}
     }
 });
@@ -241,18 +277,20 @@ SyncDB.MappingIndex = SyncDB.LocalField.extend({
     constructor : function(name, type, id) {
 	this.type = type;
 	this.id = id;
-	this.base(name, new serialization.Object(this.id.parser()));
+	this.base(name, new serialization.Object(type.parser()), {});
     },
     set : function(index, id) {
 	if (!this.value) 
-	    this.value = { };
+	    SyncDB.throw("Youu are too early!!");
 	this.value[index] = id;
 	// adding something can be done cheaply, by appending the tuple
 	this.base();
     },
     get : function(index) {
-	if (!this.value) this.base(index);
-	if (!this.value || !this.value[index]) return [];
+	if (!this.value)
+	if (!this.value) 
+	    SyncDB.throw("Youu are too early!!");
+	if (!this.value[index]) return [];
 	return [ this.value[index] ];
     }
 });
@@ -260,20 +298,23 @@ SyncDB.MultiIndex = SyncDB.LocalField.extend({
     constructor : function(name, type, id) {
 	this.type = type;
 	this.id = id;
-	this.base(name, new serialization.Object(new serialization.SimpleSet()));
+	console.log("%o %o %o", name, type, id);
+	this.base(name, new serialization.Object(new serialization.SimpleSet()), {});
     },
     set : function(index, id) {
 	if (!this.value) 
-	    this.value = { };
+	    SyncDB.throw("Youu are too early!!");
 	if (!this.value[index]) {
 	    this.value[index] = { };
 	}
-	this.value[index][id] = { };
+	this.value[index][id] = 1;
 	// adding something can be done cheaply, by appending the tuple
+	console.log(">> %o", this.value);
 	this.base();
     },
     get : function(index) {
-	if (!this.value) this.base();
+	if (!this.value)
+	    SyncDB.throw("Youu are too early!!");
 	if (!this.value || !this.value[index]) return [];
 	return UTIL.keys(this.value[index]);
     }
@@ -354,30 +395,26 @@ SyncDB.TableConfig = SyncDB.LocalField.extend({
 	// the schema and version, etc.
 	this.base(name, new serialization.Struct({
 			    version : new serialization.Integer(),
-			    schema : new SyncDB.Serialization.Schema(),
-			}));
-	var v = this.get();
-	if (!v) {
-	    v = {
-		version : 0,
-		schema : new SyncDB.Schema({}),
-	    };
-	    this.set(v);
-	}
+			    schema : new SyncDB.Serialization.Schema()
+			}), 
+		  {
+		    version : 0,
+		    schema : new SyncDB.Schema({})
+		  });
     },
     version : function() { // table version. to sync missing upstream revisions
 	if (arguments.length) {
-	    var v = this.get().version = arguments[0];
+	    var v = this.value.version = arguments[0];
 	    this.set();
 	}
-	return this.get().version; 
+	return this.value.version; 
     },
     schema : function() {
 	if (arguments.length) {
-	    var v = this.get().schema = arguments[0];
+	    var v = this.value.schema = arguments[0];
 	    this.set();
 	}
-	return this.get().schema; 
+	return this.value.schema; 
     }
 });
 // NOTE:
@@ -415,10 +452,7 @@ SyncDB.Table = UTIL.Base.extend({
 	this.I = {};
 	if (db) db.add_update_callback(this.M(this.update));
 	console.log("schema: %o\n", schema);
-	var key;
-	for (var field in schema) if (schema.hasOwnProperty(field)) {
-	    if (schema[field].is_key) key = schema[field];
-	}
+	var key = schema.key;
 
 	if (!key) throw(SyncDB.Error.Retard("Man, this schema wont work.\n"));
 
@@ -613,28 +647,24 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 });
 SyncDB.LocalTable = SyncDB.Table.extend({
     constructor : function(name, schema, db) { 
-	this.config = new SyncDB.TableConfig("_syncdb_"+name);
-	if (this.config) {
+	this.config = new SyncDB.TableConfig("_syncdb_"+name).get(this.M(function() {
 	    if (this.config.schema().hashCode() != schema.hashCode()) {
 		this.prune();
-	    } else {
-		this.base(name, schema, db);
-		return;
 	    }
-	}
 
-	this.config.schema(schema);
+	    this.config.schema(schema);
+	    if (db) db.get_version(function(version) {
+		if (version > this.version()) {
+		    // update all missing fields, depending on sync. maybe all
+		    //
+		    // server would no which things are either
+		    //  - fully synced
+		    //  - cached (^^ works the same here)
+		    //  - irrelevant
+		}
+	    });
+	}));
 	this.base(name, schema, db);
-	if (db) db.get_version(function(version) {
-	    if (version > this.version()) {
-		// update all missing fields, depending on sync. maybe all
-		//
-		// server would no which things are either
-		//  - fully synced
-		//  - cached (^^ works the same here)
-		//  - irrelevant
-	    }
-	});
     },
     index : function(name, field_type, key_type) {
 	if (field_type.is_unique)
@@ -645,12 +675,16 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	return null;
     },
     select : function(name, type) {
-	var key = this.schema.key;
 	var f = this.M(function(value, callback) {
+	    var key = this.schema.key;
 	    var k = type.get_key(this.name, key, value);
 	    //console.log("trying to fetch %o from local storage %o.\n", key, [ this.name, name, value] );
-	    if (localStorage[k]) callback(0, this.parser.decode(serialization.parse_atom(localStorage[k])));
-	    else callback(new SyncDB.Error.NotFound());
+	    SyncDB.LS.get(k, this.M(function(error, value) {
+		if (!error) {
+		    if (UTIL.stringp(value)) callback(false, this.parser.decode(serialization.parse_atom(value)));
+		    else callback(new SyncDB.Error.NotFound());
+		} else callback(error);
+	    }));
 	});
 	if (type.is_key) {
 	    return f;
@@ -712,19 +746,21 @@ SyncDB.LocalTable = SyncDB.Table.extend({
     prune : function() { // delete everything
     },
     update : function(name, type) {
-	var key = this.config.schema().key;
 	var f = this.M(function(value, row, callback) {
+	    var key = this.config.schema().key;
 	    console.log("parser: %o, data: %o\n", this.parser, row);
-	    try {
-		localStorage[type.get_key(this.name, key, value)] = this.parser.encode(row).render();
-		callback(0, row);
-	    } catch(err) {
-		console.log("SET FAILED: %o", err);
-		callback(new SyncDB.Error.Set(this, row));
-	    }
+	    SyncDB.LS.set(type.get_key(this.name, key, value), this.parser.encode(row).render(),
+			  this.M(function(error) {
+			    if (error) {
+				callback(new SyncDB.Error.Set(this, row));
+			    } else {
+				callback(0, row);
+			    }
+			  }));
 	});
 	if (type.is_indexed || type.is_key) {
 	    return this.M(function(value, row, callback) {
+		var key = this.config.schema().key;
 		if (!row[name]) row[name] = value;
 		for (var i in this.I) {
 		    this.I[i].set(row[i], row[key]);
@@ -750,11 +786,14 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 		    this.I[i].update(row[i], row[key]);
 		    console.log("update %o=%o(%o) in %o(%o)", row[i], row[key], key, this.I[i], i);
 		}
-		localStorage[this.schema[key].get_key(this.name, key, row[key])] = this.parser.encode(row).render();
-		console.log("stored in %o.", this.schema[key].get_key(this.name, key, row[key]));
-	    }
-
-	    callback(error, row);
+		SyncDB.LS.set(this.schema[key].get_key(this.name, key, row[key]), this.parser.encode(row).render(),
+			      this.M(function (error) {
+				  console.log("stored in %o.", this.schema[key].get_key(this.name, key, row[key]));
+				  if (error) callback(error, row);
+				  else callback(false, row);
+			      })
+		);
+	    } else callback(error, row);
 	});
 
 	if (this.db) {
