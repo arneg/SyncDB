@@ -785,7 +785,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	var f = this.M(function(error, row) {
 	    if (!error) {
 		for (var i in this.I) {
-		    this.I[i].update(row[i], row[key]);
+		    this.I[i].set(row[i], row[key]);
 		    console.log("update %o=%o(%o) in %o(%o)", row[i], row[key], key, this.I[i], i);
 		}
 		SyncDB.LS.set(this.schema[key].get_key(this.name, key, row[key]), this.parser.encode(row).render(),
