@@ -12,7 +12,7 @@
 	    id : new SyncDB.Types.Integer(new SyncDB.Flags.Key(), new SyncDB.Flags.AutoIncrement()),
 	    foo : new SyncDB.Types.String(new SyncDB.Flags.Cached()),
 	});
-    var con = new meteor.Connection("/dbsync/server.pike", {});
+    var con = new meteor.Connection("http://dev.webhaveninternational.com/dbsync/server.pike", {});
     var mplex = new meteor.Multiplexer(con);
     var chan = mplex.get_channel("control");
     var db = new SyncDB.LocalTable("test", schema,
