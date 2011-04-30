@@ -4,10 +4,12 @@
 * FILE:	sha256.js
 * VERSION:	0.8
 * AUTHOR:	Christoph Bichlmeier <informatik@zombiearena.de>
+*		Arne Goedeke <el+sha256@laramies.com>
 *
 * NOTE: This version is not tested thoroughly!
 *
 * Copyright (c) 2003, Christoph Bichlmeier
+* Copyright (c) 2011, Arne Goedeke
 * All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
@@ -37,7 +39,16 @@
 * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/* SHA256 logical functions */
 #define ROTR(n,x)	(((x) >>> (n)) | ((x) << (32 - (n))))
+/* Add 32-bit integers with 16-bit operations (bug in some JS-interpreters: overflow) */
+/*
+    safe_add : function(x, y) {
+	var lsw = (x & 0xffff) + (y & 0xffff);
+	var msw = (x >> 16) + (y >> 16) + (lsw >> 16);
+	return (msw << 16) | (lsw & 0xffff);
+    }
+*/
 #define ADD(x, y)	(((x) + (y))&0xffffffff)
 #define Sigma0(x)	(ROTR(2, (x)) ^ ROTR(13, (x)) ^ ROTR(22, (x)))
 #define Sigma1(x)	(ROTR(6, (x)) ^ ROTR(11, (x)) ^ ROTR(25, (x)))
@@ -51,15 +62,6 @@
     s2 = (W)[((j)+1)&0x0f];						      \
     (T1) += ((W)[(j)&0x0f] += sigma1(s1) + (W)[((j)+9)&0x0f] + sigma0(s2));   \
 } while(0)
-/* Add 32-bit integers with 16-bit operations (bug in some JS-interpreters: overflow) */
-/*
-    safe_add : function(x, y) {
-	var lsw = (x & 0xffff) + (y & 0xffff);
-	var msw = (x >> 16) + (y >> 16) + (lsw >> 16);
-	return (msw << 16) | (lsw & 0xffff);
-    }
-*/
-/* SHA256 logical functions */
 UTIL.SHA256 = {
     /* test if the JS-interpreter is working properly */
     self_test : function() {
@@ -135,11 +137,11 @@ UTIL.SHA256.Hash = function() {
 	ihash[6] += g;
 	ihash[7] += h;
     };
+    var W = new Array(16);
 
     /* Read the next chunk of data and update the SHA256 computation */
     var update = function(data, inputLen) {
 	var curpos = 0;
-	var W = new Array(16);
 
 	/* Transform as many times as possible */
 	for(var i=0; i+63<inputLen; i+=64) {
