@@ -6,15 +6,30 @@
 	<script type="text/javascript" src="util.sha256.js"></script>
 	<script type="text/javascript">
 	    var s = UTIL.get_random_key(1024*100);
-	    function test1() {
-		return sha256_digest(s);
+	    function pr(s) {
+		document.body.appendChild(document.createTextNode(s));
 	    }
-	    function test2() {
-		return (new UTIL.SHA256.Hash()).update(s).digest();
+	    function prln(s) {
+		pr(s);
+		document.body.appendChild(document.createElement("br"));
 	    }
+
+	    window.onload = function() {
+		prln("verify sha256 legacy: "+sha256_self_test());
+		prln("verify UTIL.SHA256: "+UTIL.SHA256.self_test());
+
+		pr("legacy sha256: ");
+		prln((s.length / UTIL.gauge(function () { 
+								 return sha256_digest(s); 
+							     }) / 1024).toFixed(2) + " kb/s");
+		pr("UTIL.SHA256: ");
+		prln((s.length / UTIL.gauge(function () { 
+								return (new UTIL.SHA256.Hash()).update(s).digest();
+							     }) / 1024).toFixed(2) + " kb/s");
+	    };
 	</script>
     </head>
     <body>
-	use the console!
+	use the console!<br>
     </body>
 </html>
