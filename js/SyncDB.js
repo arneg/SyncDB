@@ -914,7 +914,7 @@ SyncDB.Flags.Hashed = SyncDB.Flags.Base.extend({
     },
     transform : function(f) {
 	return function(data) {
-	    return new SHA256.update(f(data)).digest();
+	    return (new UTIL.SHA256.Hash()).update(f(data)).hex_digest();
 	}
     }
 });
