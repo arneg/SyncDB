@@ -1,0 +1,20 @@
+<html>
+    <head>
+	<script type="text/javascript" src="ppp/Base.js"></script>
+	<script type="text/javascript" src="ppp/util.js"></script>
+	<script type="text/javascript" src="sha256.js"></script>
+	<script type="text/javascript" src="util.sha256.js"></script>
+	<script type="text/javascript">
+	    var s = UTIL.get_random_key(1024*100);
+	    function test1() {
+		return sha256_digest(s);
+	    }
+	    function test2() {
+		return (new UTIL.SHA256.Hash()).update(s).digest();
+	    }
+	</script>
+    </head>
+    <body>
+	use the console!
+    </body>
+</html>
