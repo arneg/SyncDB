@@ -87,20 +87,18 @@ UTIL.SHA256 = {
 };
 UTIL.SHA256.Hash = function() {
     this.buf = "";
-    var ihash, count, buffer;
+    var ihash;
+    this.length = 0;
 
     /* Initialise the SHA256 computation */
     ihash = [
 	0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
 	0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
     ];
-    count = [0,0];
-    buffer = new Array(64);
 
     /* Transform a 512-bit message block */
-    var transform = function() {
+    var transform = function(W) {
 	var a, b, c, d, e, f, g, h, T1, T2;
-	var W = new Array(16);
 
 	/* Initialize registers with the previous intermediate value */
 	a = ihash[0];
@@ -111,10 +109,6 @@ UTIL.SHA256.Hash = function() {
 	f = ihash[5];
 	g = ihash[6];
 	h = ihash[7];
-
-        /* make 32-bit words */
-	for(var i=0; i<16; i++)
-		W[i] = ((buffer[(i<<2)+3]) | (buffer[(i<<2)+2] << 8) | (buffer[(i<<2)+1] << 16) | (buffer[i<<2] << 24));
 
         for(var j=0; j<64; j++) {
 		T1 = h + Sigma1(e) + choice(e, f, g) + UTIL.SHA256.K256[j];
@@ -144,55 +138,48 @@ UTIL.SHA256.Hash = function() {
 
     /* Read the next chunk of data and update the SHA256 computation */
     var update = function(data, inputLen) {
-	var i, index, curpos = 0;
-	/* Compute number of bytes mod 64 */
-	index = ((count[0] >> 3) & 0x3f);
-        var remainder = (inputLen & 0x3f);
-
-	/* Update number of bits */
-	if ((count[0] += (inputLen << 3)) < (inputLen << 3)) count[1]++;
-	count[1] += (inputLen >> 29);
+	var curpos = 0;
+	var W = new Array(16);
 
 	/* Transform as many times as possible */
-	for(i=0; i+63<inputLen; i+=64) {
-                for(var j=index; j<64; j++)
-			buffer[j] = data.charCodeAt(curpos++);
-		transform();
-		index = 0;
+	for(var i=0; i+63<inputLen; i+=64) {
+                for(var j=0; j<16; j++) {
+			W[j] = (data.charCodeAt(curpos) << 24)
+			     | (data.charCodeAt(curpos+1) << 16)
+			     | (data.charCodeAt(curpos+2) << 8)
+			     | (data.charCodeAt(curpos+3))
+			curpos+=4;
+		}
+		transform(W);
 	}
-
-	/* Buffer remaining input */
-	for(var j=0; j<remainder; j++)
-		buffer[j] = data.charCodeAt(curpos++);
     };
 
     /* Finish the computation by operations such as padding */
-    var final = function() {
-	var index = ((count[0] >> 3) & 0x3f);
-        buffer[index++] = 0x80;
-        if(index <= 56) {
-		for(var i=index; i<56; i++)
-			buffer[i] = 0;
-        } else {
-		for(var i=index; i<64; i++)
-			buffer[i] = 0;
-                transform();
-                for(var i=0; i<56; i++)
-			buffer[i] = 0;
+    var final = function(data, len) {
+	var t;
+	len*=8;
+
+        if (data.length <= 56) {
+		t = new Array(64 - data.length);
+	} else {
+		t = new Array(128 - data.length);
 	}
-        buffer[56] = (count[1] >>> 24) & 0xff;
-        buffer[57] = (count[1] >>> 16) & 0xff;
-        buffer[58] = (count[1] >>> 8) & 0xff;
-        buffer[59] = count[1] & 0xff;
-        buffer[60] = (count[0] >>> 24) & 0xff;
-        buffer[61] = (count[0] >>> 16) & 0xff;
-        buffer[62] = (count[0] >>> 8) & 0xff;
-        buffer[63] = count[0] & 0xff;
-        transform();
+	t[0] = 0x80;
+
+	for (var i = 0; i < 4; i++)
+	    t[t.length-1-i] = (len>>>(i*8))&0xff;
+	data += String.fromCharCode.apply(window, t);
+
+	update(data, data.length);
     };
 
     this.update = function(data) {
 	this.buf += data;
+	this.length += data.length;
+	if (this.buf.length >= 64) {
+	    update(this.buf, (this.buf.length)&0xffffffc0);
+	    this.buf = this.buf.substr(this.buf.length&0xffffffc0);
+	}
 	return this;
     };
     this.digest = function() {
@@ -206,8 +193,7 @@ UTIL.SHA256.Hash = function() {
 	    }
 	    return output;
 	};
-	update(this.buf, this.buf.length);
-	final();
+	final(this.buf, this.length);
         return encode_hex();
     };
 };
