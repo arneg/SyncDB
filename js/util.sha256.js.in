@@ -85,32 +85,20 @@ UTIL.SHA256 = {
 	    0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
 	    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
 	    0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
-    ]
-};
-UTIL.SHA256.Hash = function() {
-    this.buf = "";
-    var ihash;
-    this.length = 0;
-
-    /* Initialise the SHA256 computation */
-    ihash = [
-	0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-	0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
-    ];
-
+    ],
     /* Transform a 512-bit message block */
-    var transform = function(W) {
+    transform : function(hash, W) {
 	var a, b, c, d, e, f, g, h, T1, T2;
 
 	/* Initialize registers with the previous intermediate value */
-	a = ihash[0];
-	b = ihash[1];
-	c = ihash[2];
-	d = ihash[3];
-	e = ihash[4];
-	f = ihash[5];
-	g = ihash[6];
-	h = ihash[7];
+	a = hash[0];
+	b = hash[1];
+	c = hash[2];
+	d = hash[3];
+	e = hash[4];
+	f = hash[5];
+	g = hash[6];
+	h = hash[7];
 
         for(var j=0; j<64; j++) {
 		T1 = h + Sigma1(e) + choice(e, f, g) + UTIL.SHA256.K256[j];
@@ -128,36 +116,66 @@ UTIL.SHA256.Hash = function() {
         }
 
 	/* Compute the current intermediate hash value */
-	ihash[0] += a;
-	ihash[1] += b;
-	ihash[2] += c;
-	ihash[3] += d;
-	ihash[4] += e;
-	ihash[5] += f;
-	ihash[6] += g;
-	ihash[7] += h;
-    };
-    var W = new Array(16);
-
+	hash[0] += a;
+	hash[1] += b;
+	hash[2] += c;
+	hash[3] += d;
+	hash[4] += e;
+	hash[5] += f;
+	hash[6] += g;
+	hash[7] += h;
+    }
+};
+UTIL.SHA256.Hash = Base.extend({
+    constructor : function() {
+	this.init();
+    },
+    /* Initialise the SHA256 computation */
+    init : function() {
+	this.ihash = [
+	    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+	    0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
+	];
+	this.final = 0;
+	this.length = 0;
+	this.buf = "";
+    },
     /* Read the next chunk of data and update the SHA256 computation */
-    var update = function(data, inputLen) {
+    low_update : function(hash, data, len) {
 	var curpos = 0;
+	this.final = false;
 
-	/* Transform as many times as possible */
-	for(var i=0; i+63<inputLen; i+=64) {
+	if (UTIL.arrayp(data)) {
+	    if (data.length == 64) {
+		var W = new Array(16);
                 for(var j=0; j<16; j++) {
-			W[j] = (data.charCodeAt(curpos) << 24)
-			     | (data.charCodeAt(curpos+1) << 16)
-			     | (data.charCodeAt(curpos+2) << 8)
-			     | (data.charCodeAt(curpos+3))
+			W[j] = (data[curpos] << 24)
+			     | (data[curpos+1] << 16)
+			     | (data[curpos+2] << 8)
+			     | (data[curpos+3]);
 			curpos+=4;
 		}
-		transform(W);
+		UTIL.SHA256.transform(hash, W);
+	    } else if (data.length == 16) {
+		UTIL.SHA256.transform(hash, data);
+	    }
+	/* Transform as many times as possible */
+	} else for(var i=0; i+63<len; i+=64) {
+	    var W = new Array(16);
+	    for(var j=0; j<16; j++) {
+		    W[j] = (data.charCodeAt(curpos) << 24)
+			 | (data.charCodeAt(curpos+1) << 16)
+			 | (data.charCodeAt(curpos+2) << 8)
+			 | (data.charCodeAt(curpos+3))
+		    curpos+=4;
+	    }
+	    UTIL.SHA256.transform(hash, W);
 	}
-    };
 
+	return hash;
+    },
     /* Finish the computation by operations such as padding */
-    var final = function(data, len) {
+    low_final : function(hash, data, len) {
 	var t;
 	len*=8;
 
@@ -172,33 +190,69 @@ UTIL.SHA256.Hash = function() {
 	    t[t.length-1-i] = (len>>>(i*8))&0xff;
 	data += String.fromCharCode.apply(window, t);
 
-	update(data, data.length);
-    };
+	return this.low_update(this.ihash.concat(), data, data.length);
+    },
+    update : function(data) {
+	this.final = 0;
 
-    this.update = function(data) {
-	this.buf += data;
-	this.length += data.length;
-	if (this.buf.length >= 64) {
-	    update(this.buf, (this.buf.length)&0xffffffc0);
-	    this.buf = this.buf.substr(this.buf.length&0xffffffc0);
+	if (UTIL.stringp(data)) {
+	    this.length += data.length;
+	    this.buf += data;
+	    if (this.buf.length >= 64) {
+		this.low_update(this.ihash, this.buf, (this.buf.length)&0xffffffc0);
+		this.buf = this.buf.substr(this.buf.length&0xffffffc0);
+	    }
+	} else if (this.buf.length) {
+	    UTIL.error("Using Hash in string mode already.\n");
+	} else {
+	    this.length += 64;
+	    this.low_update(this.ihash, data);
 	}
 	return this;
-    };
-    this.digest = function() {
+    },
+    digest : function() {
+	if (!this.final) 
+	    this.final = this.low_final(this.ihash, this.buf, this.length);
+        return this.final.concat();
+    },
+    array_digest : function() {
+	if (!this.final) 
+	    this.final = this.low_final(this.ihash, this.buf, this.length);
+	var a = new Array(32);
+	for (var i = 0; i < 8; i++) {
+	    a[i*4] = (this.final[i] >>> 24);
+	    a[i*4+1] = (this.final[i] >> 16) & 0xff;
+	    a[i*4+2] = (this.final[i] >> 8) & 0xff;
+	    a[i*4+3] = (this.final[i]) & 0xff;
+	}
+	return a;
+    },
+    string_digest : function() {
+	return String.fromCharCode.apply(window, this.array_digest());
+    },
+    hex_digest : function() {
+	if (!this.final) 
+	    this.final = this.low_final(this.ihash, this.buf, this.length);
+
 	/* Get the internal hash as a hex string */
-	var encode_hex = function() {
-	    var hex_digits = "0123456789abcdef";
-	    var output = new String();
-	    for(var i=0; i<8; i++) {
-		    for(var j=28; j>=0; j-=4)
-			    output += hex_digits.charAt((ihash[i] >>> j) & 0x0f);
-	    }
-	    return output;
-	};
-	final(this.buf, this.length);
-        return encode_hex();
-    };
-};
+	var hex_digits = "0123456789abcdef";
+	var output = new String();
+	for(var i=0; i<8; i++) {
+		for(var j=28; j>=0; j-=4)
+			output += hex_digits.charAt((this.final[i] >>> j) & 0x0f);
+	}
+	return output;
+    }
+});
 
+/*UTIL.HMAC = Base.extend({
+    constructor : function(hash) {
+	this.hash = hash;
+    },
+    update : function(data) {
 
+    },
+    digest : function
+});
 
+*/
