@@ -4,8 +4,11 @@
 	<script type="text/javascript" src="ppp/util.js"></script>
 	<script type="text/javascript" src="sha256.js"></script>
 	<script type="text/javascript" src="util.sha256.js"></script>
+	<script type="text/javascript" src="util.hmac.js"></script>
 	<script type="text/javascript">
-	    var s = UTIL.get_random_key(1024*100);
+	    var s = UTIL.get_random_key(100*1024);
+	    var hash;
+	    var hmac;
 	    function pr(s) {
 		document.body.appendChild(document.createTextNode(s));
 	    }
@@ -28,6 +31,10 @@
 	    }
 
 	    window.onload = function() {
+		hash = new UTIL.SHA256.Hash();
+		Hmac = new HMAC(UTIL.SHA256.Hash);
+		hmac = Hmac.get("foo");
+		prln("hmac(foo)(bar): "+hmac.hmac("bar"));
 		prln("verify sha256 legacy: "+sha256_self_test());
 		prln("verify UTIL.SHA256: "+UTIL.SHA256.self_test());
 
