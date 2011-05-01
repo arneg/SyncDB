@@ -107,6 +107,10 @@ SyncDB.KeyValueMapping = UTIL.Base.extend({
 	delete this.m[key];
 	UTIL.call_later(cb, null, false, v);
     },
+    clear : function(cb) {
+	this.m = {};
+	UTIL.call_later(cb, null, false);
+    },
     toString : function() {
 	return "SyncDB.KeyValueMapping";
     }
@@ -140,6 +144,11 @@ if (UTIL.App.has_local_storage) {
 	    } catch (err) {
 		UTIL.call_later(cb, null, err);
 	    }
+	},
+	clear : function(cb) {
+	    // TODO: remove only sync_db entries. ;_)
+	    localStorage.clear();
+	    UTIL.call_later(cb, null, false);
 	},
 	toString : function() {
 	    return "SyncDB.KeyValueStorage";
@@ -250,6 +259,17 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 		q[i].apply(this);
 	    }
 	},
+	clear : function(cb) {
+	    if (!cb) cb = function() {};
+	    this.db.transaction(function tx) {
+		tx.executeSql("DROP TABLE sLsA;", [], function() {
+			      cb(false);
+			  }, function(err) {
+			      UTIL.log("db clear errored: %o", Array.prototype.slice.call(arguments));
+			      cb(err);
+			  });
+	    }
+	},
 	toString : function() {
 	    return "SyncDB.KeyValueDatabase";
 	}
@@ -291,14 +311,12 @@ SyncDB.LocalField = UTIL.Base.extend({
 		if (err) {
 		    cb(undefined);
 		} else {
-		    UTIL.log("%s value: %o", this.toString(), value);
 		    if (UTIL.stringp(value))
 			this.value = this.parser.decode(serialization.parse_atom(value));
 		    else {
 			this.value = this.def;
 			this.sync();
 		    }
-		    UTIL.log("%s value: %o", this.toString(), this.value);
 		    cb(this.value);
 		}
 	    }));
@@ -505,7 +523,6 @@ SyncDB.TableConfig = SyncDB.LocalField.extend({
 	return this.value.version; 
     },
     schema : function() {
-	UTIL.trace();
 	if (arguments.length) {
 	    this.value.schema = arguments[0];
 	    this.sync();
@@ -755,6 +772,7 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	    return id;
 	});
     },
+    // TODO: this does not support chaining. we have to do this properly
     insert : function(row, callback) {
 	var id = UTIL.get_unique_key(5, this.requests);
 	this.requests[id] = callback;
