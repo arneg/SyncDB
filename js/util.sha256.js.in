@@ -65,7 +65,7 @@
 UTIL.SHA256 = {
     /* test if the JS-interpreter is working properly */
     self_test : function() {
-	return (new UTIL.SHA256.Hash()).update("message digest").digest() == "f7846f55cf23e14eebeab5b4e1550cad5b509e3348fbc4efa3a1413d393cb650";
+	return (new UTIL.SHA256.Hash()).update("message digest").hex_digest() == "f7846f55cf23e14eebeab5b4e1550cad5b509e3348fbc4efa3a1413d393cb650";
     },
     /* Hash constant words K: */
     K256 : [
@@ -124,30 +124,16 @@ UTIL.SHA256 = {
 	hash[5] += f;
 	hash[6] += g;
 	hash[7] += h;
-    }
-};
-UTIL.SHA256.Hash = Base.extend({
-    constructor : function() {
-	this.init();
-    },
-    /* Initialise the SHA256 computation */
-    init : function() {
-	this.ihash = [
-	    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-	    0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
-	];
-	this.final = 0;
-	this.length = 0;
-	this.buf = "";
+
+	return hash;
     },
     /* Read the next chunk of data and update the SHA256 computation */
     low_update : function(hash, data, len) {
 	var curpos = 0;
-	this.final = false;
+	var W = new Array(16);
 
 	if (UTIL.arrayp(data)) {
 	    if (data.length == 64) {
-		var W = new Array(16);
                 for(var j=0; j<16; j++) {
 			W[j] = (data[curpos] << 24)
 			     | (data[curpos+1] << 16)
@@ -155,24 +141,26 @@ UTIL.SHA256.Hash = Base.extend({
 			     | (data[curpos+3]);
 			curpos+=4;
 		}
-		UTIL.SHA256.transform(hash, W);
+		return UTIL.SHA256.transform(hash, W);
 	    } else if (data.length == 16) {
-		UTIL.SHA256.transform(hash, data);
-	    }
+		return UTIL.SHA256.transform(hash, data);
+	    } 
 	/* Transform as many times as possible */
-	} else for(var i=0; i+63<len; i+=64) {
-	    var W = new Array(16);
-	    for(var j=0; j<16; j++) {
-		    W[j] = (data.charCodeAt(curpos) << 24)
-			 | (data.charCodeAt(curpos+1) << 16)
-			 | (data.charCodeAt(curpos+2) << 8)
-			 | (data.charCodeAt(curpos+3))
-		    curpos+=4;
+	} else {
+	    for(var i=0; i+63<len; i+=64) {
+		for (var j=0; j<16; j++) {
+			W[j] = (data.charCodeAt(curpos) << 24)
+			     | (data.charCodeAt(curpos+1) << 16)
+			     | (data.charCodeAt(curpos+2) << 8)
+			     | (data.charCodeAt(curpos+3));
+			curpos+=4;
+		}
+		UTIL.SHA256.transform(hash, W);
 	    }
-	    UTIL.SHA256.transform(hash, W);
+	    return hash;
 	}
 
-	return hash;
+	UTIL.error("Bad argument to low_update.");
     },
     /* Finish the computation by operations such as padding */
     low_final : function(hash, data, len) {
@@ -190,34 +178,51 @@ UTIL.SHA256.Hash = Base.extend({
 	    t[t.length-1-i] = (len>>>(i*8))&0xff;
 	data += String.fromCharCode.apply(window, t);
 
-	return this.low_update(this.ihash.concat(), data, data.length);
+	return UTIL.SHA256.low_update(hash.concat(), data, data.length);
+    }
+};
+UTIL.SHA256.Hash = Base.extend({
+    constructor : function() {
+	this.init();
+    },
+    block_bytes : 64,
+    /* Initialise the SHA256 computation */
+    init : function() {
+	this.ihash = [
+	    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+	    0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
+	];
+	this.final = 0;
+	this.length = 0;
+	this.buf = "";
     },
     update : function(data) {
-	this.final = 0;
+	this.final = null;
 
 	if (UTIL.stringp(data)) {
 	    this.length += data.length;
 	    this.buf += data;
 	    if (this.buf.length >= 64) {
-		this.low_update(this.ihash, this.buf, (this.buf.length)&0xffffffc0);
+		UTIL.SHA256.low_update(this.ihash, this.buf, (this.buf.length)&0xffffffc0);
 		this.buf = this.buf.substr(this.buf.length&0xffffffc0);
 	    }
 	} else if (this.buf.length) {
 	    UTIL.error("Using Hash in string mode already.\n");
 	} else {
 	    this.length += 64;
-	    this.low_update(this.ihash, data);
+	    UTIL.SHA256.low_update(this.ihash, data);
 	}
+
 	return this;
     },
     digest : function() {
 	if (!this.final) 
-	    this.final = this.low_final(this.ihash, this.buf, this.length);
+	    this.final = UTIL.SHA256.low_final(this.ihash, this.buf, this.length);
         return this.final.concat();
     },
     array_digest : function() {
 	if (!this.final) 
-	    this.final = this.low_final(this.ihash, this.buf, this.length);
+	    this.final = UTIL.SHA256.low_final(this.ihash, this.buf, this.length);
 	var a = new Array(32);
 	for (var i = 0; i < 8; i++) {
 	    a[i*4] = (this.final[i] >>> 24);
@@ -232,7 +237,7 @@ UTIL.SHA256.Hash = Base.extend({
     },
     hex_digest : function() {
 	if (!this.final) 
-	    this.final = this.low_final(this.ihash, this.buf, this.length);
+	    this.final = UTIL.SHA256.low_final(this.ihash, this.buf, this.length);
 
 	/* Get the internal hash as a hex string */
 	var hex_digits = "0123456789abcdef";
