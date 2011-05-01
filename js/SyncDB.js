@@ -261,14 +261,14 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 	},
 	clear : function(cb) {
 	    if (!cb) cb = function() {};
-	    this.db.transaction(function tx) {
+	    this.db.transaction(function (tx) {
 		tx.executeSql("DROP TABLE sLsA;", [], function() {
 			      cb(false);
 			  }, function(err) {
 			      UTIL.log("db clear errored: %o", Array.prototype.slice.call(arguments));
 			      cb(err);
 			  });
-	    }
+	    });
 	},
 	toString : function() {
 	    return "SyncDB.KeyValueDatabase";
