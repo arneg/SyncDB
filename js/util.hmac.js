@@ -9,8 +9,7 @@ var HMAC = Base.extend({
 	constructor : function(hash, key) {
 	    var blen;
 	    this.hash = hash;
-	    hash.update("");
-	    blen = 64;
+	    blen = hash.block_bytes;
 	    hash.init();
 	    if (key.length > blen) {
 		hash.update(key);
@@ -19,32 +18,23 @@ var HMAC = Base.extend({
 	    }
 	    var a;
 
-	    if (key.length < blen) {
-		a = new Array(blen - key.length);
+	    if ((key.length & (blen-1)) != 0) {
+		a = new Array(blen - (key.length & (blen-1)));
 		key += String.fromCharCode.apply(window, a);
-		console.log("sizeof key: %o, blen: %o, key: %o", key.length, blen, key);
+		//UTIL.log("sizeof key: %o, blen: %o, key: %o", key.length, blen, key);
 	    }
-	    a = new Array(blen);
-	    for (var i = 0; i < a.length; i++) {
-		a[i] = 0x5c;
-	    }
-	    console.log(">>>> %o, %o", String.fromCharCode.apply(window, a).length, key.length);
-	    //this.o_key_pad = this.xor(String.fromCharCode.apply(window, a), key);
 	    this.o_key_pad = this.XOR(key, 0x5c);
-	    for (var i = 0; i < a.length; i++) {
-		a[i] = 0x36;
-	    }
-	    //this.i_key_pad = this.xor(String.fromCharCode.apply(window, a), key);
 	    this.i_key_pad = this.XOR(key, 0x36);
-
-	    console.log(">> %o, %o", this.o_key_pad.length, this.i_key_pad.length);
+	    //UTIL.log(">> %o, %o", this.o_key_pad.length, this.i_key_pad.length);
 	},
+	// move this somewhere else
 	XOR : function(s, i) {
 	    var a = new Array(s.length);
 	    for (var j = 0; j < a.length; j++)
 		a[j] = s.charCodeAt(j)^i;
 	    return String.fromCharCode.apply(window, a);
 	},
+	      /*
 	xor : function(one, two) {
 	    var three;
 
@@ -56,9 +46,9 @@ var HMAC = Base.extend({
 
 	    three = new Array(one.length - two.length);
 
-	    console.log("o, t: %o, %o", one.length, two.length);
+	    UTIL.log("o, t: %o, %o", one.length, two.length);
 	    for (var i = 0; i < (one.length - two.length); i++) {
-		console.log("DID IT %o %o", i, one.length - two.length);
+		UTIL.log("DID IT %o %o", i, one.length - two.length);
 		two += String.fromCharCode(two.charCodeAt(i));
 		three[i] = two.charCodeAt(i);
 	    }
@@ -72,6 +62,7 @@ var HMAC = Base.extend({
 
 	    return three;
 	},
+	*/
 	hmac : function(s) {
 	    var inner;
 	    this.hash.update(this.i_key_pad + s)
@@ -79,7 +70,6 @@ var HMAC = Base.extend({
 	    this.hash.init();
 	    this.hash.update(this.o_key_pad + inner);
 	    inner = this.hash.hex_digest();
-	    //inner = this.hash.array_digest();
 	    this.hash.init();
 	    return inner;
         }
