@@ -144,7 +144,7 @@ UTIL.SHA256 = {
 		return UTIL.SHA256.transform(hash, W);
 	    } else if (data.length == 16) {
 		return UTIL.SHA256.transform(hash, data);
-	    } 
+	    }
 	/* Transform as many times as possible */
 	} else {
 	    for(var i=0; i+63<len; i+=64) {
@@ -203,7 +203,8 @@ UTIL.SHA256.Hash = Base.extend({
 	    this.length += data.length;
 	    this.buf += data;
 	    if (this.buf.length >= 64) {
-		UTIL.SHA256.low_update(this.ihash, this.buf, (this.buf.length)&0xffffffc0);
+		UTIL.SHA256.low_update(this.ihash, this.buf,
+				       (this.buf.length)&0xffffffc0);
 		this.buf = this.buf.substr(this.buf.length&0xffffffc0);
 	    }
 	} else if (this.buf.length) {
@@ -216,13 +217,15 @@ UTIL.SHA256.Hash = Base.extend({
 	return this;
     },
     digest : function() {
-	if (!this.final) 
-	    this.final = UTIL.SHA256.low_final(this.ihash, this.buf, this.length);
+	if (!this.final)
+	    this.final = UTIL.SHA256.low_final(this.ihash, this.buf,
+					       this.length);
         return this.final.concat();
     },
     array_digest : function() {
-	if (!this.final) 
-	    this.final = UTIL.SHA256.low_final(this.ihash, this.buf, this.length);
+	if (!this.final)
+	    this.final = UTIL.SHA256.low_final(this.ihash, this.buf,
+					       this.length);
 	var a = new Array(32);
 	for (var i = 0; i < 8; i++) {
 	    a[i*4] = (this.final[i] >>> 24);
@@ -236,15 +239,16 @@ UTIL.SHA256.Hash = Base.extend({
 	return String.fromCharCode.apply(window, this.array_digest());
     },
     hex_digest : function() {
-	if (!this.final) 
-	    this.final = UTIL.SHA256.low_final(this.ihash, this.buf, this.length);
+	if (!this.final)
+	    this.final = UTIL.SHA256.low_final(this.ihash, this.buf,
+					       this.length);
 
 	/* Get the internal hash as a hex string */
 	var hex_digits = "0123456789abcdef";
 	var output = new String();
 	for(var i=0; i<8; i++) {
-		for(var j=28; j>=0; j-=4)
-			output += hex_digits.charAt((this.final[i] >>> j) & 0x0f);
+	    for(var j=28; j>=0; j-=4)
+	    	output += hex_digits.charAt((this.final[i] >>> j) & 0x0f);
 	}
 	return output;
     }
