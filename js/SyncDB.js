@@ -103,7 +103,9 @@ SyncDB.KeyValueMapping = UTIL.Base.extend({
 	UTIL.call_later(cb, null, false, this.m[key]);
     },
     remove : function(key, cb) {
-	UTIL.call_later(cb, null, false, delete this.m[key]);
+	var v = this.m[key];
+	delete this.m[key];
+	UTIL.call_later(cb, null, false, v);
     },
     toString : function() {
 	return "SyncDB.KeyValueMapping";
@@ -131,9 +133,9 @@ if (UTIL.App.has_local_storage) {
 
 	},
 	remove : function(key, cb) {
-	    var value;
 	    try {
-		value = delete localStorage[key];
+		var value = localStorage[key];
+		delete localStorage[key];
 		UTIL.call_later(cb, null, false, value);
 	    } catch (err) {
 		UTIL.call_later(cb, null, err);
@@ -222,16 +224,22 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 	    } else {
 		this.q = [];
 		this.db.transaction(this.M(function (tx) {
-		    tx.executeSql("DELETE FROM sLsA WHERE key=?;", [key],
-				  this.M(function (tx, data) {
-				      cb(false);
-				      this.replay();
-				  }),
-				  this.M(function (tx, err) {
-				      cb(err);
-				      this.replay();
-				  })
-		    );
+		    tx.executeSql("SELECT * FROM sLsA WHERE key=?;", [key],
+			this.M(function(tx, data) {
+			    tx.executeSql("DELETE FROM sLsA WHERE key=?;", [key],
+					  this.M(function (tx, data) {
+					      cb(false, data);
+					      this.replay();
+					  }),
+					  this.M(function (tx, err) {
+					      cb(err);
+					      this.replay();
+					  }));
+					  }),
+			this.M(function (tx, err) {
+			    cb(err);
+			    this.replay();
+			}));
 		}));
 	    }
 	},
@@ -297,14 +305,15 @@ SyncDB.LocalField = UTIL.Base.extend({
 	cb(this.value);
 	return this;
     },
-    set : function() {
+    set : function(value) {
 	console.log("name: %o, parser: %o, this: %o\n", this.name, this.parser, this);
-	if (arguments.length) {
-	    if (this.def) {
-		this.def = undefined;
-	    }
-	    this.value = arguments[0];
+	if (this.def) {
+	    this.def = undefined;
 	}
+	this.value = value;
+	this.sync();
+    },
+    sync : function() {
 	// We want to allow for looping over a repeated set call (e.g. MultiIndex)
 	if (this.will_set) return;
 	this.will_set = true;
@@ -330,14 +339,17 @@ SyncDB.MappingIndex = SyncDB.LocalField.extend({
 	    SyncDB.error("You are too early!!");
 	this.value[index] = id;
 	// adding something can be done cheaply, by appending the tuple
-	this.base();
+	this.sync();
     },
     get : function(index) {
-	if (!this.value)
 	if (!this.value) 
 	    SyncDB.error("You are too early!!");
 	if (!this.value[index]) return [];
 	return [ this.value[index] ];
+    },
+    remove : function(index, value) {
+	delete this.value[index];
+	this.sync();
     }
 });
 SyncDB.MultiIndex = SyncDB.LocalField.extend({
@@ -356,13 +368,21 @@ SyncDB.MultiIndex = SyncDB.LocalField.extend({
 	this.value[index][id] = 1;
 	// adding something can be done cheaply, by appending the tuple
 	console.log(">> %o", this.value);
-	this.base();
+	this.sync();
     },
     get : function(index) {
 	if (!this.value)
 	    SyncDB.error("You are too early!!");
 	if (!this.value || !this.value[index]) return [];
 	return UTIL.keys(this.value[index]);
+    },
+    remove : function(index, value) {
+	if (!this.value)
+	    SyncDB.error("You are too early!!");
+	if (this.value[index]) {
+	    delete this.value[index][value];
+	    this.sync();
+	}
     }
 });
 SyncDB.Serialization = {};
@@ -527,8 +547,10 @@ SyncDB.Table = UTIL.Base.extend({
 
 		if (!schema[field].is_key) {
 		    this.I[field] = this.index(field, schema[field], key);
+		} else {
+		    console.log("   is key.\n");
+		    this["remove_by_"+field] = this.generate_remove(field, schema[field]);
 		}
-		else console.log("   is key.\n");
 
 		this["select_by_"+field] = this.generate_select(field, schema[field]);
 
@@ -540,6 +562,23 @@ SyncDB.Table = UTIL.Base.extend({
     get_version : function() {},
     index : function() {
 	return null;
+    },
+    generate_remove : function(name, type) {
+	var remove = this.remove(name, type);
+	var db = this.db;
+	if (!remove) SyncDB.error("could not generate remove() for %o %o\n", name, type);
+	if (db) return function(key, callback) {
+	    db["remove_by_"+name](key, this.M(function(error, row) {
+		if (error) return callback(error);
+
+		remove(key, function(lerror, lrow) {
+		    if (lerror) // this case is stupid. local db is out of sync
+			callback(lerror);
+		    else
+			callback(false, row);
+		});
+	    }));
+	} else return remove;
     },
     generate_select : function(name, type) {
 	var select = this.select(name, type);
@@ -738,6 +777,29 @@ SyncDB.LocalTable = SyncDB.Table.extend({
     index : function(name, field_type, key_type) {
 	return field_type.get_index(name, field_type, key_type);
     },
+    remove : function(name, type) {
+	var f = this.M(function(value, callback) {
+	    var key = this.schema.key;
+	    var k = type.get_key(this.name, key, value);
+
+	    for (var i in this.I) {
+		type.index_remove(this.I[i], row[i], row[key]);
+	    }
+
+	    SyncDB.LS.remove(k, this.M(function(error, value) { // TODO: make useful with different storage errors etc.
+		if (!error) {
+		    if (UTIL.stringp(value)) callback(false, this.parser.decode(serialization.parse_atom(value)));
+		    else callback(new SyncDB.Error.NotFound());
+		} else callback(error);
+	    }));
+	});
+
+	if (type.is_key) {
+	    return f;
+	} else {
+	    throw("deleteing on !keys does not work yet.");
+	}
+    },
     select : function(name, type) {
 	var f = this.M(function(value, callback) {
 	    var key = this.schema.key;
@@ -829,13 +891,12 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 		if (!row[name]) row[name] = value;
 		for (var i in this.I) {
 		    type.index_insert(this.I[i], row[i], row[key]);
-		    console.log();
 		}
 		return f(row[key], row, callback);
 	    });
 	}
 
-	console.log("Could not generate update for %o %o", name, type);
+	SyncDB.error("Could not generate update for %o %o", name, type);
     },
 	     /*
     update : function() {
@@ -972,6 +1033,9 @@ SyncDB.Types = {
 	},
 	index_insert : function(index, key, id) {
 	    return index.set(key, id);
+	},
+	index_remove : function(index, key, id) {
+	    return index.remove(key, id);    
 	}
     })
 };
@@ -1014,5 +1078,11 @@ SyncDB.Types.Array = SyncDB.Types.Base.extend({
 	    // complex types, e.g. AND, OR and shit like that
 	    return key.index_lookup(index);
 	} else return index.get(key);
+    },
+    index_remove : function(index, key, id) {
+	if (UTIL.arrayp(key)) {
+	    for (var i = 0; i < key.length; i++)
+		index.remove(key[i], id);
+	} else index.remove(key, id);
     }
 });
