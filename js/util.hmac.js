@@ -18,8 +18,8 @@ var HMAC = Base.extend({
 	    }
 	    var a;
 
-	    if ((key.length & (blen-1)) != 0) {
-		a = new Array(blen - (key.length & (blen-1)));
+	    if (key.length < blen) {
+		a = new Array(blen - key.length);
 		key += String.fromCharCode.apply(window, a);
 		//UTIL.log("sizeof key: %o, blen: %o, key: %o", key.length, blen, key);
 	    }
