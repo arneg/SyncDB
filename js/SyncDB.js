@@ -698,6 +698,10 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 		id : s,
 		row : this.parser_in
 	    }, "_update"),
+	    _remove : new serialization.Struct({
+		id : s,
+		row : this.parser_in
+	    }, "_remove"),
 	    _insert : new serialization.Struct({
 		id : s,
 		row : this.parser_out
@@ -769,6 +773,16 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	    this.requests[id] = callback;
 	    this.channel.send(this.out._update.encode({ row : row, id : id }).render());
 	    console.log("METEOR SET.");
+	    return id;
+	});
+    },
+    remove : function(name, type) {
+	return this.M(function(value, row, callback) {
+	    var id = UTIL.get_unique_key(5, this.requests);	
+	    row[name] = value;
+	    this.requests[id] = callback;
+	    this.channel.send(this.out._remove.encode({ row : row, id : id }).render());
+	    console.log("METEOR REMOVE.");
 	    return id;
 	});
     },
