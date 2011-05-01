@@ -277,26 +277,28 @@ SyncDB.LocalField = UTIL.Base.extend({
 	this.value = undefined;
 	this.def = def;
 	this.will_set = false;
-	SyncDB.LS.get(this.name, this.M(function(err, value) {
-		console.log("initialized field %s", this.name);
-		if (UTIL.stringp(value))
-		    this.value = this.parser.decode(serialization.parse_atom(value));
-		else {
-		    this.value = def;
-		    SyncDB.LS.set(this.name, this.parser.encode(this.value).render(), function() {});
-		}
-		this.def = undefined;
-	}));
+	// this.get is overloaded and might be synchronous only (e.g. Index)
+	SyncDB.LocalField.prototype.get.call(this, function() {
+	    console.log("initialized field %s", this.name);
+	});
 	//console.log("name: %s, parser: %o\n", name, parser);
     },
     get : function(cb) {
-	if (!this.value) {
+	if (!cb) UTIL.error("CallBack missing.");
+
+	if (!this.value) { // cache this, we will fetch
 	    SyncDB.LS.get(this.name, this.M(function(err, value) {
 		if (err) {
 		    cb(undefined);
 		} else {
+		    UTIL.log("%s value: %o", this.toString(), value);
 		    if (UTIL.stringp(value))
 			this.value = this.parser.decode(serialization.parse_atom(value));
+		    else {
+			this.value = this.def;
+			this.sync();
+		    }
+		    UTIL.log("%s value: %o", this.toString(), this.value);
 		    cb(this.value);
 		}
 	    }));
@@ -350,6 +352,9 @@ SyncDB.MappingIndex = SyncDB.LocalField.extend({
     remove : function(index, value) {
 	delete this.value[index];
 	this.sync();
+    },
+    toString : function() {
+	return "MappingIndex("+this.name+","+this.type+")";
     }
 });
 SyncDB.MultiIndex = SyncDB.LocalField.extend({
@@ -383,6 +388,9 @@ SyncDB.MultiIndex = SyncDB.LocalField.extend({
 	    delete this.value[index][value];
 	    this.sync();
 	}
+    },
+    toString : function() {
+	return "MultiIndex("+this.name+","+this.type+")";
     }
 });
 SyncDB.Serialization = {};
@@ -486,17 +494,21 @@ SyncDB.TableConfig = SyncDB.LocalField.extend({
 		    schema : new SyncDB.Schema({})
 		  });
     },
+    toString : function() {
+	return "TableConfig()";
+    },
     version : function() { // table version. to sync missing upstream revisions
 	if (arguments.length) {
-	    var v = this.value.version = arguments[0];
-	    this.set();
+	    this.value.version = arguments[0];
+	    this.sync();
 	}
 	return this.value.version; 
     },
     schema : function() {
+	UTIL.trace();
 	if (arguments.length) {
-	    var v = this.value.schema = arguments[0];
-	    this.set();
+	    this.value.schema = arguments[0];
+	    this.sync();
 	}
 	return this.value.schema; 
     }
@@ -567,7 +579,7 @@ SyncDB.Table = UTIL.Base.extend({
 	var remove = this.remove(name, type);
 	var db = this.db;
 	if (!remove) SyncDB.error("could not generate remove() for %o %o\n", name, type);
-	if (db) return function(key, callback) {
+	if (db) { return function(key, callback) {
 	    db["remove_by_"+name](key, this.M(function(error, row) {
 		if (error) return callback(error);
 
@@ -578,7 +590,7 @@ SyncDB.Table = UTIL.Base.extend({
 			callback(false, row);
 		});
 	    }));
-	} else return remove;
+	} } else return remove;
     },
     generate_select : function(name, type) {
 	var select = this.select(name, type);
@@ -1062,6 +1074,7 @@ SyncDB.Types.Array = SyncDB.Types.Base.extend({
 	if (type instanceof SyncDB.Types.Array)
 	    SyncDB.error("nested arrays are not implemented, yet. we want food!");
     },
+    toString : function() { return "Array"; },
     get_index : function(name, key_type) {
 	if (this.is_indexed) {
 	    return this.type.get_index(name, key_type);	    
