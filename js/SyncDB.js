@@ -1233,7 +1233,7 @@ SyncDB.Connector = SyncDB.LocalField.extend({
 	    if (oid) { // corresponds to online entry
 		// update or delete
 		if (!row) this.online.remove_by(key, callback);
-		else this.online.update_by(oid callback);
+		else this.online.update_by(oid, callback);
 	    } else this.online.insert(row, callback);
 	}));
     }
