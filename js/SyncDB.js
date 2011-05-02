@@ -160,6 +160,9 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 	constructor : function(cb) {
 		console.log("will open db");
 		this.db = openDatabase("SyncDB", "1.0", "SyncDB", 5*1024*1024);
+		this.init(cb);
+	},
+	init : function(cb) {
 		try {
 		    console.log("creating transaction.");
 		    this.db.transaction(this.M(function (tx) {
@@ -202,6 +205,7 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 			}
 			this.replay();
 		    }), this.M(function(tx, err) {
+			console.log("err: %o", err);
 			cb(err);
 			this.replay();
 		    }));
@@ -261,14 +265,14 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 	},
 	clear : function(cb) {
 	    if (!cb) cb = function() {};
-	    this.db.transaction(function (tx) {
-		tx.executeSql("DROP TABLE sLsA;", [], function() {
-			      cb(false);
-			  }, function(err) {
+	    this.db.transaction(this.M(function (tx) {
+		tx.executeSql("DROP TABLE sLsA;", [], this.M(function() {
+			      this.init(cb);
+			  }), function(err) {
 			      UTIL.log("db clear errored: %o", Array.prototype.slice.call(arguments));
 			      cb(err);
 			  });
-	    });
+	    }));
 	},
 	toString : function() {
 	    return "SyncDB.KeyValueDatabase";
@@ -309,12 +313,14 @@ SyncDB.LocalField = UTIL.Base.extend({
 	if (!this.value) { // cache this, we will fetch
 	    SyncDB.LS.get(this.name, this.M(function(err, value) {
 		if (err) {
+		    UTIL.log("error: %o");
 		    cb(undefined);
 		} else {
 		    if (UTIL.stringp(value))
 			this.value = this.parser.decode(serialization.parse_atom(value));
-		    else {
+		    else if (this.def) {
 			this.value = this.def;
+			delete this.def;
 			this.sync();
 		    }
 		    cb(this.value);
@@ -328,8 +334,9 @@ SyncDB.LocalField = UTIL.Base.extend({
     set : function(value) {
 	console.log("name: %o, parser: %o, this: %o\n", this.name, this.parser, this);
 	if (this.def) {
-	    this.def = undefined;
+	    delete this.def;
 	}
+	if (!value) UTIL.trace();
 	this.value = value;
 	this.sync();
     },
@@ -527,6 +534,7 @@ SyncDB.TableConfig = SyncDB.LocalField.extend({
 	    this.value.schema = arguments[0];
 	    this.sync();
 	}
+	//UTIL.trace();
 	return this.value.schema; 
     }
 });
@@ -574,9 +582,9 @@ SyncDB.Table = UTIL.Base.extend({
 	    if (schema[field].is_key || schema[field].is_indexed) {
 		console.log("   is indexed.\n");
 
-		if (!schema[field].is_key) {
-		    this.I[field] = this.index(field, schema[field], key);
-		} else {
+		this.I[field] = this.index(field, schema[field], key);
+
+		if (schema[field].is_key) {
 		    console.log("   is key.\n");
 		    this["remove_by_"+field] = this.generate_remove(field, schema[field]);
 		}
@@ -815,6 +823,18 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	}));
 	this.base(name, schema, db);
     },
+    clear : function(cb) {
+	var c = 1;
+	for (var key in this.I.value) {
+	    c++;
+	    this.db.remove(key, function () {
+		if (!--c) cb(false);
+	    });
+	}
+
+	--c;
+	if (!c) cb(false);
+    },
     is_permanent : function() {
 	return SyncDB.LS.is_permanent;
     },
@@ -993,6 +1013,7 @@ SyncDB.Flags.Key = SyncDB.Flags.Unique.extend({
     toString : function() {
 	return "Key";
     },
+    is_indexed : 1,
     is_key : 1
 });
 SyncDB.Flags.Index = SyncDB.Flags.Base.extend({ 
@@ -1028,13 +1049,19 @@ SyncDB.Flags.Auto = SyncDB.Flags.Base.extend({
 });
 SyncDB.Flags.AutoIncrement = SyncDB.Flags.Auto.extend({
     get_val : function (db, name, type, cb) {
-	var field = new SyncDB.LocalField("_syncdb_CNT_" + db.name + "_" + name, type.parser(), 1);
+	var n = "_syncdb_CNT_" + db.name + "_" + name;
+	if (!SyncDB.Flags.AutoCache[n])
+	    SyncDB.Flags.AutoCache[n] = new SyncDB.LocalField(n, type.parser(), 1);
+
+	var field = SyncDB.Flags.AutoCache[n];
 	field.get(function(val) {
 		    field.set(type.increment(val));
+		    UTIL.log("INCREMENT %o", val);
 		    cb(val);
 		  });
     }
 });
+SyncDB.Flags.AutoCache = {};
 SyncDB.Types = {
     Base : UTIL.Base.extend({
 	constructor : function() {
@@ -1087,6 +1114,9 @@ SyncDB.Types.Integer = SyncDB.Types.Base.extend({
     parser : function() {
 	return new serialization.Integer();
     },
+    random : function() {
+	return Math.floor(0xffffffff*Math.random());
+    },
     toString : function() { return "Integer"; },
     increment : function(old) {
 	return old + 1;
@@ -1095,6 +1125,9 @@ SyncDB.Types.Integer = SyncDB.Types.Base.extend({
 SyncDB.Types.String = SyncDB.Types.Base.extend({
     parser : function() {
 	return new serialization.String();
+    },
+    random : function() {
+	return UTIL.get_random_key(10);
     },
     toString : function() { return "String"; }
 });
@@ -1123,6 +1156,12 @@ SyncDB.Types.Array = SyncDB.Types.Base.extend({
 	    // complex types, e.g. AND, OR and shit like that
 	    return key.index_lookup(index);
 	} else return index.get(key);
+    },
+    random : function() {
+	var a = new Array(20);
+	for (var i = 0; i < 20; i++)
+	    a[i] = this.type.random();
+	return a;
     },
     index_remove : function(index, key, id) {
 	if (UTIL.arrayp(key)) {
