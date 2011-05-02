@@ -1139,6 +1139,9 @@ SyncDB.Types.Array = SyncDB.Types.Base.extend({
 	if (type instanceof SyncDB.Types.Array)
 	    SyncDB.error("nested arrays are not implemented, yet. we want food!");
     },
+    parser : function() {
+	return new serialization.Array(this.type.parser());
+    },
     toString : function() { return "Array"; },
     get_index : function(name, key_type) {
 	if (this.is_indexed) {
