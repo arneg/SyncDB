@@ -23,7 +23,7 @@
 			lastname : new SyncDB.Types.String(),
 			streetname : new SyncDB.Types.String(),
 			suburb : new SyncDB.Types.String(),
-			interests : new SyncDB.Types.Array(new SyncDB.Types.String())
+			interests : new SyncDB.Types.Array(new SyncDB.Types.String(), new SyncDB.Flags.Index())
 		}) 
 	);
 	SyncDB.Test.run(db, function() {
