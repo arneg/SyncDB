@@ -303,7 +303,7 @@ SyncDB.LocalField = UTIL.Base.extend({
 	this.will_set = false;
 	// this.get is overloaded and might be synchronous only (e.g. Index)
 	SyncDB.LocalField.prototype.get.call(this, function() {
-	    UTIL.log("initialized field %s", this.name);
+	    //UTIL.log("initialized field %s", this.name);
 	});
 	//UTIL.log("name: %s, parser: %o\n", name, parser);
     },
@@ -579,10 +579,12 @@ SyncDB.Table = UTIL.Base.extend({
 
 	for (var field in schema) if (schema.hasOwnProperty(field)) {
 	    //UTIL.log("scanning %s:%o.\n", field, schema[field]);
-	    if (schema[field].is_key || schema[field].is_indexed) {
+	    if (schema[field].is_indexed) {
 		//UTIL.log("   is indexed.\n");
 
+		UTIL.log("generating index for %s", field);
 		this.I[field] = this.index(field, schema[field], key);
+		UTIL.log("INDEX: %o", this.I[field]);
 
 		if (schema[field].is_key) {
 		    //UTIL.log("   is key.\n");
@@ -886,7 +888,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 		return this.M(function(value, callback) {
 		    // probe the index and check sync.
 		    var ids = type.index_lookup(index, value);
-		    //UTIL.log("ids: %o\n", ids);
+		    UTIL.log("ids: %o\n", ids);
 		    if (ids.length) {
 			if (ids.length == 1) {
 			    return f(ids[0], callback);
@@ -974,7 +976,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	var f = this.M(function(error, row) {
 	    if (!error) {
 		for (var i in this.I) {
-		    this.I[i].set(row[i], row[key]);
+		    this.schema.m[i].index_insert(this.I[i], row[i], row[key]);
 		    //UTIL.log("update %o=%o(%o) in %o(%o)", row[i], row[key], key, this.I[i], i);
 		}
 		SyncDB.LS.set(this.schema[key].get_key(this.name, key, row[key]), this.parser.encode(row).render(),
@@ -1097,7 +1099,7 @@ SyncDB.Types = {
 	get_index : function(name, key_type) {
 	    if (this.is_unique)
 		return new SyncDB.MappingIndex("_syncdb_I"+name, this, key_type);
-	    else if (this.is_indexed) 
+	    else //if (this.is_indexed) 
 		return new SyncDB.MultiIndex("_syncdb_I"+name, this, key_type);
 	},
 	index_lookup : function(index, key) {
@@ -1145,9 +1147,7 @@ SyncDB.Types.Array = SyncDB.Types.Base.extend({
     },
     toString : function() { return "Array"; },
     get_index : function(name, key_type) {
-	if (this.is_indexed) {
-	    return this.type.get_index(name, key_type);	    
-	}
+	return this.type.get_index(name, key_type);	    
     },
     index_insert : function(index, key, id) {
 	for (var i = 0; i < key.length; i++)
