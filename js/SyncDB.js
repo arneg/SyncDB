@@ -476,10 +476,11 @@ SyncDB.Schema = UTIL.Base.extend({
 	}
     },
     hashCode : function() {
-	//return sha256_digest(this.parser().encode(this).render());
-	return 1;
+	return (new UTIL.SHA256.Hash()).update(this.schema_parser().encode(this).render()).digest();
     },
-    // maybe in the future, the schema will generate its own parser.
+    schema_parser : function() {
+	return new SyncDB.Serialization.Schema();
+    },
     parser : function(filter) {
 	var n = {};
 	for (var name in this.m) if (this.m.hasOwnProperty(name)) {
@@ -582,19 +583,22 @@ SyncDB.Table = UTIL.Base.extend({
 	    if (schema[field].is_indexed) {
 		//UTIL.log("   is indexed.\n");
 
-		UTIL.log("generating index for %s", field);
+		//UTIL.log("generating index for %s", field);
 		this.I[field] = this.index(field, schema[field], key);
-		UTIL.log("INDEX: %o", this.I[field]);
-
-		if (schema[field].is_key) {
-		    //UTIL.log("   is key.\n");
-		    this["remove_by_"+field] = this.generate_remove(field, schema[field]);
-		}
+		//UTIL.log("INDEX: %o", this.I[field]);
 
 		this["select_by_"+field] = this.generate_select(field, schema[field]);
-
 		if (schema[field].is_unique)
 		    this["update_by_"+field] = this.generate_update(field, schema[field]);
+		if (schema[field].is_key) {
+		    //UTIL.log("   is key.\n");
+		    this.update_by = this["update_by_"+field];
+		    this.select_by = this["select_by_"+field];
+		    this.remove_by
+		      = this["remove_by_"+field] =
+			this.generate_remove(field, schema[field]);
+		}
+
 	    }
 	}
     },
@@ -626,6 +630,7 @@ SyncDB.Table = UTIL.Base.extend({
 	return function(value, callback) {
 	    var extra = Array.prototype.slice.call(arguments, 2);
 	    if (!callback) callback = SyncDB.getcb;
+	    callback = UTIL.once(callback);
 	    select(value, function(error, row) {
 		if (!error) return callback.apply(this, [error, row].concat(extra));
 		if (!db) return callback.apply(this, [error, row].concat(extra));
@@ -809,8 +814,9 @@ SyncDB.LocalTable = SyncDB.Table.extend({
     constructor : function(name, schema, db) { 
 	(this.config = new SyncDB.TableConfig("_syncdb_"+name)).get(this.M(function() {
 	    if (this.config.schema().hashCode() != schema.hashCode()) {
+		UTIL.log("SCHEMA changed. cleaning local databse");
 		this.prune();
-	    }
+	    } else UTIL.log("SCHEMA unchanged.");
 
 	    this.config.schema(schema);
 	    if (db) db.get_version(function(version) {
