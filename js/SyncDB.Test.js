@@ -30,7 +30,7 @@ SyncDB.Test = {
 	    }
 	    var log = function (f, test, err) {
 		if (!err)
-		    UTIL.log("Testsuite '%s' OK: %o ms", test, f);
+		    UTIL.log("Testsuite '%s' OK: %o s", test, f);
 		else
 		    UTIL.log("Testsuite '%s' failed: %o", test, err);
 	    };
@@ -93,10 +93,10 @@ SyncDB.Test.Suite = Base.extend({
 	    }
 	}
 	tests = tests.sort();
-	UTIL.log("%o starting testsuite: %o %o", this, tests);
+	UTIL.log("%o starting testsuite: %o", this, tests);
 	var log = function (f, test, err) {
 	    if (!err)
-		UTIL.log("test '%s' OK: %o ms", test.substr(5), f);
+		UTIL.log("test '%s' OK: %o s", test.substr(5), f);
 	    else
 		UTIL.log("test '%s' failed: %o", test.substr(5), err);
 	};
@@ -135,29 +135,30 @@ SyncDB.Test.Simple = SyncDB.Test.Suite.extend({
 	    }));
 	}
     },
-    test_0select : function(cb) {
+    test_1select : function(cb) {
 	// select all indices
 	var c = 1;
+	cb = UTIL.once(cb, "HEINZ");
 	var error = false;
 	for (var i = 0; i < this.rows.length; i++) {
 	    for (var field in this.schema.m) {
 		if (!this.schema.m[field].is_unique) continue;
-		UTIL.log("field: %o %o %o", field, this.schema.m[field], this.uniques);
+		//UTIL.log("field: %o %o %o", field, this.schema.m[field], this.uniques);
 		c++;
 		var index = this.rows[i][field];
 		if (!index) UTIL.log("bad row: %o", this.rows[i]);
-		UTIL.log("selecting %o", index);
-		this.db["select_by_"+field](index, function(err, row) {
+		//UTIL.log("selecting %o", index);
+		this.db["select_by_"+field](index, UTIL.once(function(err, row) {
 		    c--;
 		    if (err) {
 			error = err;
 			cb(err);
 		    }
-		    if (!error || !c) cb(false);
-		});
+		    if (!error && !c) cb(false);
+		}));
 	    }
 	}
 	c--;
-	if (!c) cb(false);
+	if (!c && !error) cb(false);
     }
 });
