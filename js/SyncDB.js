@@ -467,7 +467,6 @@ SyncDB.Serialization.Schema = serialization.Object.extend({
 SyncDB.Schema = UTIL.Base.extend({
     constructor : function(m) {
 	this.m = m;
-	this.key;
 	this.autos = [];
 	for (var name in m) if (m.hasOwnProperty(name)) {
 	    if (m[name].is_key) this.key = name;
@@ -1232,7 +1231,7 @@ SyncDB.Connector = SyncDB.LocalField.extend({
 	    var oid = this.drafts.draft_index.get(key);
 	    if (oid) { // corresponds to online entry
 		// update or delete
-		if (!row) this.online.remove_by(key, callback);
+		if (!row) this.online.remove_by(oid, callback);
 		else this.online.update_by(oid, callback);
 	    } else this.online.insert(row, callback);
 	}));
