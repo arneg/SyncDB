@@ -42,6 +42,7 @@ SyncDB.Test = {
 
 SyncDB.Test.Suite = Base.extend({
     constructor : function(db) {
+	if (!db) UTIL.trace();
 	this.db = db;
 	this.schema = db.config.schema();
 	this.uniques = {};
@@ -104,7 +105,6 @@ SyncDB.Test.Suite = Base.extend({
 	if (tests.length) this.low_run(tests, 0, log, cb);
     }
 });
-
 SyncDB.Test.Simple = SyncDB.Test.Suite.extend({
     constructor : function(db) {
 	this.base(db);
@@ -150,15 +150,60 @@ SyncDB.Test.Simple = SyncDB.Test.Suite.extend({
 		//UTIL.log("selecting %o", index);
 		this.db["select_by_"+field](index, UTIL.once(function(err, row) {
 		    c--;
+		    if (error) return;
 		    if (err) {
 			error = err;
 			cb(err);
 		    }
-		    if (!error && !c) cb(false);
+		    if (!c) cb(false);
 		}));
 	    }
 	}
 	c--;
 	if (!c && !error) cb(false);
+    },
+    test_9remove : function(cb) {
+	var c = 1 + this.rows.length;
+	cb = UTIL.once(cb);
+	var error = false;
+	for (var i = 0; i < this.rows.length; i ++) {
+	    this.db.remove_by(this.rows[i][this.schema.key], function(err, row) {
+		c--;
+		if (error) return;
+		if (err) {
+		    error = err;
+		    console.log("rmove of %o failed with %o, %o", i, err, row);
+		    cb(err);
+		}
+		if (!c) cb(false);
+	    });
+	}
+	c--;
+	if (!c && !error) cb(false);
+    }
+});
+SyncDB.Test.Connector = SyncDB.Test.Simple.extend({
+    constructor : function(drafts, online) {
+	this.connector = new SyncDB.Connector(drafts, online,
+					      UTIL.make_method(this, this.commitcb));
+	this.base(drafts);
+    },
+    commitcb : function(key, err, row) {
+	this.count--;
+	if (this.error) return;
+	if (err) {
+	    this.error = err;
+	    this.cb(err);
+	    return;
+	}
+	if (!this.count) this.cb(false);
+    },
+    test_2commit : function(cb) {
+	this.cb = cb;
+	this.count = this.rows.length;
+	for (var i = 0; i < this.rows.length; i++) {
+	    this.connector.commit(this.rows[i][this.schema.key]);
+	}
+	this.rows = [];
     }
 });

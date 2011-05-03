@@ -240,8 +240,9 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 		    tx.executeSql("SELECT * FROM sLsA WHERE key=?;", [key],
 			this.M(function(tx, data) {
 			    tx.executeSql("DELETE FROM sLsA WHERE key=?;", [key],
-					  this.M(function (tx, data) {
-					      cb(false, data);
+					  this.M(function (tx) {
+					      UTIL.log("tx: %o. data: %o", tx, data);
+					      cb(false, data.rows.item(0).value);
 					      this.replay();
 					  }),
 					  this.M(function (tx, err) {
@@ -280,7 +281,7 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
     });
     try {
 	SyncDB.LS = new SyncDB.KeyValueDatabase(function (err) {
-	    UTIL.log("%o", err);
+	    //UTIL.log("%o", err);
 	    if (err) {
 		SyncDB.LS = new (SyncDB.KeyValueStorage || SyncDB.KeyValueMapping)();
 	    }
@@ -332,7 +333,7 @@ SyncDB.LocalField = UTIL.Base.extend({
 	return this;
     },
     set : function(value) {
-	UTIL.log("name: %o, parser: %o, this: %o\n", this.name, this.parser, this);
+	//UTIL.log("name: %o, parser: %o, this: %o\n", this.name, this.parser, this);
 	if (this.def) {
 	    delete this.def;
 	}
@@ -386,7 +387,7 @@ SyncDB.MultiIndex = SyncDB.LocalField.extend({
     constructor : function(name, type, id) {
 	this.type = type;
 	this.id = id;
-	UTIL.log("%o %o %o", name, type, id);
+	//UTIL.log("%o %o %o", name, type, id);
 	this.base(name, new serialization.Object(new serialization.SimpleSet()), {});
     },
     set : function(index, id) {
@@ -397,7 +398,7 @@ SyncDB.MultiIndex = SyncDB.LocalField.extend({
 	}
 	this.value[index][id] = 1;
 	// adding something can be done cheaply, by appending the tuple
-	UTIL.log(">> %o", this.value);
+	//UTIL.log(">> %o", this.value);
 	this.sync();
     },
     get : function(index) {
@@ -583,7 +584,7 @@ SyncDB.Table = UTIL.Base.extend({
 		//UTIL.log("   is indexed.\n");
 
 		//UTIL.log("generating index for %s", field);
-		this.I[field] = this.index(field, schema[field], key);
+		this.I[field] = this.index("_syncdb_"+this.name+"_I"+field, schema[field], key);
 		//UTIL.log("INDEX: %o", this.I[field]);
 
 		this["select_by_"+field] = this.generate_select(field, schema[field]);
@@ -728,13 +729,13 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	    for (var i = 0; i < a.length; i++) {
 		var o;
 		if (!this.incoming[a[i].type]) {
-		    meteor.debug("dont know how to handle %o", a[i]);
+		    UTIL.log("dont know how to handle %o", a[i]);
 		    continue;
 		}
 		try {
 		    o = this.incoming[a[i].type].decode(a[i]);
 		} catch (err) {
-		    meteor.debug("decoding %o failed: %o\n", a[i], err);
+		    UTIL.log("decoding %o failed: %o\n", a[i], err);
 		    continue;
 		}
 
@@ -753,7 +754,7 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 		    } else {
 			f(0, o.row);	    
 		    }
-		} else meteor.debug("could not find reply handler for %o:%o\n", a[i].type, o);
+		} else UTIL.log("could not find reply handler for %o:%o\n", a[i].type, o);
 	    }
 	}));
     },
@@ -854,15 +855,21 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	    var key = this.schema.key;
 	    var k = type.get_key(this.name, key, value);
 
-	    for (var i in this.I) {
-		type.index_remove(this.I[i], row[i], row[key]);
-	    }
+	    UTIL.log("select_by(%o)", value);
+	    this.select_by(value, this.M(function(err, row) {
+		UTIL.log("select_by(%o) : %o %o", value, err, row);
+		if (err) return callback(err, row);
+		for (var i in this.I) {
+		    type.index_remove(this.I[i], row[i], row[key]);
+		}
 
-	    SyncDB.LS.remove(k, this.M(function(error, value) { // TODO: make useful with different storage errors etc.
-		if (!error) {
-		    if (UTIL.stringp(value)) callback(false, this.parser.decode(serialization.parse_atom(value)));
-		    else callback(new SyncDB.Error.NotFound());
-		} else callback(error);
+		SyncDB.LS.remove(k, this.M(function(error, value) { // TODO: make useful with different storage errors etc.
+		    UTIL.log("LS remove : %o %o", error, value);
+		    if (!error) {
+			if (UTIL.stringp(value)) callback(false, row);
+			else callback(new SyncDB.Error.NotFound());
+		    } else callback(error);
+		}));
 	    }));
 	});
 
@@ -893,7 +900,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 		return this.M(function(value, callback) {
 		    // probe the index and check sync.
 		    var ids = type.index_lookup(index, value);
-		    UTIL.log("ids: %o\n", ids);
+		    //UTIL.log("ids: %o\n", ids);
 		    if (ids.length) {
 			if (ids.length == 1) {
 			    return f(ids[0], callback);
@@ -1103,9 +1110,9 @@ SyncDB.Types = {
 	},
 	get_index : function(name, key_type) {
 	    if (this.is_unique)
-		return new SyncDB.MappingIndex("_syncdb_I"+name, this, key_type);
+		return new SyncDB.MappingIndex(name, this, key_type);
 	    else //if (this.is_indexed) 
-		return new SyncDB.MultiIndex("_syncdb_I"+name, this, key_type);
+		return new SyncDB.MultiIndex(name, this, key_type);
 	},
 	index_lookup : function(index, key) {
 	    return index.get(key);
@@ -1186,6 +1193,7 @@ SyncDB.DraftTable = SyncDB.LocalTable.extend({
 	// insert/update
 	this.base(name, schema);
 	this.draft_index = new SyncDB.MappingIndex("_syncdb_DI_" + this.name, schema.m[schema.key], schema.m[schema.key]);
+	UTIL.log("DRAFT INDEX: %o", this.draft_index);
     },
     insert : function(row, cb) {
 	row[this.schema.key] = false;
@@ -1206,8 +1214,9 @@ SyncDB.Connector = SyncDB.LocalField.extend({
 	this.drafts = drafts;
 	this.online = online;
 	this.cb = cb;
+	UTIL.log("Connector(%o, %o)", drafts, online);
 	this.base("_syncdb_connector_"+drafts.name+"_"+online.name,
-		  new serialization.Object(drafts.schema.parser()),
+		  new serialization.Object(drafts.schema.m[drafts.schema.key].parser()),
 		  { });
 	this.get(this.M(function () {
 	    for (var key in this.value)
@@ -1221,18 +1230,28 @@ SyncDB.Connector = SyncDB.LocalField.extend({
 	    if (error) {
 		return this.cb(key, error);
 	    }
-	    var callback = function(error) {
+	    var callback = this.M(function(error, row) {
 		delete this.value[key];
 		this.sync();
-		this.cb(key, error);
-	    };
+		if (!error) {
+		    //console.log("removing key %o", key);
+		    this.drafts.draft_index.remove(key);
+		    this.drafts.remove_by(key,
+			this.M(function(err, _row) {
+			    if (err) UTIL.log("Something fishy happeneed in Connector#commit: %o", err);
+			    this.cb(key, error, row);
+			}));
+		} else 
+		    this.cb(key, error, row);
+	    });
 	    this.value[key] = 1;
 	    this.sync();
 	    var oid = this.drafts.draft_index.get(key);
 	    if (oid) { // corresponds to online entry
+		oid = oid[0];
 		// update or delete
 		if (!row) this.online.remove_by(oid, callback);
-		else this.online.update_by(oid, callback);
+		else this.online.update_by(oid, row, callback);
 	    } else this.online.insert(row, callback);
 	}));
     }

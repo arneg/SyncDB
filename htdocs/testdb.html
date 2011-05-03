@@ -12,24 +12,62 @@
 /*
     */
     var db;
-    SyncDB.LS.clear(function(error) {
-	db = new SyncDB.LocalTable("test", 
-		new SyncDB.Schema({
-			city : new SyncDB.Types.String(),
-			country : new SyncDB.Types.String(),
-			email : new SyncDB.Types.String(new SyncDB.Flags.Index()),
-			firstname : new SyncDB.Types.String(),
-			id : new SyncDB.Types.Integer(new SyncDB.Flags.Key(), new SyncDB.Flags.AutoIncrement()),
-			lastname : new SyncDB.Types.String(),
-			streetname : new SyncDB.Types.String(),
-			suburb : new SyncDB.Types.String(),
-			interests : new SyncDB.Types.Array(new SyncDB.Types.String(), new SyncDB.Flags.Index())
-		}) 
-	);
-	SyncDB.Test.run(db, function() {
-	    UTIL.log("testsuite finished.");
+    function run1() {
+	SyncDB.LS.clear(function(error) {
+	    db = new SyncDB.LocalTable("test", 
+		    new SyncDB.Schema({
+			    city : new SyncDB.Types.String(),
+			    country : new SyncDB.Types.String(),
+			    email : new SyncDB.Types.String(new SyncDB.Flags.Index()),
+			    firstname : new SyncDB.Types.String(),
+			    id : new SyncDB.Types.Integer(new SyncDB.Flags.Key(), new SyncDB.Flags.AutoIncrement()),
+			    lastname : new SyncDB.Types.String(),
+			    streetname : new SyncDB.Types.String(),
+			    suburb : new SyncDB.Types.String(),
+			    interests : new SyncDB.Types.Array(new SyncDB.Types.String(), new SyncDB.Flags.Index())
+		    }) 
+	    );
+	    db.config.get(function () {
+		(new SyncDB.Test.Simple(db)).run(function(err) {
+		    UTIL.log("testsuite finished.");
+		    if (!err) run2();
+		});
+	    });
 	});
-    });
+    }
+
+    var cn;
+
+    function run2() {
+	SyncDB.LS.clear(function(error) {
+	    var schema = new SyncDB.Schema({
+		    id : new SyncDB.Types.Integer(new SyncDB.Flags.Key(), new SyncDB.Flags.AutoIncrement()),
+		    foo : new SyncDB.Types.String(new SyncDB.Flags.Cached()),
+		});
+	    var con = new meteor.Connection("/dbsync/server.pike", {});
+	    var mplex = new meteor.Multiplexer(con);
+	    var chan = mplex.get_channel("control");
+	    var db = new SyncDB.LocalTable("test", schema
+		   /**/,	new SyncDB.MeteorTable("test", schema, chan) /**/
+	    );
+	    var ldb = new SyncDB.DraftTable("dtest", schema);
+	    ldb.config.get(function() {
+		//for (var key in ldb.I.id) {
+		    // loop over all draft keys. fetch them using
+		    // ldb.select_by(key, function(err, row) {
+		    // 	do something with row
+		    // });
+		//}
+		var t = new SyncDB.Test.Connector(ldb, db);
+		t.run(function() {
+		    UTIL.log("testsuite finished.");
+		});
+		cn = t.connector;
+	    });
+	    con.init();
+	});
+    }
+
     function indices(obj) {
 	var a = [];
 	for (var x in obj) {
@@ -43,6 +81,7 @@
 	{ console.log("%o: %o", id, Array.prototype.slice.call(arguments));
 	};
     }
+    window.onload = run1;
     //con.init();
 /*
 */
