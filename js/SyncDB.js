@@ -1180,3 +1180,61 @@ SyncDB.Types.Array = SyncDB.Types.Base.extend({
 	} else index.remove(key, id);
     }
 });
+SyncDB.DraftTable = SyncDB.LocalTable.extend({
+    constructor : function(name, schema) {
+	// add some extra fields to the schema
+	// we also need to support deletes?
+	// insert/update
+	this.base(name, schema);
+	this.draft_index = new SyncDB.MappingIndex("_syncdb_DI_" + this.name, schema.m[schema.key], schema.m[schema.key]);
+    },
+    insert : function(row, cb) {
+	row[this.schema.key] = false;
+	return this.create_draft(row, cb);
+	this.base(row, cb);
+    },
+    create_draft : function(row, cb) {
+	//row["_syncdb_version"] = row.version; // version should always exist
+	SyncDB.LocalTable.prototype.insert.call(this, row, this.M(function(err, row_) {
+	    if (err) return cb(err, row_);
+	    this.draft_index.set(row_[this.schema.key], row[this.schema.key]);
+	    cb(err, row_);
+	}));
+    }
+});
+SyncDB.Connector = SyncDB.LocalField.extend({
+    constructor : function(drafts, online, cb) {
+	this.drafts = drafts;
+	this.online = online;
+	this.cb = cb;
+	this.base("_syncdb_connector_"+drafts.name+"_"+online.name,
+		  new serialization.Object(drafts.schema.parser()),
+		  { });
+	this.get(this.M(function () {
+	    for (var key in this.value)
+		this.commit(key);
+	    // retrigger all commits
+	}));
+    },
+    commit : function(key) {
+	// commit key from draft table online
+	this.drafts.select_by(key, this.M(function(error, row) {
+	    if (error) {
+		return this.cb(key, error);
+	    }
+	    var callback = function(error) {
+		delete this.value[key];
+		this.sync();
+		this.cb(key, error);
+	    };
+	    this.value[key] = 1;
+	    this.sync();
+	    var oid = this.drafts.draft_index.get(key);
+	    if (oid) { // corresponds to online entry
+		// update or delete
+		if (!row) this.online.remove_by(key, callback);
+		else this.online.update_by(oid callback);
+	    } else this.online.insert(row, callback);
+	}));
+    }
+});
