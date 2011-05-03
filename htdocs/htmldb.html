@@ -5,9 +5,11 @@
 <script type="text/javascript" src="../js/ppp/mmp.js"></script>
 <script type="text/javascript" src="../js/ppp/meteor.js"></script>
 <script type="text/javascript" src="../js/ppp/serialization.js"></script>
-<script type="text/javascript" src="../js/sha256.js"></script>
+<script type="text/javascript" src="../js/util.sha256.js"></script>
 <script type="text/javascript" src="../js/SyncDB.js"></script>
 <script type="text/javascript">
+/*
+    */
     var schema = new SyncDB.Schema({
 	    id : new SyncDB.Types.Integer(new SyncDB.Flags.Key(), new SyncDB.Flags.AutoIncrement()),
 	    foo : new SyncDB.Types.String(new SyncDB.Flags.Cached()),
@@ -15,8 +17,8 @@
     var con = new meteor.Connection("http://dev.webhaveninternational.com/dbsync/server.pike", {});
     var mplex = new meteor.Multiplexer(con);
     var chan = mplex.get_channel("control");
-    var db = new SyncDB.LocalTable("test", schema,
-	new SyncDB.MeteorTable("test", schema, chan)
+    var db = new SyncDB.LocalTable("test", schema
+	   /**/,	new SyncDB.MeteorTable("test", schema, chan) /**/
     );
     function indices(obj) {
 	var a = [];
@@ -32,6 +34,8 @@
 	};
     }
     con.init();
+/*
+*/
 </script>
 <body>
 <h1>Use the javascript console!</h1>
