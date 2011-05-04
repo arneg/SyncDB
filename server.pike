@@ -12,10 +12,12 @@ void create() {
     object schema =  SyncDB.Schema(([
 	"id" : SyncDB.Types.Integer(SyncDB.Flags.Key(),
 				    SyncDB.Flags.Automatic()),
-	"foo" : SyncDB.Types.String() 
+	"firstname" : SyncDB.Types.String(),
+	"lastname" : SyncDB.Types.String(),
+	"email" : SyncDB.Types.String()
     ]));
     table = SyncDB.Meteor.Table("ignore", schema, 
-	    SyncDB.MySQL.Table("ignore", Sql.Sql("mysql://root@localhost/FOO"), schema));
+	    SyncDB.MySQL.Table("ignore", Sql.Sql("mysql://root@localhost/eventapp"), schema));
 }
 
 void answer(object r, int code, string data) {
