@@ -689,10 +689,6 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 		id : s,
 		row : this.parser_in
 	    }, "_select"),
-	    _update : new serialization.Struct({
-		id : s,
-		row : this.parser_in
-	    }, "_update"),
 	    _error : new serialization.Struct({
 		id : s,
 		error : s
@@ -1004,9 +1000,10 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	if (this.db) {
 	    this.db.insert(row, f);
 	} else {
+	    row = UTIL.copy(row);
 	    this.schema.get_auto_set(this, function(as) {
 		for (var x in as) row[x] = as[x];
-		f(0, row);
+		f(false, row);
 	    });
 	}
     }
@@ -1196,15 +1193,15 @@ SyncDB.DraftTable = SyncDB.LocalTable.extend({
 	UTIL.log("DRAFT INDEX: %o", this.draft_index);
     },
     insert : function(row, cb) {
-	row[this.schema.key] = false;
+	row[this.schema.key] = 0;
 	return this.create_draft(row, cb);
 	this.base(row, cb);
     },
     create_draft : function(row, cb) {
-	//row["_syncdb_version"] = row.version; // version should always exist
 	SyncDB.LocalTable.prototype.insert.call(this, row, this.M(function(err, row_) {
 	    if (err) return cb(err, row_);
-	    this.draft_index.set(row_[this.schema.key], row[this.schema.key]);
+	    this.draft_index.set(row_[this.schema.key],
+				 row [this.schema.key]);
 	    cb(err, row_);
 	}));
     }
@@ -1247,7 +1244,7 @@ SyncDB.Connector = SyncDB.LocalField.extend({
 	    this.value[key] = 1;
 	    this.sync();
 	    var oid = this.drafts.draft_index.get(key);
-	    if (oid) { // corresponds to online entry
+	    if (oid.length) { // corresponds to online entry
 		oid = oid[0];
 		// update or delete
 		if (!row) this.online.remove_by(oid, callback);
