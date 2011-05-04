@@ -1,9 +1,10 @@
-constant TABLE = "foo";
 inherit SyncDB.Table;
 
 Sql.Sql con;
+string table;
 
-void create(string dbname, Sql.Sql con, SyncDB.Schema schema) {
+void create(string dbname, Sql.Sql con, SyncDB.Schema schema, string table) {
+    this_program::table = table;
     ::create(dbname, schema);
     mapping tables = ([ ]), fields = ([ ]);
     // try to generate all the SQL queries and stored procedures
@@ -22,7 +23,7 @@ void create(string dbname, Sql.Sql con, SyncDB.Schema schema) {
     foreach (schema->types; string field; object type) {
 	if (type->is_key || type->is_index) {
 	    queries["get_by_" + field] = sprintf("SELECT %s FROM %s WHERE"
-				 " %s=:fetchby: ", field_s, TABLE, field);
+				 " %s=:fetchby: ", field_s, table, field);
 	}
     }
 #endif
@@ -32,7 +33,7 @@ void create(string dbname, Sql.Sql con, SyncDB.Schema schema) {
 
 
 void select(mapping keys, function(int(0..1),array(mapping)|mixed:void) cb2, mixed ... extra) {
-    string sql = sprintf("SELECT * FROM %s WHERE 1=1", TABLE);
+    string sql = sprintf("SELECT * FROM %s WHERE 1=1", table);
     int(0..1) noerr;
     array(mapping) rows;
     mixed err;
@@ -63,7 +64,7 @@ void select(mapping keys, function(int(0..1),array(mapping)|mixed:void) cb2, mix
     sql += ";";
 
     err = catch {
-	con->query(sprintf("LOCK TABLES %s READ;", TABLE));
+	con->query(sprintf("LOCK TABLES %s READ;", table));
 	rows = con->query(sql);
 	con->query("UNLOCK TABLES;");
 	noerr = 1;
@@ -81,7 +82,7 @@ void update(mapping keys, function(int(0..1),mapping|mixed:void) cb2, mixed ... 
     mixed err;
     mixed k;
     array rows;
-    string sql = sprintf("UPDATE %s SET ", TABLE);
+    string sql = sprintf("UPDATE %s SET ", table);
     mixed cb(int(0..1) error, mixed bla) {
 	return cb2(error, bla, @extra);
     };
@@ -99,9 +100,9 @@ void update(mapping keys, function(int(0..1),mapping|mixed:void) cb2, mixed ... 
     sql += sprintf(" WHERE %s=%s;", schema->key, schema[schema->key]->encode_sql(keys[schema->key]));
 
     err = catch {
-	con->query(sprintf("LOCK TABLES %s WRITE;", TABLE));
+	con->query(sprintf("LOCK TABLES %s WRITE;", table));
 	con->query(sql);
-	rows = con->query(sprintf("SELECT * FROM %s WHERE %s=%s;", TABLE, schema->key, schema[schema->key]->encode_sql(keys[schema->key])));
+	rows = con->query(sprintf("SELECT * FROM %s WHERE %s=%s;", table, schema->key, schema[schema->key]->encode_sql(keys[schema->key])));
 	con->query("UNLOCK TABLES;");
 	noerr = 1;
     };
@@ -136,9 +137,9 @@ void insert(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... e
 	    return;
 	}
 	err = catch {
-	    con->query(sprintf("LOCK TABLES %s WRITE;", TABLE));
-	    con->query(sprintf("INSERT INTO %s (%s) VALUES(%s);", TABLE, keys * ",", vals * ","));
-	    rows = con->query(sprintf("SELECT * FROM %s WHERE %s=%s;", TABLE, schema->key, row[schema->key]));
+	    con->query(sprintf("LOCK TABLES %s WRITE;", table));
+	    con->query(sprintf("INSERT INTO %s (%s) VALUES(%s);", table, keys * ",", vals * ","));
+	    rows = con->query(sprintf("SELECT * FROM %s WHERE %s=%s;", table, schema->key, row[schema->key]));
 	    con->query("UNLOCK TABLES;");
 	    noerr = 1;
 	} ;
@@ -147,9 +148,9 @@ void insert(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... e
 	error("RETARDO! (%O != %O)\n", schema->key, schema->automatic);
     } else {
 	err = catch {
-	    con->query(sprintf("LOCK TABLES %s WRITE;", TABLE));
-	    con->query(sprintf("INSERT INTO %s (%s) VALUES(%s);", TABLE, keys * ",", vals * ","));
-	    rows = con->query(sprintf("SELECT * FROM %s WHERE %s=LAST_INSERT_ID();", TABLE, schema->automatic));
+	    con->query(sprintf("LOCK TABLES %s WRITE;", table));
+	    con->query(sprintf("INSERT INTO %s (%s) VALUES(%s);", table, keys * ",", vals * ","));
+	    rows = con->query(sprintf("SELECT * FROM %s WHERE %s=LAST_INSERT_ID();", table, schema->automatic));
 	    con->query("UNLOCK TABLES;");
 	    noerr = 1;
 	} ;
