@@ -434,11 +434,10 @@ SyncDB.Serialization.Flag = serialization.String.extend({
 });
 SyncDB.Serialization.FieldType = serialization.Struct.extend({
     constructor : function() {
-	this.base({
+	this.base("_type", {
 	    type : new serialization.String(), 
 	    flags : new serialization.Array(new SyncDB.Serialization.Flag())
 	});
-	this.type == "_type";
     },
     encode : function(type) {
 	return this.base({ type : type.toString(), flags : type.flags });
@@ -488,7 +487,7 @@ SyncDB.Schema = UTIL.Base.extend({
 		n[name] = new serialization.Or(new serialization.False(),
 					       this.m[name].parser());
 	}
-	return new serialization.Struct(n, "_schema");
+	return new serialization.Struct("_schema", n);
     },
     get_auto_set : function(db, cb) {
 	var as = {};
@@ -511,7 +510,7 @@ SyncDB.TableConfig = SyncDB.LocalField.extend({
     constructor : function(name) {
 	// create self updating field with given serialization for
 	// the schema and version, etc.
-	this.base(name, new serialization.Struct({
+	this.base(name, new serialization.Struct(null, {
 			    version : new serialization.Integer(),
 			    schema : new SyncDB.Serialization.Schema()
 			}), 
@@ -676,6 +675,25 @@ SyncDB.Table = UTIL.Base.extend({
 	// this gets triggered on update / delete
     }
 });
+SyncDB.Meteor = {
+    Error : Base.extend({
+	constructor : function(id, error) {
+	    this.id = id;
+	    this.error = error;
+	},
+    }),
+    Base : Base.extend({
+	constructor : function(id, row) {
+	    this.id = id;
+	    this.row = row;
+	},
+    })
+};
+SyncDB.Meteor.Select = SyncDB.Meteor.Base.extend({});
+SyncDB.Meteor.Update = SyncDB.Meteor.Base.extend({});
+SyncDB.Meteor.Insert = SyncDB.Meteor.Base.extend({});
+SyncDB.Meteor.Sync = SyncDB.Meteor.Base.extend({});
+
 SyncDB.MeteorTable = SyncDB.Table.extend({
     constructor : function(name, schema, channel, db) {
 	this.requests = {};	
@@ -684,58 +702,40 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	this.base(name, schema, db);
 	var int = new serialization.Integer();
 	var s = new serialization.String();
-	this.incoming = {
-	    _select : new serialization.Struct({
-		id : s,
-		row : this.parser_in
-	    }, "_select"),
-	    _error : new serialization.Struct({
-		id : s,
-		error : s
-	    }, "_error"),
-	    _update : new serialization.Struct({
-		id : s,
-		row : this.parser_in
-	    }, "_update")
+	var regtype = function(poly, atype, ptype, m) {
+	    poly.register_type(atype, ptype, 
+			       new serialization.Struct(atype, m, ptype));
 	};
-	this.out = {
-	    _select : new serialization.Struct({
-		id : s,
-		// it does not make sense here to allow for
-		// a SELECT on hidden values. They should only
-		// be set by the client.
-		row : this.parser_in
-	    }, "_select"),
-	    _update : new serialization.Struct({
-		id : s,
-		row : this.parser_in
-	    }, "_update"),
-	    _remove : new serialization.Struct({
-		id : s,
-		row : this.parser_in
-	    }, "_remove"),
-	    _insert : new serialization.Struct({
-		id : s,
-		row : this.parser_out
-	    }, "_insert")
-	};
+	this.incoming = new serialization.Polymorphic();
+	regtype(this.incoming, "_error", SyncDB.Meteor.Error,
+		{ id : s, error : s });
+	regtype(this.incoming, "_select", SyncDB.Meteor.Select,
+		{ id : s, row : this.parser_in });
+	regtype(this.incoming, "_sync", SyncDB.Meteor.Sync,
+		{ id : s, row : this.parser_in });
+	this.out = new serialization.Polymorphic();
+	regtype(this.out, "_select", SyncDB.Meteor.Select,
+		{ id : s, row : this.parser_in });
+	regtype(this.out, "_insert", SyncDB.Meteor.Insert,
+		{ id : s, row : this.parser_out });
+	// TODO: is an update allowed to change hidden fields?
+	// insert is, so in principle this should be allowed
+	regtype(this.out, "_update", SyncDB.Meteor.Insert,
+		{ id : s, row : this.parser_in });
 
 	channel.set_cb(this.M(function(data) {
 	    var a = this.atom_parser.parse(data);
 	    for (var i = 0; i < a.length; i++) {
 		var o;
-		if (!this.incoming[a[i].type]) {
-		    UTIL.log("dont know how to handle %o", a[i]);
-		    continue;
-		}
 		try {
-		    o = this.incoming[a[i].type].decode(a[i]);
+		    o = this.incoming.decode(a[i]);
 		} catch (err) {
 		    UTIL.log("decoding %o failed: %o\n", a[i], err);
 		    continue;
 		}
 
 		/*
+		 * TODO: this is called sync now
 		if (a[i].type == "_update") {
 		    this.call_update_callback(o);
 		    continue;
@@ -767,14 +767,17 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
     register_request : function(id, callback) {
 	this.requests[id] = callback;
     },
+    send : function(o) {
+	this.channel.send(this.out.encode(o).render());
+    },
     select : function(name, type) {
 	return this.M(function(value, callback) {
 	    var id = UTIL.get_unique_key(5, this.requests);	
-	    var o = this.get_empty(function (type) { return !type.is_hidden; });
+	    var row = this.get_empty(function (type) { return !type.is_hidden; });
 	    //UTIL.log("name: %o, value: %o\n", name, value);
-	    o[name] = value;
+	    row[name] = value;
 	    this.requests[id] = callback;
-	    this.channel.send(this.out._select.encode({ row : o, id : id }).render());
+	    this.send(new SyncDB.Meteor.Select(id, row));
 	    return id;
 	});
     },
@@ -783,18 +786,18 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	    var id = UTIL.get_unique_key(5, this.requests);	
 	    row[name] = value;
 	    this.requests[id] = callback;
-	    this.channel.send(this.out._update.encode({ row : row, id : id }).render());
+	    this.send(new SyncDB.Meteor.Update(id, row));
 	    UTIL.log("METEOR SET.");
 	    return id;
 	});
     },
     remove : function(name, type) {
 	return this.M(function(value, row, callback) {
+	    UTIL.error("METEOR REMOVE not supported, yet.");
 	    var id = UTIL.get_unique_key(5, this.requests);	
 	    row[name] = value;
 	    this.requests[id] = callback;
-	    this.channel.send(this.out._remove.encode({ row : row, id : id }).render());
-	    UTIL.log("METEOR REMOVE.");
+	    //this.send(new SyncDB.Meteor.Remove(id, row));
 	    return id;
 	});
     },
@@ -802,7 +805,7 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
     insert : function(row, callback) {
 	var id = UTIL.get_unique_key(5, this.requests);
 	this.requests[id] = callback;
-	this.channel.send(this.out._insert.encode({ row: row, id: id }).render());
+	this.send(new SyncDB.Meteor.Insert(id, row));
 	return id;
     }
 });
