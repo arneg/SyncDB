@@ -42,7 +42,10 @@
 	SyncDB.LS.clear(function(error) {
 	    var schema = new SyncDB.Schema({
 		    id : new SyncDB.Types.Integer(new SyncDB.Flags.Key(), new SyncDB.Flags.AutoIncrement()),
-		    foo : new SyncDB.Types.String(new SyncDB.Flags.Cached()),
+		    //foo : new SyncDB.Types.String(new SyncDB.Flags.Cached()),
+		    firstname : new SyncDB.Types.String(),
+		    lastname : new SyncDB.Types.String(),
+		    email : new SyncDB.Types.String()
 		});
 	    var con = new meteor.Connection("/dbsync/server.pike", {});
 	    var mplex = new meteor.Multiplexer(con);
