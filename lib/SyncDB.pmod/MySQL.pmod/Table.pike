@@ -94,8 +94,9 @@ void update(mapping keys, function(int(0..1),mapping|mixed:void) cb2, mixed ... 
 
     foreach (keys; string field; mixed val) {
 	if (field != schema->key)
-	    sql = sprintf("%s %s=%s", sql, field, schema[field]->encode_sql(val));
+	    sql = sprintf("%s %s=%s,", sql, field, schema[field]->encode_sql(val));
     }
+    sql = sql[..sizeof(sql)-2];
     
     sql += sprintf(" WHERE %s=%s;", schema->key, schema[schema->key]->encode_sql(keys[schema->key]));
 
@@ -125,8 +126,9 @@ void insert(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... e
 
     foreach (row; string field; mixed val) {
 	keys[cnt] = field;
-	werror(">> %O %O %O\n", schema->m, field, schema[field]);
+	werror(">> %O -> %O(%O)\n", field, schema[field], val);
 	vals[cnt] = schema[field]->encode_sql(val);
+	cnt++;
     }
 
     // TODO:
@@ -155,7 +157,6 @@ void insert(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... e
 	    noerr = 1;
 	} ;
     }
-
 
     if (noerr) {
 	cb(0, sizeof(rows) ? sanitize_result(rows[0]) : 0);
