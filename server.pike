@@ -33,10 +33,12 @@ function combine(function f1, function f2) {
 }
 
 string make_response_headers(mapping headers) {
+	headers["Cache-Control"] = "no-cache";
 	return "HTTP/1.1 200 OK\r\n" + Roxen.make_http_headers(headers);
 }
 
 mapping parse(Protocols.HTTP.Server.Request r) {
+	write("new request: %O\n", r);
 	string f = basename(r->not_query);
 #if 1
 	mapping id = ([
@@ -65,7 +67,7 @@ mapping parse(Protocols.HTTP.Server.Request r) {
 		// TODO:: inform table of new connection
 		plexers += ({ multiplexer });
 
-		write("new session created just now. %O\n", sessions);
+		write("new session %O created just now.\n", session->client_id);
 
 		string response = sprintf("_id %s",
 					  Serialization.Atom("_string", session->client_id)->render());
