@@ -3,6 +3,12 @@ inherit SyncDB.Table;
 Sql.Sql con;
 string table;
 
+mixed query(mixed ... args) {
+    string s = sprintf(@args);
+    werror("SQL:\t%s\n", s);
+    return con->query(s);
+}
+
 void create(string dbname, Sql.Sql con, SyncDB.Schema schema, string table) {
     this_program::table = table;
     ::create(dbname, schema);
