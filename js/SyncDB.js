@@ -1231,6 +1231,9 @@ SyncDB.Connector = SyncDB.LocalField.extend({
 	    // retrigger all commits
 	}));
     },
+    commit_all : function() {
+	for (var x in this.drafts.draft_index.value) this.commit(x);
+    },
     commit : function(key) {
 	// commit key from draft table online
 	this.drafts.select_by(key, this.M(function(error, row) {
