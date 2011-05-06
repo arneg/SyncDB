@@ -412,6 +412,7 @@ SyncDB.MultiIndex = SyncDB.LocalField.extend({
 	    SyncDB.error("You are too early!!");
 	if (this.value[index]) {
 	    delete this.value[index][value];
+	    if (!this.value[index].length) delete this.value[index];
 	    this.sync();
 	}
     },
@@ -959,7 +960,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 			    if (error) {
 				callback(new SyncDB.Error.Set(this, row));
 			    } else {
-				callback(0, row);
+				callback(false, row);
 			    }
 			  }));
 	});
@@ -967,10 +968,16 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	    return this.M(function(value, row, callback) {
 		var key = this.config.schema().key;
 		if (!row[name]) row[name] = value;
-		for (var i in this.I) {
-		    type.index_insert(this.I[i], row[i], row[key]);
-		}
-		return f(row[key], row, callback);
+		this["select_by_" + name](value, this.M(function(err, row_) {
+		    if (err) {
+			UTIL.error("Some unexpected error occured. Sorry.");
+		    }
+		    for (var i in this.I) {
+			type.index_remove(this.I[i], row_[i], row_[key]);
+			type.index_insert(this.I[i], row[i], row[key]);
+		    }
+		    return f(row[key], row, callback);
+		}));
 	    });
 	}
 
