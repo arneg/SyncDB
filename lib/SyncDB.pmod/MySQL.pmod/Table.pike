@@ -70,9 +70,9 @@ void select(mapping keys, function(int(0..1),array(mapping)|mixed:void) cb2, mix
     sql += ";";
 
     err = catch {
-	con->query(sprintf("LOCK TABLES %s READ;", table));
-	rows = con->query(sql);
-	con->query("UNLOCK TABLES;");
+	query("LOCK TABLES %s READ;", table);
+	rows = query(sql);
+	query("UNLOCK TABLES;");
 	noerr = 1;
     };
 
@@ -107,10 +107,10 @@ void update(mapping keys, function(int(0..1),mapping|mixed:void) cb2, mixed ... 
     sql += sprintf(" WHERE %s=%s;", schema->key, schema[schema->key]->encode_sql(keys[schema->key]));
 
     err = catch {
-	con->query(sprintf("LOCK TABLES %s WRITE;", table));
-	con->query(sql);
-	rows = con->query(sprintf("SELECT * FROM %s WHERE %s=%s;", table, schema->key, schema[schema->key]->encode_sql(keys[schema->key])));
-	con->query("UNLOCK TABLES;");
+	query("LOCK TABLES %s WRITE;", table);
+	query(sql);
+	rows = query("SELECT * FROM %s WHERE %s=%s;", table, schema->key, schema[schema->key]->encode_sql(keys[schema->key]));
+	query("UNLOCK TABLES;");
 	noerr = 1;
     };
 
@@ -145,10 +145,10 @@ void insert(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... e
 	    return;
 	}
 	err = catch {
-	    con->query(sprintf("LOCK TABLES %s WRITE;", table));
-	    con->query(sprintf("INSERT INTO %s (%s) VALUES(%s);", table, keys * ",", vals * ","));
-	    rows = con->query(sprintf("SELECT * FROM %s WHERE %s=%s;", table, schema->key, row[schema->key]));
-	    con->query("UNLOCK TABLES;");
+	    query("LOCK TABLES %s WRITE;", table);
+	    query("INSERT INTO %s (%s) VALUES(%s);", table, keys * ",", vals * ",");
+	    rows = query("SELECT * FROM %s WHERE %s=%s;", table, schema->key, row[schema->key]);
+	    query("UNLOCK TABLES;");
 	    noerr = 1;
 	} ;
     } else if (schema->key != schema->automatic) {
@@ -156,10 +156,10 @@ void insert(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... e
 	error("RETARDO! (%O != %O)\n", schema->key, schema->automatic);
     } else {
 	err = catch {
-	    con->query(sprintf("LOCK TABLES %s WRITE;", table));
-	    con->query(sprintf("INSERT INTO %s (%s) VALUES(%s);", table, keys * ",", vals * ","));
-	    rows = con->query(sprintf("SELECT * FROM %s WHERE %s=LAST_INSERT_ID();", table, schema->automatic));
-	    con->query("UNLOCK TABLES;");
+	    query("LOCK TABLES %s WRITE;", table);
+	    query("INSERT INTO %s (%s) VALUES(%s);", table, keys * ",", vals * ",");
+	    rows = query("SELECT * FROM %s WHERE %s=LAST_INSERT_ID();", table, schema->automatic);
+	    query("UNLOCK TABLES;");
 	    noerr = 1;
 	} ;
     }

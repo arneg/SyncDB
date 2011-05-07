@@ -20,6 +20,7 @@
 // create a transaction for set, to handle all joins
 // 
 // do a join on get
+#if constant(Weirdos.Really)
 SyncDB.MySQL(schema, ([
     "name" : Join("contacts.fullname", "id"),
     // this would add a WHERE (%d == company_id) clause
@@ -35,3 +36,4 @@ void create(mapping schema, mapping map2) {
 	}
     }
 }
+#endif
