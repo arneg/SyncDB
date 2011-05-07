@@ -1,7 +1,7 @@
 inherit .Base;
 
 object parser() {
-    return Serialization.Or(Serialization.Types.Int(), Serialization.Types.False());
+    return Serialization.Types.Or(Serialization.Types.Int(), Serialization.Types.False());
 }
 
 string encode_sql(int i) {
