@@ -14,7 +14,8 @@ void create() {
 				    SyncDB.Flags.Automatic()),
 	"firstname" : SyncDB.Types.String(),
 	"lastname" : SyncDB.Types.String(),
-	"email" : SyncDB.Types.String()
+	"email" : SyncDB.Types.String(),
+	"mobile" : SyncDB.Types.String()
     ]));
     table = SyncDB.Meteor.Table("ignore", schema, 
 	    SyncDB.MySQL.Table("ignore", Sql.Sql("mysql://root@localhost/eventapp"), schema, "newsubscribers"));
