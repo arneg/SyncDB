@@ -77,6 +77,7 @@ void generate_reply(int err, array(mapping)|mapping row, object session, object 
 }
 
 void incoming(object session, Serialization.Atom a) {
+    werror("INCOMING: %O\n", a);
     object message = in->decode(a);
 
     switch (object_program(message)) {
@@ -89,5 +90,7 @@ void incoming(object session, Serialization.Atom a) {
     case .Insert:
 	db->insert(message->row, generate_reply, session, message);
 	break;
+    default:
+	error("Unknown message type: %O\n", message);
     }
 }
