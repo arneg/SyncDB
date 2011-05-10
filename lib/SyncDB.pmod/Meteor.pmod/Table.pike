@@ -77,16 +77,21 @@ void generate_reply(int err, array(mapping)|mapping row, object session, object 
 }
 
 void incoming(object session, Serialization.Atom a) {
+    werror("TABLE: incoming(%O, %O)\n", session, a);
     object message = in->decode(a);
+    werror("TABLE: decoded to %O\n", message);
 
     switch (object_program(message)) {
     case .Select:
+	werror("TABLE: select(%O, %O, %O, %O) (%O)\n", message->row, generate_reply, session, message, object_program(message));
 	db->select(message->row, generate_reply, session, message);
 	break;
     case .Update:
+	werror("TABLE: update(%O, %O, %O, %O) (%O)\n", message->row, generate_reply, session, message, object_program(message));
 	db->update(message->row, generate_reply, session, message);
 	break;
     case .Insert:
+	werror("TABLE: insert(%O, %O, %O, %O) (%O)\n", message->row, generate_reply, session, message, object_program(message));
 	db->insert(message->row, generate_reply, session, message);
 	break;
     }

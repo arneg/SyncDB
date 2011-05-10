@@ -85,6 +85,7 @@ mapping parse(Protocols.HTTP.Server.Request r) {
 
 	// we should check whether or not this is hitting a max connections limit somewhere.
 	if ((session = sessions[id->variables["id"]])) {
+		werror("SERVER: call_out(handle_id, 0, %O(%O))\n", id, id->vars);
 		call_out(session->handle_id, 0, id);
 		return Roxen.http_pipe_in_progress();
 	}
