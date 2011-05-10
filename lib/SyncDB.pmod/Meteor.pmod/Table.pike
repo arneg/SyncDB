@@ -94,5 +94,7 @@ void incoming(object session, Serialization.Atom a) {
 	werror("TABLE: insert(%O, %O, %O, %O) (%O)\n", message->row, generate_reply, session, message, object_program(message));
 	db->insert(message->row, generate_reply, session, message);
 	break;
+    default:
+	error("Unknown message type: %O\n", message);
     }
 }
