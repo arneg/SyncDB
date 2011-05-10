@@ -476,7 +476,7 @@ SyncDB.Schema = UTIL.Base.extend({
 	}
     },
     hashCode : function() {
-	return (new UTIL.SHA256.Hash()).update(this.schema_parser().encode(this).render()).digest();
+	return (new UTIL.SHA256.Hash()).update(this.schema_parser().encode(this).render()).hex_digest();
     },
     schema_parser : function() {
 	return new SyncDB.Serialization.Schema();
