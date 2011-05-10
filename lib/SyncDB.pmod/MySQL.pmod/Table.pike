@@ -176,10 +176,10 @@ array(mapping)|mapping sanitize_result(array(mapping)|mapping rows) {
 	mapping new = ([ ]);
 	foreach (rows; string field; mixed val) {
 	    if (has_value(field, '.')) continue;
-	    if (has_index(schema, field))
+	    if (schema[field])
 		new[field] = schema[field]->decode_sql(rows[field]);
 	    else
-		werror("Field unknown to schema: %O\n", field);
+		werror("Field %O unknown to schema: %O\n", field, schema);
 	}
 
 	return new;
