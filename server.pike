@@ -94,6 +94,6 @@ mapping parse(Protocols.HTTP.Server.Request r) {
 	}
 
 	werror("unknown session '%O'(%O,%O) in %O\n", id->variables["id"], id->variables, r->variables, sessions);
-	answer(r, 500, "me dont know you");
+	call_out(answer, 0, r, 500, "me dont know you");
 	return Roxen.http_pipe_in_progress();
 } 
