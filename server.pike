@@ -64,6 +64,9 @@ mapping parse(Protocols.HTTP.Server.Request r) {
 	if (id->method == "GET" && !has_index(id->variables, "id")) {
 		session = get_new_session();
 		object multiplexer = Meteor.Multiplexer(session);
+		if (!table->incoming) {
+		    werror("!incoming: %O, %O\n", table, table->incoming);
+		}
 		multiplexer->get_channel("control")->set_cb(table->incoming);
 		// TODO:: inform table of new connection
 		plexers += ({ multiplexer });
