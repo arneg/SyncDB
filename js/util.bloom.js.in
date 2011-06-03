@@ -1,0 +1,121 @@
+#include "bits.h"
+UTIL.Bloom = {
+    table_mag : function(n, p) {
+	var t = Math.floor(
+	       Math.log(n * UTIL.Bloom.amount_hashes(p)/ Math.LN2)
+		   /Math.LN2) + 1;
+	return t; 
+    },
+    amount_hashes : function(p) {
+	var a = Math.ceil(- Math.log(p)/Math.LN2);
+	return a;
+    },
+    hash_length : function(n, p) {
+	return UTIL.Bloom.table_mag(n, p) * UTIL.Bloom.amount_hashes(p);
+    },
+};
+UTIL.Bloom.Filter = Base.extend({
+    constructor : function(n, p, hash) {
+	this.hashes = Array.prototype.slice.call(arguments, 1);
+	/*
+	 * Let n be number of elements in the table, and p the required
+	 * probability of false posisitves. Then, the amount of bits in the 
+	 * vector have to be chosen like
+	 * 	m = - (n ln p)/((ln 2)^2)
+	 * The number of different hash functions giving hashes in [0, m-1]
+	 * is optimal at k = ln2 (m/n).
+	 */
+	this.table_mag = UTIL.Bloom.table_mag(n, p); /* conservative start value: 8192 ,) */
+	this.amount_hashes = UTIL.Bloom.amount_hashes(p);
+
+	if (this.amount_hashes * this.table_mag > hash.block_bytes * 8) {
+	    UTIL.error("Requirements cannot be fulfilled. Would need %d bits of hash key (\"Too big to fail\"-condition).", this.amount_hashes * this.table_mag);
+	}
+
+	this.table = BITVECTOR(1 << this.table_mag);
+    },
+    set : function(key) {
+	for (var i = 0; i < arguments.length; i++) {
+	    hash.init();
+	    hash.update(arguments[i]);
+	    var h = hash.digest();
+	    var n = 0;
+	    for (var j = 0; j < this.amount_hashes; j++) {
+		var t;
+		BV_GET_INT(h, n, this.table_mag, t);
+		BV_SET(this.table, t);
+		n += this.table_mag;
+	    }
+	}
+    },
+    get : function(key) {
+	for (var i = 0; i < arguments.length; i++) {
+	    hash.init();
+	    hash.update(arguments[i]);
+	    var h = hash.digest();
+	    var n = 0;
+	    for (var j = 0; j < this.amount_hashes; j++) {
+		var t;
+		BV_GET_INT(h, n, this.table_mag, t);
+		if (!BV_IS_SET(this.table, t))
+		    return false;
+		n += this.table_mag;
+	    }
+	}
+	return true;
+    },
+    compute_hash : function(val) {
+	var res = new Array(this.hashes.length);
+
+	for (var i = 0; i < this.hashes.length; i++) {
+	    var hval = this.hashes[i].update(val, this.table_size);
+	}
+    },
+});
+UTIL.BitVector = Base.extend({
+    constructor : function(len, val) {
+	if (UTIL.arrayp(len)) {
+	    this.field = len;
+	    return;
+	}
+	this.field = new Array(len >>> 5 + ((len % 32) ? 1 : 0));
+	if (val) for (var i = 0; i < this.field.length; i++) {
+	    this.field[i] = val;
+	}
+    },
+    get : function(idx) {
+	var acc = Math.floor(idx >>> 5);
+	var f = this.field[acc];
+
+	return (f & (1 << (idx % 32))) ? 1 : 0;
+    },
+    set : function(idx, val) {
+	var acc = Math.floor(idx >>> 5);
+	if (!(this.field[acc] & (1 << (idx % 32))) != !val) {
+	    this.field[acc] ^= (1 << (idx % 32));
+	}
+    },
+    clear : function() {
+	for (var i = 0; i < this.field.length; i++) {
+	    this.field[i] = 0;
+	}
+    },
+    get_int : function(n, len) {
+	var t = this.field[n >>> 5];
+	t >>>= n % 32;
+	if (len > 32 - (n%32)) {
+	    t |= this.field[n >>> 5 + 1] << n % 32;
+	}
+	return t & (1 << len) - 1;
+    },
+    enlarge : function(len, val) {
+	var of = this.field;
+	this.field = new Array(of.length + len >>> 5 + ((len % 32 ? 1 : 0)));
+	for (var i = 0; i < of.length; i++) {
+	    this.field[i] = of[i];
+	}
+	if (val) for (var i = of.length; i < this.field.length; i++) {
+	    this.field[i] = val;
+	}
+    }
+});
