@@ -5,10 +5,12 @@
 	<script type="text/javascript" src="sha256.js"></script>
 	<script type="text/javascript" src="util.sha256.js"></script>
 	<script type="text/javascript" src="util.hmac.js"></script>
+	<script type="text/javascript" src="util.bloom.js"></script>
 	<script type="text/javascript">
 	    var s = UTIL.get_random_key(100*1024);
 	    var hash;
 	    var hmac;
+	    var bloom;
 	    function pr(s) {
 		document.body.appendChild(document.createTextNode(s));
 	    }
@@ -31,21 +33,42 @@
 	    }
 
 	    window.onload = function() {
+		var f;
 		hash = new UTIL.SHA256.Hash();
 		Hmac = new HMAC(UTIL.SHA256.Hash);
 		hmac = Hmac.get("foo");
+		bloom = new UTIL.Bloom.Filter(1000, 0.03, hash);
+
 		prln("hmac(foo)(bar): "+hmac.hmac("bar"));
 		prln("verify sha256 legacy: "+sha256_self_test());
 		prln("verify UTIL.SHA256: "+UTIL.SHA256.self_test());
 
 		pr("legacy sha256: ");
-		prln((s.length / UTIL.gauge(function () {
-								 return sha256_digest(s); 
-							     }) / 1024).toFixed(2) + " kb/s");
+		f = UTIL.gauge(function () { return sha256_digest(s); });
+		prln(UTIL.sprintf("%2f kb/s (took %2f s)", s.length / f / 1024, f));
 		pr("UTIL.SHA256: ");
-		prln((s.length / UTIL.gauge(function () { 
-								return (new UTIL.SHA256.Hash()).update(s).digest();
-							     }) / 1024).toFixed(2) + " kb/s");
+		f = UTIL.gauge(function () { return (new UTIL.SHA256.Hash()).update(s).digest(); });
+		prln(UTIL.sprintf("%2f kb/s (took %2f s)", s.length / f / 1024, f));
+
+		prln("UTIL.Bloom: ");
+		f = UTIL.gauge(function() {
+		    for (var i = 0; i < 1000; i ++) {
+			bloom.set(s.substr(i*100, 100));
+		    }
+		});
+		prln(UTIL.sprintf("%0f inserts/s (took %fs)", 1000.0 / f, f));
+		f = UTIL.gauge(function() {
+		    for (var i = 0; i < 1000; i ++) {
+			bloom.get(s.substr(i*100, 100));
+		    }
+		});
+		prln(UTIL.sprintf("positive elements: %0f gets/s (took %fs)", 1000.0 / f, f));
+		f = UTIL.gauge(function() {
+		    for (var i = 1; i < 1000; i ++) {
+			if (bloom.get(s.substr(i*100-10, 100))) UTIL.log("false positive: %s", s.substr(i*100-10, 100));
+		    }
+		});
+		prln(UTIL.sprintf("negative elements: %0f gets/s (took %fs)", 1000.0 / f, f));
 	    };
 
 
