@@ -1,8 +1,24 @@
+// vim:syntax=lpc
 inherit SyncDB.Table;
 
 Sql.Sql sql;
 string table;
 Table table_o;
+
+/*
+ * JOIN (using INNER JOIN)
+ *  - join id in secondary table has to be automatic
+ *    either explicit or doing it by hand/with triggers
+ *  - join id in main table is read-only
+ *  - insert new row in secondary tables on insert
+ * LINK (using JOIN)
+ *  - join id in main table can only be set to NULL or 
+ *    an existing id in the other table
+ *  - join id is rw
+ * REFERENCE (using JOIN) inherits LINK
+ *  - members in secondary table are read-only
+ *    and optional.
+ */
 
 mixed query(mixed ... args) {
     string s = sprintf(@args);
@@ -11,9 +27,123 @@ mixed query(mixed ... args) {
 }
 
 class Table(string name) {
-    array(string) fields = ({});
+    object fields = ADT.CritBit.Tree();
+
+    array(string) field_names() {
+	return indices(fields);
+    }
+
+    array(string) readable(mapping row, function fun) {
+	array(string) t = ({ });
+	foreach (fields; string field; object type) {
+	    if (!type->is_readable) {
+		error("Trying to read non-readable field %s\n", field);
+	    }
+	    string res = fun(type, field);
+	    if (res) t += ({ res });
+	}
+	return t;
+    }
+
+    string index(mapping row) {
+	array t = readable(row, lambda(object type, string field) {
+	    if (!row[field] || !type->is_index) return 0;
+	    return sprintf("%s.%s=%s", name, field, type->encode_sql(row[field]));
+	});
+	return sizeof(t) ? t*" AND " : 0;
+    }
+
+    string select(mapping row) {
+	array t = readable(row, lambda(object type, string field) {
+	    if (!row[field] || type->is_index) return 0;
+	    return sprintf("%s.%s=%s", name, field, type->encode_sql(row[field]));
+	});
+	return sizeof(t) ? t*" AND " : 0;
+    }
+
+    string update(mapping row) {
+	array t = writable(row, lambda(object type, string field, mixed val) {
+	    if (field == schema->key) return 0;
+	    return sprintf("%s.%s=%s", name, field, type->encode_sql(val));
+	});
+	return sizeof(t) ? t*", " : 0;
+    }
+
+    array writable(mapping row, function fun) {
+	array t = ({});
+	foreach (fields;string s; object f) {
+	    if (has_index(row, s)) {
+		if (f->is_readonly) {
+		    error("Trying to modify read-only field %s\n", s);
+		}
+		string res = fun(f, s, row[s]);
+		if (res) t += ({ res });
+	    }
+	}
+	return t;
+    }
+
+    string into(mapping row) {
+	// check for mandatory fields here.
+	array t = writable(row, lambda(object type, string field, mixed val) {
+	    return sprintf("%s.%s", name, field);
+	});
+	return sizeof(t) ? t*", " : 0;
+    }
+
+
+    string values(mapping row) {
+	array t = writable(row, lambda(object type, string field, mixed val) {
+	    return type->encode_sql(val);
+	});
+	return sizeof(t) ? t*", " : 0;
+    }
+}
+
+class Foreign(string name) {
+    inherit Table;
     string id;
     string fid;
+
+}
+
+class Join(string name) {
+    inherit Foreign;
+
+    string update(mapping row) {
+	string s = ::update(row);
+	if (s) { // need to add the corresponding link id
+	    if (has_index(row, id)) {
+		s += sprintf(", %s.%s=%s", name, fid, schema[id]->encode_sql(row[id]));
+	    }
+	}
+
+	return s;
+    }
+
+    string join(string table) {
+	return sprintf(" INNER JOIN %s ON %s.%s=%s.%s", name,
+		      name, fid, table, id);
+    }
+}
+
+class Link(string name) {
+    inherit Foreign;
+
+    string join(string table) {
+	return sprintf(" JOIN %s ON %s.%s=%s.%s", name,
+		      name, fid, table, id);
+    }
+}
+
+class Reference(string name) {
+    inherit Link;
+
+    string writable(mapping row, function fun) {
+	if (sizeof(row & indices(fields))) {
+	    error("Trying to change referenced an hence readonly fields.\n");
+	}
+    }
 }
 
 string get_sql_name(string field) {
@@ -75,25 +205,41 @@ void create(string dbname, Sql.Sql con, SyncDB.Schema schema, string table) {
     // 1. determine all tables. if its more than one with complex sum queries,
     //    generate transaction. otherwise if its just one table, we can do with
     //    selects
-    array t = ({});
+    array t = ({
+	table + ".version"
+    });
+
+#define CASE(x) if (Program.inherits(object_program(type), (x)))
+
+
+    foreach (schema->m; string field; object type) {
+	if (type->is_link) {
+	    mapping type = type->f_link;
+	    foreach (type->tables; string name; string fid) {
+		CASE(SyncDB.Flags.Join) {
+		    tables[name] = Join(name);
+		} else CASE(SyncDB.Flags.Reference) {
+		    tables[name] = Reference(name);
+		} else CASE(SyncDB.Flags.Link) {
+		    tables[name] = Link(name);
+		} else {
+		    error("Unsupported link flag.\n");
+		}
+		tables[name]->id = field;
+		tables[name]->fid = fid;
+		t += ({ name  + ".version" });
+	    }
+	}
+    }
 
     foreach (schema->m; string field; object type) {
 	if (type->is_foreign) {
 	    string t2 = type->f_foreign->table;
 	    if (!has_index(tables, t2))
 		tables[t2] = Table(t2);
-	    tables[t2]->fields += ({ field });
+	    tables[t2]->fields[field] = type;
 	} else {
-	    table_o->fields += ({ field });
-	    if (type->is_join) {
-		mapping t = type->f_join->tables;
-		foreach (t; string name; string fid) {
-		    if (!has_index(tables, name))
-			tables[name] = Table(name);
-		    tables[name]->id = field;
-		    tables[name]->fid = fid;
-		}
-	    }
+	    table_o->fields[field] = type;
 	}
 	t += ({ sprintf("%s as %s", get_sql_name(field), field) });
     }
@@ -106,9 +252,7 @@ void create(string dbname, Sql.Sql con, SyncDB.Schema schema, string table) {
     update_sql += "%s WHERE ";
     foreach (tables; string foreign_table; Table t) {
 	// generate the version triggers
-	select_sql +=
-	      sprintf(" INNER JOIN %s ON %s.%s=%s.%s", foreign_table,
-		      foreign_table, t->fid, table, t->id);
+	select_sql += t->join(table);
 	update_sql += sprintf("%s.%s = %s.%s AND ", 
 		      foreign_table, t->fid, table, t->id);
 	// generate proper selects/inserts
@@ -132,29 +276,18 @@ void select(mapping keys, function(int(0..1),array(mapping)|mixed:void) cb2, mix
     
     if (!Array.all(map(map(indices(keys), Function.curry(`[])(schema)), `->, "is_index"), `!=, 0)) {
 	werror("!! %O\n", indices(keys));
-	cb(1, "Need indexable field(s).\n"); // needs error type, i guess
-	return;
-    }
-
-    foreach (keys; string field; mixed val) {
-	if (sizeof(tables)) {
-	    err = catch {
-		a[i++] = sprintf("%s=%s", get_sql_name(field), encode(field, val));
-		noerr = 1;
-	    };
-	}
-
-	if (noerr) {
-	    noerr = 0;
-	} else {
-	    cb(1, err);
-	    return;
-	}
     }
 
     err = catch {
 	//query("LOCK TABLES %s READ;", table);
-	rows = query(sprintf(select_sql, a*" AND "));
+	string index = filter(table_objects()->index(keys), `!=, 0) * " AND ";
+	if (!sizeof(index)) {
+	    cb(1, "Need indexable field(s).\n"); // needs error type, i guess
+	    return;
+	}
+	string t = filter(table_objects()->select(keys), `!=, 0) * " AND ";
+	if (sizeof(t)) index += " AND "+t;
+	rows = query(sprintf(select_sql, t));
 	//query("UNLOCK TABLES;");
 	noerr = 1;
     };
@@ -181,11 +314,7 @@ void update(mapping keys, function(int(0..1),mapping|mixed:void) cb2, mixed ... 
 	return;
     }
 
-    foreach (keys; string field; mixed val) {
-	if (field != schema->key)
-	    sql = sprintf("%s %s=%s,", sql, get_sql_name(field), schema[field]->encode_sql(val));
-    }
-    sql = sql[..sizeof(sql)-2];
+    sql = filter(table_objects()->update(keys), `!=, 0)*",";
     
     sql = sprintf(update_sql, sql, sprintf("%s=%s", get_sql_name(schema->key), encode(schema->key, keys[schema->key])));
 
@@ -234,24 +363,11 @@ void insert(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... e
     }
     err = catch {
 	query("LOCK TABLES %s WRITE;", table_names()*" WRITE,");
+
 	foreach (table_objects(); ; Table t) {
-	    string into = "";
-	    string values = "";
-	    array a = filter(t->fields, Function.curry(`->)(row));
-	    if (sizeof(a)) {
-		if (!row[t->id]) {
-		    if (schema[t->id]->is_automatic) {
-			// TODO: row[t->id] = 
-		    } else 
-			error("field join JOIN not specified.\n");
-		}
-		foreach (a;; string field) {
-		    values += encode(field, row[field]) + ",";
-		    into += sprintf("%s,", field);
-		}
-	    }
-	    into = into[..sizeof(into)-2];
-	    values = values[..sizeof(values)-2];
+	    string into = t->into(row);
+	    if (!into) continue;
+	    string values = t->values(row);
 	    query("INSERT INTO %s (%s) VALUES (%s);", t->name, into, values);
 	}
 	// use select on the ip here.
@@ -276,7 +392,10 @@ void insert(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... e
 
 array(mapping)|mapping sanitize_result(array(mapping)|mapping rows) {
     if (mappingp(rows)) {
-	mapping new = ([ ]);
+	mapping new = ([ "version" : ({}) ]);
+	foreach (table_names();; string table) {
+	    new->version += ({ (int)m_delete(rows, table+".version") }); 
+	}
 	foreach (rows; string field; mixed val) {
 	    if (has_value(field, '.')) continue;
 	    if (schema[field])
