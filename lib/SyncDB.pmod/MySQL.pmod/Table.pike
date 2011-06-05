@@ -26,8 +26,19 @@ mixed query(mixed ... args) {
     return sql->query(s);
 }
 
-class Table(string name) {
+class Table {
     object fields = ADT.CritBit.Tree();
+    mapping sql_schema = ([]);
+
+    string name;
+
+    void create(string name) {
+	this_program::name = name;
+	array a = sql->list_fields(name);
+	foreach (a;; mapping m) {
+	    sql_schema[m->name] = m;
+	}
+    }
 
     array(string) field_names() {
 	return indices(fields);
@@ -61,7 +72,7 @@ class Table(string name) {
 	return sizeof(t) ? t*" AND " : 0;
     }
 
-    string update(mapping row) {
+    string update(mapping row, mapping oldrow) {
 	array t = writable(row, lambda(object type, string field, mixed val) {
 	    if (field == schema->key) return 0;
 	    return sprintf("%s.%s=%s", name, field, type->encode_sql(val));
@@ -100,21 +111,91 @@ class Table(string name) {
     }
 }
 
-class Foreign(string name) {
+class Foreign {
     inherit Table;
+
     string id;
     string fid;
 
+    void create(string name, string id, string fid) {
+	this_program::id = id;
+	this_program::fid = fid;
+	::create(name);
+    }
+
+    string into(mapping row, string|void operation) {
+	string s = ::into(row);
+	if (s) {
+	    if (row[id]) {
+		s += sprintf(", %s.%s", name, fid);
+	    } else if (!is_auto_increment) {
+		error("join id needs to be either automatic or specified."); 
+	    } 
+	}
+	return s;
+    }
+
+    string values(mapping row) {
+	string s = ::values(row);
+	if (s) {
+	    if (row[id]) {
+		s += ", "+schema[id]->encode_sql(row[id]);
+	    } else if (!is_auto_increment) {
+		error("join id needs to be either automatic or specified."); 
+	    } 
+	}
+	return s;
+    }
+
+    int(0..1) `is_auto_increment() {
+	return sql_schema[fid]->flags->auto_increment;
+    }
 }
 
-class Join(string name) {
+class Join {
     inherit Foreign;
 
-    string update(mapping row) {
-	string s = ::update(row);
+    string into(mapping row) {
+	string s = ::into(row);
+	if (!s) {
+	    if (row[id]) return sprintf("%s.%s", name, fid);
+	    if (!is_auto_increment)
+		error("This field is mandatory.\n");
+	    return "";
+	}
+	return s;
+    }
+
+    string values(mapping row) {
+	string s = ::values(row);
+	if (!s) {
+	    if (row[id])
+		return schema[id]->encode_sql(row[id]);
+	    if (!is_auto_increment)
+		error("This field is mandatory.\n");
+	    return "";
+	}
+	return s;
+    }
+
+    string update(mapping row, mapping oldrow) {
+	string s = ::update(row, oldrow);
 	if (s) { // need to add the corresponding link id
 	    if (has_index(row, id)) {
 		s += sprintf(", %s.%s=%s", name, fid, schema[id]->encode_sql(row[id]));
+	    } else {
+		if (!oldrow[id]) {
+		    if (is_auto_increment) {
+			// insert data
+			// change row[id] to the auto incremented value
+			query(sprintf("INSERT INTO %s (%s) VALUES (%s)",  name, into(row), values(row)));
+			mapping r = query(sprintf("SELECT %s,version FROM %s WHERE %s=LAST_INSERT_ID();", fid, name, fid))[0];
+			row[id] = r[fid];
+			return 0;
+		    }
+
+		    error("fooobar");
+		}
 	    }
 	}
 
@@ -127,8 +208,23 @@ class Join(string name) {
     }
 }
 
-class Link(string name) {
+// think: country_id where country table is writable by user
+class Link {
     inherit Foreign;
+
+    string update(mapping row, mapping oldrow) {
+	string s = ::update(row, oldrow);
+	if (s) { // need to add the corresponding link id
+	    if (has_index(row, id)) {
+		if (row[id] != Sql.Null) {
+		}
+		// check if the new link id has a corresponding field in the other table
+		// or Sql.Null
+	    }
+	}
+
+	return s;
+    }
 
     string join(string table) {
 	return sprintf(" JOIN %s ON %s.%s=%s.%s", name,
@@ -136,7 +232,8 @@ class Link(string name) {
     }
 }
 
-class Reference(string name) {
+// think: country_id where country table is readonly by user
+class Reference {
     inherit Link;
 
     string writable(mapping row, function fun) {
@@ -154,12 +251,17 @@ string get_sql_name(string field) {
     return sprintf("%s.%s", table, field);
 }
 
-array(string) table_names() {
-    return indices(tables) + ({ table });
+array(Table) table_objects() {
+    // TODO: move sorting to create
+    array a = values(tables), r;
+    sort(indices(tables), a);
+    r = filter(a, a->is_auto_increment) + ({ table_o });
+    r += filter(a, map(a->is_auto_increment, `!));
+    return r;
 }
 
-array(Table) table_objects() {
-    return values(tables) + ({ table_o });
+array(string) table_names() {
+    return table_objects()->name;
 }
 
 mapping tables = ([ ]);
@@ -179,7 +281,11 @@ void install_triggers(string table) {
 	BEGIN
 	    DECLARE v INT;
 	    SELECT MAX(%<s.version) INTO v FROM %<s WHERE 1;
-	    SET NEW.version=v + 1;
+	    IF v IS NULL THEN
+		SET NEW.version=1;
+	    ELSE 
+		SET NEW.version=v + 1;
+	    END IF;
 	END;
     ;
     ", table));
@@ -189,15 +295,19 @@ void install_triggers(string table) {
 	BEGIN
 	    DECLARE v INT;
 	    SELECT MAX(%<s.version) INTO v FROM %<s WHERE 1;
-	    SET NEW.version=v + 1;
+	    IF v IS NULL THEN
+		SET NEW.version=1;
+	    ELSE 
+		SET NEW.version=v + 1;
+	    END IF;
 	END;
     ", table));
 }
 
 void create(string dbname, Sql.Sql con, SyncDB.Schema schema, string table) {
     this_program::table = table;
-    table_o = Table(table);
     sql = con;
+    table_o = Table(table);
     ::create(dbname, schema);
     // try to generate all the SQL queries and stored procedures
     //
@@ -216,18 +326,21 @@ void create(string dbname, Sql.Sql con, SyncDB.Schema schema, string table) {
 	if (type->is_link) {
 	    mapping type = type->f_link;
 	    foreach (type->tables; string name; string fid) {
+		program p;
 		CASE(SyncDB.Flags.Join) {
-		    tables[name] = Join(name);
+		    p = Join;
 		} else CASE(SyncDB.Flags.Reference) {
-		    tables[name] = Reference(name);
+		    p = Reference;
 		} else CASE(SyncDB.Flags.Link) {
-		    tables[name] = Link(name);
+		    p = Link;
 		} else {
 		    error("Unsupported link flag.\n");
 		}
-		tables[name]->id = field;
-		tables[name]->fid = fid;
+		tables[name] = p(name, field, fid);
 		t += ({ name  + ".version" });
+		if (table_o->sql_schema[field]->flags->auto_increment && tables[name]->is_auto_increment) {
+		    error("Link fields cannot be both automatic in %s and %s.\n", table, name);
+		}
 	    }
 	}
     }
@@ -287,7 +400,7 @@ void select(mapping keys, function(int(0..1),array(mapping)|mixed:void) cb2, mix
 	}
 	string t = filter(table_objects()->select(keys), `!=, 0) * " AND ";
 	if (sizeof(t)) index += " AND "+t;
-	rows = query(sprintf(select_sql, t));
+	rows = query(sprintf(select_sql, index));
 	//query("UNLOCK TABLES;");
 	noerr = 1;
     };
@@ -303,7 +416,7 @@ void update(mapping keys, function(int(0..1),mapping|mixed:void) cb2, mixed ... 
     int(0..1) noerr;
     mixed err;
     mixed k;
-    array rows;
+    array|mapping rows;
     string sql = "";
     mixed cb(int(0..1) error, mixed bla) {
 	return cb2(error, bla, @extra);
@@ -314,17 +427,30 @@ void update(mapping keys, function(int(0..1),mapping|mixed:void) cb2, mixed ... 
 	return;
     }
 
-    sql = filter(table_objects()->update(keys), `!=, 0)*",";
-    
+    err = catch {
+	query("LOCK TABLES %s WRITE;", table_names() * " WRITE,");
+	rows = query(sprintf(select_sql, sprintf("%s=%s", get_sql_name(schema->key), schema[schema->key]->encode_sql(keys[schema->key]))))[0];
+    };
+
+    if (keys->version) {
+	if (!equal(m_delete(keys, "version"), rows->version)) {
+	    query("UNLOCK TABLES;");
+	    cb(1, "Version collision.\n");
+	    return;
+	}
+    }
+
+    sql = filter(table_objects()->update(keys, rows), `!=, 0)*",";
+
     sql = sprintf(update_sql, sql, sprintf("%s=%s", get_sql_name(schema->key), encode(schema->key, keys[schema->key])));
 
     err = catch {
-	query("LOCK TABLES %s WRITE;", table_names() * " WRITE,");
 	query(sql);
 	rows = query(sprintf(select_sql, sprintf("%s=%s", get_sql_name(schema->key), schema[schema->key]->encode_sql(keys[schema->key]))));
-	query("UNLOCK TABLES;");
 	noerr = 1;
     };
+
+    query("UNLOCK TABLES;");
 
     if (noerr) {
 	cb(0, sizeof(rows) && sanitize_result(rows[0]));
@@ -344,7 +470,7 @@ string encode(string field, mixed val) {
 void insert(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... extra) {
     mixed err;
     int(0..1) noerr;
-    array keys = allocate(sizeof(row)), vals = allocate(sizeof(row)), rows;
+    array rows;
     mixed cb(int(0..1) error, mixed bla) {
 	return cb2(error, bla, @extra);
     };
@@ -364,21 +490,32 @@ void insert(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... e
     err = catch {
 	query("LOCK TABLES %s WRITE;", table_names()*" WRITE,");
 
+	// first do the ones which have the fid AUTO_INCREMENT
+	// use those automatic values to populare the link ids in the main table
+	// insert the main one
+	// insert the others
+
 	foreach (table_objects(); ; Table t) {
 	    string into = t->into(row);
 	    if (!into) continue;
 	    string values = t->values(row);
 	    query("INSERT INTO %s (%s) VALUES (%s);", t->name, into, values);
+	    if (t->is_auto_increment && t->is_link) {
+		mapping last = query("SELECT * FROM %s WHERE %s=LAST_INSERT_ID()", t->name, t->fid)[0];
+		row[t->id] = (int)last[t->fid];
+	    }
+	    
+	    if (t == table_o && schema[schema->key]->is_automatic) {
+		mixed last = query("SELECT LAST_INSERT_ID() as id;");
+		werror(">last> %O\n", last);
+		if (sizeof(last)) last = last[0];
+		werror("setting %s to %s\n", schema->key, last->id);
+		row[schema->key] = (int)last->id;
+	    }
 	}
-	// use select on the ip here.
     };
     if (!err) err = catch {
-	if (!schema->automatic) {
-	    rows = query(sprintf(select_sql, sprintf("%s=%s", schema->key, encode(schema->key, row[schema->key]))));
-
-	} else {
-	    rows = query(sprintf(select_sql, sprintf("%s=LAST_INSERT_ID()", get_sql_name(schema->automatic))));
-	}
+	rows = query(sprintf(select_sql, sprintf("%s.%s=%s", table, schema->key, encode(schema->key, row[schema->key]))));
 	query("UNLOCK TABLES;");
 	noerr = 1;
     };
@@ -400,7 +537,7 @@ array(mapping)|mapping sanitize_result(array(mapping)|mapping rows) {
 	    if (has_value(field, '.')) continue;
 	    if (schema[field])
 		new[field] = schema[field]->decode_sql(rows[field]);
-	    else
+	    else if (field != "version")
 		werror("Field %O unknown to schema: %O\n", field, schema);
 	}
 
