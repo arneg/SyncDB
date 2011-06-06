@@ -1,8 +1,8 @@
 inherit .Base;
 
-mapping tables;
+mapping(string:string) tables;
 
-void create(mapping tables) {
+void create(void|mapping tables) {
     this_program::tables = tables;
 }
 
