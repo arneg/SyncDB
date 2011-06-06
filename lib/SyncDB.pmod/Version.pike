@@ -1,7 +1,8 @@
 array(int) a;
 
-void create(int n) {
-    a = allocate(n);
+void create(void|array(int)|int n) {
+    if (n)
+	a = intp(n) && allocate(n) || n;
 }
 
 int __hash() {
@@ -29,4 +30,10 @@ string _sprintf(int fmt) {
 	return sprintf("SyncDB.Version(%d)", this);
     }
     return 0;
+}
+
+mixed cast(string type) {
+    if (type == "array") {
+	return a;
+    } else error("Cannot cast %O into %s\n", this, type);
 }
