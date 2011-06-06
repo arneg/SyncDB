@@ -4,6 +4,7 @@ inherit SyncDB.Table;
 Sql.Sql sql;
 string table;
 Table table_o;
+SyncDB.Version version;
 
 /*
  * JOIN (using INNER JOIN)
@@ -374,6 +375,7 @@ void create(string dbname, Sql.Sql con, SyncDB.Schema schema, string table) {
 
     update_sql += "%s";
     select_sql += " WHERE 1=1 AND %s";
+    version = SyncDB.Version(sizeof(tables) + 1);
 }
 
 
@@ -527,11 +529,27 @@ void insert(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... e
     }
 }
 
+void syncreq(SyncDB.Version version, function cb, mixed ... args) {
+    array(mapping) rows;
+    array t = table_objects();
+
+    if (sizeof(version) != sizeof(t)) error("");
+
+    foreach (t;int i;Table tab) {
+	t[i] = sprintf("%s.version > %d", tab->name, version[i]);	
+    }
+
+    rows = map(query(sprintf(select_sql, t*" OR ")), sanitize_result);
+    call_out(cb, 0, 0, map(rows, sanitize_result), @args, this_program::version);
+}
+
 array(mapping)|mapping sanitize_result(array(mapping)|mapping rows) {
     if (mappingp(rows)) {
-	mapping new = ([ "version" : ({}) ]);
-	foreach (table_names();; string table) {
-	    new->version += ({ (int)m_delete(rows, table+".version") }); 
+	mapping new = ([ "version" : SyncDB.Version(sizeof(tables)+1) ]);
+	foreach (table_names(); int i; string table) {
+	    int v = (int)m_delete(rows, table+".version"); 
+	    version[i] = max(v, version[i]);
+	    new->version[i] = v; 
 	}
 	foreach (rows; string field; mixed val) {
 	    if (has_value(field, '.')) continue;
