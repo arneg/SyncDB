@@ -115,6 +115,8 @@ UTIL.SHA256 = {
 		a = ADD(T1, T2);
         }
 
+	// can this overflow and also possibly overflow to something above 2^53 which would
+	// lead to completely fucked up results.
 	/* Compute the current intermediate hash value */
 	hash[0] += a;
 	hash[1] += b;
