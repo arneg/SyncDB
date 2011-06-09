@@ -814,7 +814,9 @@ SyncDB.LocalTable = SyncDB.Table.extend({
     constructor : function(name, schema, db) { 
 	(this.config = new SyncDB.TableConfig("_syncdb_"+name)).get(this.M(function() {
 	    if (this.config.schema().hashCode() != schema.hashCode()) {
-		UTIL.log("SCHEMA changed. cleaning local databse");
+		UTIL.log("SCHEMA changed. cleaning local databse %o != %o (new)", this.config.schema(), schema);
+		UTIL.log("%o vs %o", this.config.schema().hashCode(), schema.hashCode());
+
 		this.prune();
 	    } else UTIL.log("SCHEMA unchanged.");
 
