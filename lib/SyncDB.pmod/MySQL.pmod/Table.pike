@@ -244,6 +244,47 @@ class Reference {
     }
 }
 
+#if 0
+void install_triggers(string table) {
+    catch {
+	query(sprintf("DROP TRIGGER _syncdb_version_insert_%s;", table));
+    };
+    catch {
+	query(sprintf("DROP TRIGGER _syncdb_version_update_%s;", table));
+    };
+
+    query(sprintf(#"CREATE TRIGGER _syncdb_version_insert_%s
+	BEFORE INSERT ON %<s
+	FOR EACH ROW
+	BEGIN
+	    DECLARE v INT;
+	    SELECT MAX(%<s.version) INTO v FROM %<s WHERE 1;
+	    SET NEW.version=v + 1;
+	END;
+    ;
+    ", table));
+#ifdef SQL_EVENTS
+    query(sprintf(#"CREATE TRIGGER _syncdb_event_update_%s
+	AFTER UPDATE ON %<s
+	FOR EACH ROW
+	BEGIN
+	    SELECT * INTO FILE '/dev/shm/interSync/db_%<s' FROM %<s WHERE %<s.version = NEW.version;
+	END;
+    ", table));
+#endif
+    query(sprintf(#"CREATE TRIGGER _syncdb_version_update_%s
+	BEFORE UPDATE ON %<s
+	FOR EACH ROW
+	BEGIN
+	    DECLARE v INT;
+	    SELECT MAX(%<s.version) INTO v FROM %<s WHERE 1;
+	    SET NEW.version=v + 1;
+	END;
+    ", table));
+}
+#endif
+
+
 string get_sql_name(string field) {
     object type = schema[field];
     if (type->is_foreign) {

@@ -16,7 +16,7 @@ UTIL.Bloom = {
 };
 UTIL.Bloom.Filter = Base.extend({
     constructor : function(n, p, hash) {
-	this.hashes = Array.prototype.slice.call(arguments, 1);
+	this.hash = hash;
 	/*
 	 * Let n be number of elements in the table, and p the required
 	 * probability of false posisitves. Then, the amount of bits in the 
@@ -36,9 +36,9 @@ UTIL.Bloom.Filter = Base.extend({
     },
     set : function(key) {
 	for (var i = 0; i < arguments.length; i++) {
-	    hash.init();
-	    hash.update(arguments[i]);
-	    var h = hash.digest();
+	    this.hash.init();
+	    this.hash.update(arguments[i]);
+	    var h = this.hash.digest();
 	    var n = 0;
 	    for (var j = 0; j < this.amount_hashes; j++) {
 		var t;
@@ -50,9 +50,9 @@ UTIL.Bloom.Filter = Base.extend({
     },
     get : function(key) {
 	for (var i = 0; i < arguments.length; i++) {
-	    hash.init();
-	    hash.update(arguments[i]);
-	    var h = hash.digest();
+	    this.hash.init();
+	    this.hash.update(arguments[i]);
+	    var h = this.hash.digest();
 	    var n = 0;
 	    for (var j = 0; j < this.amount_hashes; j++) {
 		var t;
@@ -63,14 +63,7 @@ UTIL.Bloom.Filter = Base.extend({
 	    }
 	}
 	return true;
-    },
-    compute_hash : function(val) {
-	var res = new Array(this.hashes.length);
-
-	for (var i = 0; i < this.hashes.length; i++) {
-	    var hval = this.hashes[i].update(val, this.table_size);
-	}
-    },
+    }
 });
 UTIL.BitVector = Base.extend({
     constructor : function(len, val) {

@@ -11,8 +11,9 @@ array(object) plexers = ({ });
 void create() {
     object schema =  SyncDB.Schema(([
 	"id" : SyncDB.Types.Integer(SyncDB.Flags.Key(),
-				    SyncDB.Flags.Automatic()),
-	"firstname" : SyncDB.Types.String(),
+				    SyncDB.Flags.Automatic(),
+				    SyncDB.Flags.Join(([ "two" : "id" ]))),
+	"firstname" : SyncDB.Types.String(SyncDB.Flags.Foreign("two")),
 	"lastname" : SyncDB.Types.String(),
 	"email" : SyncDB.Types.String(),
 	"mobile" : SyncDB.Types.String()
