@@ -532,11 +532,11 @@ SyncDB.TableConfig = SyncDB.LocalField.extend({
 	// create self updating field with given serialization for
 	// the schema and version, etc.
 	this.base(name, new serialization.Struct(null, {
-			    version : new serialization.Integer(),
+			    version : new serialization.Array(new serialization.Integer()),
 			    schema : new SyncDB.Serialization.Schema()
 			}), 
 		  {
-		    version : 0,
+		    version : ({ }),
 		    schema : new SyncDB.Schema({})
 		  });
     },
@@ -645,6 +645,7 @@ SyncDB.Table = UTIL.Base.extend({
     },
     generate_select : function(name, type) {
 	var select = this.select(name, type);
+	this["local_select_by_"+name] = select;
 	var db = this.db;	
 	if (!select) SyncDB.error("could not generate select() for %o %o\n", name, type);
 	return function(value, callback) {
@@ -665,6 +666,7 @@ SyncDB.Table = UTIL.Base.extend({
     },
     generate_update : function(name, type) {
 	var update = this.update(name, type);
+	this["local_update_by_"+name] = update;
 	var db = this.db;
 	if (!update) SyncDB.error([ "could not generate update() for %o %o\n", name, type] );
 	return function(key, row, callback) {
@@ -714,6 +716,7 @@ SyncDB.Meteor.Select = SyncDB.Meteor.Base.extend({});
 SyncDB.Meteor.Update = SyncDB.Meteor.Base.extend({});
 SyncDB.Meteor.Insert = SyncDB.Meteor.Base.extend({});
 SyncDB.Meteor.Sync = SyncDB.Meteor.Base.extend({});
+SyncDB.Meteor.SyncReq = SyncDB.Meteor.Base.extend({});
 
 SyncDB.MeteorTable = SyncDB.Table.extend({
     constructor : function(name, schema, channel, db) {
@@ -733,15 +736,17 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	regtype(this.incoming, "_select", SyncDB.Meteor.Select,
 		{ id : s, row : this.parser_in });
 	regtype(this.incoming, "_sync", SyncDB.Meteor.Sync,
-		{ id : s, row : this.parser_in });
+		{ id : s, version : new serialization.Array(int), rows : new serialization.Array(this.parser_in) });
 	this.out = new serialization.Polymorphic();
+	regtype(this.out, "_syncreq", SyncDB.Meteor.SyncReq,
+		{ id : s, version : new serialization.Array(int) });
 	regtype(this.out, "_select", SyncDB.Meteor.Select,
 		{ id : s, row : this.parser_in });
 	regtype(this.out, "_insert", SyncDB.Meteor.Insert,
 		{ id : s, row : this.parser_out });
 	// TODO: is an update allowed to change hidden fields?
 	// insert is, so in principle this should be allowed
-	regtype(this.out, "_update", SyncDB.Meteor.Insert,
+	regtype(this.out, "_update", SyncDB.Meteor.Update,
 		{ id : s, row : this.parser_in });
 
 	channel.set_cb(this.M(function(data) {
@@ -755,13 +760,13 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 		    continue;
 		}
 
-		/*
-		 * TODO: this is called sync now
-		if (a[i].type == "_update") {
-		    this.call_update_callback(o);
+		if (o instanceof SyncDB.Meteor.Sync) { // we dont care for id. just clean it up, man!
+		    if (this.sync_callback) 
+			foreach (o->rows;; mapping row) {
+			    this.sync_callback(o.version, row);
+			}
 		    continue;
 		}
-		*/
 
 		var f = this.requests[o.id];
 
@@ -822,6 +827,9 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	    return id;
 	});
     },
+    sync : function(version) {
+	this.send(new SyncDB.Meteor.SyncReq("foo", version));
+    },
     // TODO: this does not support chaining. we have to do this properly
     insert : function(row, callback) {
 	var id = UTIL.get_unique_key(5, this.requests);
@@ -841,18 +849,30 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	    } else UTIL.log("SCHEMA unchanged.");
 
 	    this.config.schema(schema);
-	    if (db) db.get_version(function(version) {
-		if (version > this.version()) {
-		    // update all missing fields, depending on sync. maybe all
-		    //
-		    // server would no which things are either
-		    //  - fully synced
-		    //  - cached (^^ works the same here)
-		    //  - irrelevant
-		}
-	    });
+	    this.sync(this.config.version());
 	}));
 	this.base(name, schema, db);
+	if (db) {
+	    db.sync_callback = UTIL.make_method(this, function(version, row) {
+		var db;
+
+		this.config.version(version);
+
+		this["local_select_by_" + schema.key](row[schema.key], this.M(function(err, oldrow) {
+		    // check if version is better than before!
+
+		    if (err) {
+			this.local_insert(row, function(err, row) {});
+		    } else {
+			this["local_update_by_"+schema.key](row[schema.key], row, function(err, oldrow) {});
+		    }
+		}));
+
+		if (this.sync_callback) {
+		    this.sync_callback(version, row);
+		}
+	    });
+	}
     },
     clear : function(cb) {
 	var c = 1;
@@ -1038,6 +1058,12 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 		f(false, row);
 	    });
 	}
+    },
+    local_insert : function(row, callback) {
+	var db = this.db;
+	this.db = undefined;
+	this.insert(row, callback);
+	this.db = db;
     }
 });
 SyncDB.Flags = {
