@@ -1,5 +1,5 @@
 inherit .Vector;
 
-void create(array(string) fields, SyncDB.Flags.Base ... flags) {
-    ::create(.Date, fields, @flags);
+void create(string from, string to, SyncDB.Flags.Base ... flags) {
+    ::create(.Date, ({ from, to }), @flags);
 }
