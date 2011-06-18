@@ -8,7 +8,7 @@ array(string) fields;
 void create(string name, SyncDB.Types.Base type, array(string) fields, SyncDB.Flags.Base ... flags) {
     this_program::type = type;
     this_program::fields = fields;
-    ::create(@flags);
+    ::create(name, @flags);
 }
 
 array(string) encode_sql(array r) {

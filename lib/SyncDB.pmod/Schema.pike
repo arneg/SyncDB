@@ -3,10 +3,10 @@ string key;
 array(string) index = ({ });
 string automatic;
 
-void create(mapping(string:SyncDB.Types.Base) m) {
-    this_program::m = m;
+void create(object ... m) {
+    this_program::m = mkmapping(m->name, m);
 #if 1
-    foreach (m; string field; SyncDB.Types.Base val) {
+    foreach (this_program::m; string field; SyncDB.Types.Base val) {
 	if (val->is_index) index += ({ field });
 	if (val->is_key) {
 	    if (key) error("...");

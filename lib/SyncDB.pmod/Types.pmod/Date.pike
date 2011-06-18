@@ -2,9 +2,9 @@ inherit .Base;
 
 program prog;
 
-void create(program prog, SyncDB.Flags.Base ... flags) {
+void create(string name, program prog, SyncDB.Flags.Base ... flags) {
     this_program::prog = prog;
-    ::create(@flags);
+    ::create(name, @flags);
 }
 
 string encode_sql(object date) {
