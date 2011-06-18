@@ -79,6 +79,23 @@ SyncDB.Filter.And = SyncDB.Filter.Base.extend({
 	return results;
     }
 });
+SyncDB.Filter.False = SuncDB.Filter.Base.extend({
+    index_lookup : function(index) {
+	return [];
+    }
+});
+SyncDB.Filter.Equal = SyncDB.Filter.Base.extend({
+    index_lookup : function(index) {
+	return index.get(this.args[0]);
+	// we could allow for types here, probably the way to go
+	// return this.low_get(index, this.args[0]);
+    }
+});
+SyncDB.Filter.True = SuncDB.Filter.Base.extend({
+    index_lookup : function(index) {
+	return this.index.values();
+    }
+});
 SyncDB.Filter.Or = SyncDB.Filter.Base.extend({
     index_lookup : function(index) {
 	var results = this.low_get(index, this.args[0]);
@@ -381,6 +398,9 @@ SyncDB.MappingIndex = SyncDB.LocalField.extend({
     },
     toString : function() {
 	return "MappingIndex("+this.name+","+this.type+")";
+    },
+    values : function() {
+	return UTIL.values(this.value);
     }
 });
 SyncDB.MultiIndex = SyncDB.LocalField.extend({
