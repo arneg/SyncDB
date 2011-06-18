@@ -941,6 +941,11 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	    if (!type.is_unique)
 		return this.M(function(value, callback) {
 		    // probe the index and check sync.
+		    //
+		    // TODO: allow for partial results here. e.g. come up
+		    // with some mechanism to allow this index_lookup call
+		    // to return a partial results, which may in addition
+		    // contain another Filter and some results
 		    var ids = type.index_lookup(index, value);
 		    //UTIL.log("ids: %o\n", ids);
 		    if (ids.length) {
@@ -1170,7 +1175,9 @@ SyncDB.Types = {
 		return new SyncDB.MultiIndex(name, this, key_type);
 	},
 	index_lookup : function(index, key) {
-	    return index.get(key);
+	    if (UTIL.objectp(key) && key.index_lookup) {
+		return key.index_lookup(index);
+	    } else return index.get(key);
 	},
 	index_insert : function(index, key, id) {
 	    return index.set(key, id);
@@ -1223,7 +1230,7 @@ SyncDB.Types.Array = SyncDB.Types.Base.extend({
     index_lookup : function(index, key) {
 	if (UTIL.arrayp(key)) {
 	    return UTIL.create(SyncDB.Filter.And, key);
-	} else if (UTIL.objectp(key)) {
+	} else if (UTIL.objectp(key) && key.index_lookup) {
 	    // complex types, e.g. AND, OR and shit like that
 	    return key.index_lookup(index);
 	} else return index.get(key);
