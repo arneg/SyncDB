@@ -27,8 +27,17 @@ mixed query(mixed ... args) {
     return sql->query(s);
 }
 
+string mapping_implode(mapping m, string s1, string s2) {
+    array(string) t = allocate(sizeof(m));
+    int i = 0;
+    foreach (m; string n; string v) {
+	t[i++] = n + s1 + v;
+    }
+    return t*s2;
+}
+
 class Table {
-    object fields = ADT.CritBit.Tree();
+    array(SyncDB.Types.Base) fields = ({});
     mapping sql_schema = ([]);
 
     string name;
@@ -41,74 +50,53 @@ class Table {
 	}
     }
 
-    array(string) field_names() {
-	return indices(fields);
+    void add_field(object type) {
+	fields += ({ type });
     }
 
-    array(string) readable(mapping row, function fun) {
-	array(string) t = ({ });
-	foreach (fields; string field; object type) {
-	    if (!type->is_readable) {
-		error("Trying to read non-readable field %s\n", field);
-	    }
-	    string res = fun(type, field);
-	    if (res) t += ({ res });
-	}
-	return t;
+    array(string) field_names() {
+	return fields->name;
+    }
+
+    array(SyncDB.Types.Base) readable() {
+	return filter(fields, fields->is_readable);
+    }
+
+    array(SyncDB.Types.Base) writable() {
+	return filter(fields, fields->is_writable);
     }
 
     string index(mapping row) {
-	array t = readable(row, lambda(object type, string field) {
-	    if (!row[field] || !type->is_index) return 0;
-	    return sprintf("%s.%s=%s", name, field, type->encode_sql(row[field]));
-	});
-	return sizeof(t) ? t*" AND " : 0;
+	mapping new = ([ ]);
+	foreach (readable();; object type) {
+	    if (!type->is_index) continue;
+	    // TODO: this will only work for single field types
+	    // later we somehow have to use filters, Equal by default
+	    type->encode_sql(name, row, new);
+	}
+	return sizeof(new) ? mapping_implode(new, "=", " AND ") : 0;
     }
 
     string select(mapping row) {
-	array t = readable(row, lambda(object type, string field) {
-	    if (!row[field] || type->is_index) return 0;
-	    return sprintf("%s.%s=%s", name, field, type->encode_sql(row[field]));
-	});
-	return sizeof(t) ? t*" AND " : 0;
+	return index(row);
     }
 
     string update(mapping row, mapping oldrow) {
-	array t = writable(row, lambda(object type, string field, mixed val) {
-	    if (field == schema->key) return 0;
-	    return sprintf("%s.%s=%s", name, field, type->encode_sql(val));
-	});
-	return sizeof(t) ? t*", " : 0;
-    }
-
-    array writable(mapping row, function fun) {
-	array t = ({});
-	foreach (fields;string s; object f) {
-	    if (has_index(row, s)) {
-		if (f->is_readonly) {
-		    error("Trying to modify read-only field %s\n", s);
-		}
-		string res = fun(f, s, row[s]);
-		if (res) t += ({ res });
-	    }
+	mapping new = ([]);
+	foreach (writable();; object type) {
+	    if (type == schema->id) continue;
+	    type->encode_sql(name, row, new);
 	}
-	return t;
+	return sizeof(new) ? mapping_implode(new, "=", ", ") : 0;
     }
 
-    string into(mapping row) {
-	// check for mandatory fields here.
-	array t = writable(row, lambda(object type, string field, mixed val) {
-	    return sprintf("%s.%s", name, field);
-	});
-	return sizeof(t) ? t*", " : 0;
-    }
-
-
-    string values(mapping row) {
-	array t = writable(row, lambda(object type, string field, mixed val) {
-	    return type->encode_sql(val);
-	});
-	return sizeof(t) ? t*", " : 0;
+    mapping insert(mapping row) {
+	mapping new = ([]);
+	foreach (writable();; object type) {
+	    if (type == schema->id) continue;
+	    type->encode_sql(name, row, new);
+	}
+	return sizeof(new) ? new : 0;
     }
 }
 
@@ -124,28 +112,17 @@ class Foreign {
 	::create(name);
     }
 
-    string into(mapping row, string|void operation) {
-	string s = ::into(row);
-	if (s) {
+    mapping insert(mapping row) {
+	mapping new = ::insert(row);
+	if (new) {
 	    if (row[id]) {
-		s += sprintf(", %s.%s", name, fid);
+		new[sprintf("%s.%s", name, fid)]
+		    = schema[id]->encode_sql_value(row[id]);
 	    } else if (!is_auto_increment) {
 		error("join id needs to be either automatic or specified."); 
 	    } 
 	}
-	return s;
-    }
-
-    string values(mapping row) {
-	string s = ::values(row);
-	if (s) {
-	    if (row[id]) {
-		s += ", "+schema[id]->encode_sql(row[id]);
-	    } else if (!is_auto_increment) {
-		error("join id needs to be either automatic or specified."); 
-	    } 
-	}
-	return s;
+	return new;
     }
 
     int(0..1) `is_auto_increment() {
@@ -156,40 +133,34 @@ class Foreign {
 class Join {
     inherit Foreign;
 
-    string into(mapping row) {
-	string s = ::into(row);
-	if (!s) {
-	    if (row[id]) return sprintf("%s.%s", name, fid);
-	    if (!is_auto_increment)
-		error("This field is mandatory.\n");
-	    return "";
+    mapping insert(mapping row) {
+	mapping new = ::insert(row);
+	if (!new) {
+	    new = ([]);
+	    if (row[id]) {
+		new[sprintf("%s.%s", name, fid)]
+		    = schema[id]->encode_sql_value(row[id]);
+	    } else if (!is_auto_increment) {
+		error("join id needs to be either automatic or specified."); 
+	    } 
+	    // TODO: we somehow have to signal that we want to insert here
+	    // anyways.
 	}
-	return s;
-    }
-
-    string values(mapping row) {
-	string s = ::values(row);
-	if (!s) {
-	    if (row[id])
-		return schema[id]->encode_sql(row[id]);
-	    if (!is_auto_increment)
-		error("This field is mandatory.\n");
-	    return "";
-	}
-	return s;
+	return new;
     }
 
     string update(mapping row, mapping oldrow) {
 	string s = ::update(row, oldrow);
 	if (s) { // need to add the corresponding link id
 	    if (has_index(row, id)) {
-		s += sprintf(", %s.%s=%s", name, fid, schema[id]->encode_sql(row[id]));
+		s += sprintf(", %s.%s=%s", name, fid, schema[id]->encode_sql(name, row));
 	    } else {
 		if (!oldrow[id]) {
 		    if (is_auto_increment) {
+			mapping new = insert(row);
 			// insert data
 			// change row[id] to the auto incremented value
-			query(sprintf("INSERT INTO %s (%s) VALUES (%s)",  name, into(row), values(row)));
+			query(sprintf("INSERT INTO %s (%s) VALUES (%s)",  name, indices(row)*",", values(new)*","));
 			mapping r = query(sprintf("SELECT %s,version FROM %s WHERE %s=LAST_INSERT_ID();", fid, name, fid))[0];
 			row[id] = r[fid];
 			return 0;
@@ -285,14 +256,6 @@ void install_triggers(string table) {
 #endif
 
 
-string get_sql_name(string field) {
-    object type = schema[field];
-    if (type->is_foreign) {
-	return sprintf("%s.%s", type->f_foreign->table, type->f_foreign->field||field);
-    }
-    return sprintf("%s.%s", table, field);
-}
-
 array(Table) table_objects() {
     // TODO: move sorting to create
     array a = values(tables), r;
@@ -364,7 +327,8 @@ void create(string dbname, Sql.Sql con, SyncDB.Schema schema, string table) {
 #define CASE(x) if (Program.inherits(object_program(type), (x)))
 
 
-    foreach (schema->m; string field; object type) {
+    foreach (schema;; object type) {
+	string field = type->name;
 	if (type->is_link) {
 	    mapping type = type->f_link;
 	    foreach (type->tables; string name; string fid) {
@@ -387,16 +351,16 @@ void create(string dbname, Sql.Sql con, SyncDB.Schema schema, string table) {
 	}
     }
 
-    foreach (schema->m; string field; object type) {
+    foreach (schema;; object type) {
 	if (type->is_foreign) {
 	    string t2 = type->f_foreign->table;
 	    if (!has_index(tables, t2))
 		tables[t2] = Table(t2);
-	    tables[t2]->fields[field] = type;
+	    tables[t2]->add_field(type);
 	} else {
-	    table_o->fields[field] = type;
+	    table_o->add_field(type);
 	}
-	t += ({ sprintf("%s as %s", get_sql_name(field), field) });
+	t += type->sql_names(table);
     }
 
     select_sql = sprintf("SELECT %s FROM %s", t*",", table);
@@ -441,8 +405,6 @@ void select(mapping keys, function(int(0..1),array(mapping)|mixed:void) cb2, mix
 	    cb(1, "Need indexable field(s).\n"); // needs error type, i guess
 	    return;
 	}
-	string t = filter(table_objects()->select(keys), `!=, 0) * " AND ";
-	if (sizeof(t)) index += " AND "+t;
 	rows = query(sprintf(select_sql, index));
 	//query("UNLOCK TABLES;");
 	noerr = 1;
@@ -465,14 +427,16 @@ void update(mapping keys, function(int(0..1),mapping|mixed:void) cb2, mixed ... 
 	return cb2(error, bla, @extra);
     };
 
-    if (!schema->key && !keys[schema->key]) {
+    string where = mapping_implode(schema->id->encode_sql(table, keys), "=", " AND ");
+
+    if (!where) {
 	cb(1, "Need unique indexable field (or key) to update.\n");
 	return;
     }
 
     err = catch {
 	query("LOCK TABLES %s WRITE;", table_names() * " WRITE,");
-	rows = query(sprintf(select_sql, sprintf("%s=%s", get_sql_name(schema->key), schema[schema->key]->encode_sql(keys[schema->key]))))[0];
+	rows = query(sprintf(select_sql, where))[0];
     };
 
     if (keys->version) {
@@ -485,11 +449,11 @@ void update(mapping keys, function(int(0..1),mapping|mixed:void) cb2, mixed ... 
 
     sql = filter(table_objects()->update(keys, rows), `!=, 0)*",";
 
-    sql = sprintf(update_sql, sql, sprintf("%s=%s", get_sql_name(schema->key), encode(schema->key, keys[schema->key])));
+    sql = sprintf(update_sql, sql, where);
 
     err = catch {
 	query(sql);
-	rows = query(sprintf(select_sql, sprintf("%s=%s", get_sql_name(schema->key), schema[schema->key]->encode_sql(keys[schema->key]))));
+	rows = query(sprintf(select_sql, where));
 	noerr = 1;
     };
 
@@ -506,10 +470,6 @@ void update(mapping keys, function(int(0..1),mapping|mixed:void) cb2, mixed ... 
 // 'v3',v4, 'v5', 'v6'); 
 
 
-string encode(string field, mixed val) {
-    return schema[field]->encode_sql(val);
-}
-
 void insert(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... extra) {
     mixed err;
     int(0..1) noerr;
@@ -517,8 +477,6 @@ void insert(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... e
     mixed cb(int(0..1) error, mixed bla) {
 	return cb2(error, bla, @extra);
     };
-
-    string into = "", values = "";
 
     // TODO:
     // 	schema->key != shcema-»automatic
@@ -539,9 +497,10 @@ void insert(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... e
 	// insert the others
 
 	foreach (table_objects(); ; Table t) {
-	    string into = t->into(row);
-	    if (!into) continue;
-	    string values = t->values(row);
+	    mapping new = t->insert(row);
+	    if (!new) continue;
+	    string into = indices(new)*",";
+	    string values = values(new)*",";
 	    query("INSERT INTO %s (%s) VALUES (%s);", t->name, into, values);
 	    if (t->is_auto_increment && t->is_link) {
 		mapping last = query("SELECT * FROM %s WHERE %s=LAST_INSERT_ID()", t->name, t->fid)[0];
@@ -558,7 +517,9 @@ void insert(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... e
 	}
     };
     if (!err) err = catch {
-	rows = query(sprintf(select_sql, sprintf("%s.%s=%s", table, schema->key, encode(schema->key, row[schema->key]))));
+	string where = mapping_implode(schema->id->encode_sql(table, row), "=",
+				       " AND ");
+	rows = query(sprintf(select_sql, where));
 	query("UNLOCK TABLES;");
 	noerr = 1;
     };
@@ -592,13 +553,17 @@ array(mapping)|mapping sanitize_result(array(mapping)|mapping rows) {
 	    version[i] = max(v, version[i]);
 	    new->version[i] = v; 
 	}
+#if 1
+	schema->fields->decode_sql(table, rows, new);
+#else
 	foreach (rows; string field; mixed val) {
 	    if (has_value(field, '.')) continue;
 	    if (schema[field])
-		new[field] = schema[field]->decode_sql(rows[field]);
+		new[field] = schema[field]->decode_sql(table, rows);
 	    else if (field != "version")
 		werror("Field %O unknown to schema: %O\n", field, schema);
 	}
+#endif
 
 	return new;
     } else if (arrayp(rows)) {

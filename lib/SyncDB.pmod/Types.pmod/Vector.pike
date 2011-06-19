@@ -2,27 +2,39 @@ inherit .Base;
 
 constant is_array = 1;
 
-SyncDB.Types.Base type;
-array(string) fields;
+array(object) fields;
 
-void create(string name, SyncDB.Types.Base type, array(string) fields, SyncDB.Flags.Base ... flags) {
-    this_program::type = type;
+void create(string name, array(object) fields, SyncDB.Flags.Base ... flags) {
     this_program::fields = fields;
     ::create(name, @flags);
 }
 
-array(string) encode_sql(array r) {
-    return map(r, type->encode_sql);
+mapping encode_sql(string table, mapping row, void|mapping new) {
+    if (!new) new = ([]);
+    if (has_index(row, name)) {
+	mixed a = row[name];
+	if (!arrayp(a) || sizeof(a) != sizeof(fields))
+	    error("Type mismatch.\n");
+	foreach (fields; int i; object type) {
+	    type->encode_sql(table, ([ type->name : a[i] ]), new);
+	}
+    }
+    return new;
 }
 
-array decode_sql(array(string) s) {
-    return map(s, type->decode_sql);
-}
-
-mapping make_named_rows(array(string) vals) {
-    return mkmapping(fields, vals);
+mixed decode_sql(string table, mapping row, void|mapping new) {
+    array ret = allocate(sizeof(fields));
+    foreach (fields; int i; object type) {
+	ret[i] = type->decode_sql(table, row);
+    }
+    if (new) new[name] = ret;
+    return ret;
 }
 
 object parser() {
-    return Serialization.Types.OneTypedList(type->parser());
+    return Serialization.Types.Tuple(@fields->parser());
+}
+
+array(string) sql_names(string table) {
+    return `+(@fields->sql_names(table));
 }

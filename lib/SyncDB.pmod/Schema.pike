@@ -1,22 +1,25 @@
 mapping(string:SyncDB.Types.Base) m;
+array(SyncDB.Types.Base) fields;
 string key;
+SyncDB.Types.Base id;
 array(string) index = ({ });
 string automatic;
 
 void create(object ... m) {
+    fields = m;
     this_program::m = mkmapping(m->name, m);
 #if 1
-    foreach (this_program::m; string field; SyncDB.Types.Base val) {
-	if (val->is_index) index += ({ field });
-	if (val->is_key) {
+    foreach (fields;; SyncDB.Types.Base type) {
+	if (type->is_index) index += ({ type->name });
+	if (type->is_key) {
 	    if (key) error("...");
-	    key = field;
+	    key = type->name;
+	    id = type;
 	}
-	if (val->is_automatic) {
+	if (type->is_automatic) {
 	    if (automatic) error("...");
-	    automatic = field;
+	    automatic = type->name;
 	}
-
     }
 #endif
 }
@@ -28,9 +31,9 @@ mixed `[](mixed in) {
 object parser(function|void filter) {
     mapping(string:SyncDB.Types.Base) n = ([ ]);
 
-    foreach (m; string field; SyncDB.Types.Base val) {
-	if (!filter || filter(field, val)) {
-	    n[field] = val->parser();
+    foreach (m; string field; SyncDB.Types.Base type) {
+	if (!filter || filter(field, type)) {
+	    n[field] = type->parser();
 	}
     }
 
@@ -51,4 +54,8 @@ object parser_out() {
 
 string json_encode() {
     return sprintf("(new SyncDB.Schema(%s))", Standards.JSON.encode(m));
+}
+
+Iterator _get_iterator() {
+    return get_iterator(fields);
 }

@@ -4,10 +4,10 @@ object parser() {
     return Serialization.Types.Or(Serialization.Types.Int(), Serialization.Types.False());
 }
 
-string encode_sql(int i) {
-    return sprintf("'%d'", i);
+string encode_sql_value(mixed val) {
+    return sprintf("'%d'", val);
 }
 
-int decode_sql(string s) {
+mixed decode_sql_value(string s) {
     return (int)s;
 }
