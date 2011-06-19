@@ -6,6 +6,12 @@ int priority = 50;
 string name;
 string table;
 
+constant _types = ([
+    "name" : "string",
+    "table" : -1,
+    "priority" : -1
+]);
+
 mixed `->(string index) {
     if (has_prefix(index, "is_")) {
 	array(int(0..1)) is = flags[index] + ({ this[index] });

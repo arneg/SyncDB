@@ -2,6 +2,10 @@ inherit .Base;
 
 program prog;
 
+constant _types = ::_types + ([
+    "prog" : -1
+]);
+
 void create(string name, program prog, SyncDB.Flags.Base ... flags) {
     this_program::prog = prog;
     ::create(name, @flags);

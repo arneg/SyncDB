@@ -1,6 +1,8 @@
 inherit .Vector;
 
 void create(string name, object from, object to, SyncDB.Flags.Base ... flags) {
+    if (object_program(to) != object_program(from))
+	error("Range only work with one single type now.\n");
     ::create(name, ({ from, to }), @flags);
 }
 
@@ -22,4 +24,12 @@ mixed decode_sql(string table, mapping row, void|mapping new) {
     } else {
 	return SyncDB.Interval(@::decode_sql(table, row));
     }
+}
+
+object parser() {
+#ifdef TEST_RESOLVER
+    return SyncDB.Serialization.Range(fields[0]->parser());
+#else
+    return master()->resolv("SyncDB.Serialization.Range")(fields[0]->parser());
+#endif
 }
