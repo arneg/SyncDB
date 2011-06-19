@@ -52,8 +52,8 @@ object parser_out() {
     });
 }
 
-string json_encode() {
-    return sprintf("(new SyncDB.Schema(%s))", Standards.JSON.encode(m));
+string encode_json() {
+    return sprintf("(new SyncDB.Schema(%s))", filter(map(fields, Standards.JSON.encode), sizeof)*(",\n"+" "*4));
 }
 
 Iterator _get_iterator() {

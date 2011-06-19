@@ -69,3 +69,9 @@ string sql_name(string table) {
 array(string) sql_names(string table) {
     return ({ sql_name(table) });
 }
+
+string encode_json(string p, void|array extra) {
+    if (!extra) extra = ({});
+    extra = ({ Standards.JSON.encode(name) }) + extra + filter(map(flags, Standards.JSON.encode), sizeof);
+    return sprintf("(new %s(%s))", p, extra * (",\n"+" "*8));
+}

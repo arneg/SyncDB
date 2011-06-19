@@ -11,3 +11,7 @@ string encode_sql_value(mixed val) {
 mixed decode_sql_value(string s) {
     return (int)s;
 }
+
+string encode_json() {
+    return ::encode_json("SyncDB.Types.Integer");
+}

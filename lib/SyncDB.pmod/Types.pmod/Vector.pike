@@ -38,3 +38,8 @@ object parser() {
 array(string) sql_names(string table) {
     return `+(@fields->sql_names(table));
 }
+
+string encode_json(void|string p, void|array extra) {
+    return ::encode_json(p||"SyncDB.Types.Vector", 
+			 extra||map(fields, Standards.JSON.encode));
+}

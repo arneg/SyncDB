@@ -33,3 +33,7 @@ object parser() {
     return master()->resolv("SyncDB.Serialization.Range")(fields[0]->parser());
 #endif
 }
+
+string encode_json() {
+    return ::encode_json("SyncDB.Types.Range", map(fields, Standards.JSON.encode));
+}

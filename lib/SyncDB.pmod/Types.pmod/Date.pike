@@ -25,3 +25,7 @@ object decode_sql_value(string s) {
 object parser() {
     return Serialization.Types.Time(prog);
 }
+
+string encode_json() {
+    return ::encode_json("SyncDB.Types.Date");
+}
