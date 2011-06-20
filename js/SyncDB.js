@@ -448,10 +448,10 @@ SyncDB.Schema = UTIL.Base.extend({
 	this.autos = [];
 	for (var i = 0; i < arguments.length; i++) {
 	    var type = arguments[i];
-	    m[type.name] = type;
+	    var name = type.name;
+	    this.m[name] = type;
 	    if (type.is_key) this.key = name;
 	    if (type.get_val) this.autos.push(name);
-	    this[type.name] = type;
 	}
     },
     hashCode : function() {
@@ -496,7 +496,7 @@ SyncDB.TableConfig = SyncDB.LocalField.extend({
 			}), 
 		  {
 		    version : ({ }),
-		    schema : new SyncDB.Schema({})
+		    schema : new SyncDB.Schema()
 		  });
     },
     toString : function() {
@@ -1203,9 +1203,19 @@ SyncDB.Types.String = SyncDB.Types.Base.extend({
     toString : function() { return "String"; }
 });
 SyncDB.Types.Vector = SyncDB.Types.Base.extend({
+    // ideally this would somehow use inheritance, but I like
+    // the idea that its inside the prototype with easy lookup
+    _types : {
+	name : new serialization.Method(),
+	flags : new serialization.Array(SyncDB.Serialization.Flag),
+	types : function(p) {
+	    return new serialization.Array(p);
+	}
+    },
+    toString : function() { return "Vector"; },
     constructor : function(name, types) {
 	this.types = types;
-	this.base.apply(this, [ name ].concat(Array.prototype.slice.call(arguments, 1)));
+	this.base.apply(this, [ name ].concat(Array.prototype.slice.call(arguments, 2)));
     },
     parser : function() {
 	var l = new Array(this.types.length+2);
@@ -1223,6 +1233,7 @@ SyncDB.Range = Base.extend({
     }
 });
 SyncDB.Types.Range = SyncDB.Types.Vector.extend({
+    toString : function() { return "Range"; },
     constructor : function(name, from, to) {
 	this.base.apply(this, [ name, [ from, to ] ].concat(Array.prototype.slice.call(arguments, 3)));
     },
@@ -1237,6 +1248,7 @@ SyncDB.Types.Range = SyncDB.Types.Vector.extend({
     }
 });
 SyncDB.Types.Date = SyncDB.Types.Base.extend({ 
+    toString : function() { return "Date"; },
     parser : function() {
 	new serialization.Date();
     }
@@ -1284,6 +1296,9 @@ SyncDB.Types.Array = SyncDB.Types.Base.extend({
 SyncDB.Serialization.Type = serialization.generate_structs({
     _string : SyncDB.Types.String,
     _integer : SyncDB.Types.Integer,
+    _range : SyncDB.Types.Range,
+    _vector : SyncDB.Types.Vector,
+    _date : SyncDB.Types.Date,
 });
 SyncDB.Serialization.Schema = serialization.Array.extend({
     constructor : function() {
