@@ -441,58 +441,17 @@ SyncDB.MultiIndex = SyncDB.LocalField.extend({
     }
 });
 SyncDB.Serialization = {};
-SyncDB.Serialization.Flag = serialization.String.extend({
-    constructor : function() {
-	this.base();
-	this.type == "_flag";
-    },
-    encode : function(flag) {
-	return this.base(flag.toString());
-    },
-    decode : function(atom) {
-	return new SyncDB.Flags[atom.data]();
-    }
-});
-SyncDB.Serialization.FieldType = serialization.Struct.extend({
-    constructor : function() {
-	this.base("_type", {
-	    type : new serialization.String(), 
-	    flags : new serialization.Array(new SyncDB.Serialization.Flag())
-	});
-    },
-    encode : function(type) {
-	return this.base({ type : type.toString(), flags : type.flags });
-    },
-    can_encode : function(o) {
-	return UTIL.objectp(o) && o instanceof SyncDB.Types.Base;
-    },
-    decode : function(atom) {
-	var a = this.base(atom);
-	var t = new SyncDB.Types[a.type]();
-	t.constructor.apply(t, a.flags);
-	return t;
-    }
-});
-SyncDB.Serialization.Schema = serialization.Object.extend({
-    constructor : function() {
-	this.base(new SyncDB.Serialization.FieldType());
-	this.type = "_schema";
-    },
-    encode : function(schema) {
-	return this.base(schema.m);
-    },
-    decode : function(atom) {
-	return new SyncDB.Schema(this.base(atom));
-    }
-});
 SyncDB.Schema = UTIL.Base.extend({
-    constructor : function(m) {
-	this.m = m;
+    constructor : function() {
+	this.m = {};
+	this.fields = Array.prototype.slice.call(arguments);
 	this.autos = [];
-	for (var name in m) if (m.hasOwnProperty(name)) {
-	    if (m[name].is_key) this.key = name;
-	    if (m[name].get_val) this.autos.push(name);
-	    this[name] = m[name];
+	for (var i = 0; i < arguments.length; i++) {
+	    var type = arguments[i];
+	    m[type.name] = type;
+	    if (type.is_key) this.key = name;
+	    if (type.get_val) this.autos.push(name);
+	    this[type.name] = type;
 	}
     },
     hashCode : function() {
@@ -1157,10 +1116,25 @@ SyncDB.Flags.AutoIncrement = SyncDB.Flags.Automatic.extend({
     }
 });
 SyncDB.Flags.AutoCache = {};
+SyncDB.Serialization.Flag = serialization.generate_structs({
+    _automatic : SyncDB.Flags.Automatic,
+    //_hash : SyncDB.Flags.Hash,
+    _index : SyncDB.Flags.Index,
+    _key : SyncDB.Flags.Key,
+    _mandatory : SyncDB.Flags.Mandatory,
+    _readonly : SyncDB.Flags.ReadOnly,
+    _unique : SyncDB.Flags.Unique,
+    _writeonly : SyncDB.Flags.WriteOnly
+});
 SyncDB.Types = {
     Base : UTIL.Base.extend({
-	constructor : function() {
-	    this.flags = Array.prototype.slice.apply(arguments);
+	_types : {
+	    name : new serialization.Method(),
+	    flags : new serialization.Array(SyncDB.Serialization.Flag),
+	},
+	constructor : function(name) {
+	    this.name = name;
+	    this.flags = Array.prototype.slice.call(arguments, 1);
 	    //UTIL.log("creating %s with %d arguments.\n", this.toString(), arguments.length);
 	    // BACKWARDS loop for things that are combined recursively
 	    for (var i = this.flags.length-1; i >= 0; i--) {
@@ -1229,9 +1203,9 @@ SyncDB.Types.String = SyncDB.Types.Base.extend({
     toString : function() { return "String"; }
 });
 SyncDB.Types.Array = SyncDB.Types.Base.extend({
-    constructor : function(type) {
+    constructor : function(name, type) {
 	this.type = type;
-	this.base.apply(this, Array.prototype.slice.call(arguments, 1));
+	this.base.apply(this, [ name ].concat(Array.prototype.slice.call(arguments, 2)));
 	if (this.is_unique) SyncDB.error("Arrays cannot be unique, retard!");
 	if (type instanceof SyncDB.Types.Array)
 	    SyncDB.error("nested arrays are not implemented, yet. we want food!");
@@ -1266,6 +1240,22 @@ SyncDB.Types.Array = SyncDB.Types.Base.extend({
 	    for (var i = 0; i < key.length; i++)
 		index.remove(key[i], id);
 	} else index.remove(key, id);
+    }
+});
+SyncDB.Serialization.Type = serialization.generate_structs({
+    _string : SyncDB.Types.String,
+    _integer : SyncDB.Types.Integer,
+});
+SyncDB.Serialization.Schema = serialization.Array.extend({
+    constructor : function() {
+	this.base(SyncDB.Serialization.Type);
+	this.type = "_schema";
+    },
+    encode : function(schema) {
+	return this.base(schema.fields);
+    },
+    decode : function(atom) {
+	return UTIL.create(SyncDB.Schema, this.base(atom));
     }
 });
 SyncDB.DraftTable = SyncDB.LocalTable.extend({

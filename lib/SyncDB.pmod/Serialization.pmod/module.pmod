@@ -12,15 +12,15 @@ class Range {
 }
 
 class pSchema {
-    inherit Serialization.Types.OneTypedMapping;
+    inherit Serialization.Types.OneTypedList;
 
     void create() {
-	::create(Serialization.Types.Symbol(), Type);
+	::create(Type);
 	type = "_schema";
     }
 
     SyncDB.Schema decode(Serialization.Atom a) {
-	return SyncDB.Schema(@values(::decode(a)));
+	return SyncDB.Schema(@::decode(a));
     }
 
     int(0..1) can_encode(mixed o) {
@@ -28,7 +28,7 @@ class pSchema {
     }
 
     Serialization.Atom encode(mixed o) {
-	return ::encode(o->m);
+	return ::encode(o->fields);
     }
 }
 
@@ -43,7 +43,6 @@ void create(mapping|void overwrites) {
 	"_key" : SyncDB.Flags.Key(),
 	"_link" : SyncDB.Flags.Link(),
 	"_mandatory" : SyncDB.Flags.Mandatory(),
-	"_range" : SyncDB.Flags.Range(),
 	"_readonly" : SyncDB.Flags.ReadOnly(),
 	"_reference" : SyncDB.Flags.Reference(),
 	"_unique" : SyncDB.Flags.Unique(),
