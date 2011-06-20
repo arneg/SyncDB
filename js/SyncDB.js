@@ -1073,6 +1073,8 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 });
 SyncDB.Flags = {
     Base : UTIL.Base.extend({ 
+	is_readable : 1,
+	is_writable : 1,
 	toString : function() {
 	    return "Base";
 	}
@@ -1097,17 +1099,35 @@ SyncDB.Flags.Index = SyncDB.Flags.Base.extend({
     },
     is_indexed : 1
 });
+SyncDB.Flags.Mandatory = SyncDB.Flags.Base.extend({
+    toString : function() {
+	return "Mandatory";
+    },
+    is_mandatory : 1
+});
 SyncDB.Flags.Cached = SyncDB.Flags.Index.extend({
     toString : function() {
 	return "Cached";
     },
     is_cached : 1
 });
+SyncDB.Flags.WriteOnly = SyncDB.Flags.Base.extend({
+    toString : function() {
+	return "WriteOnly";
+    },
+    is_writable : 0
+});
+SyncDB.Flags.ReadOnly = SyncDB.Flags.Base.extend({
+    toString : function() {
+	return "ReadOnly";
+    },
+    is_readable : 0
+});
 SyncDB.Flags.Sync = SyncDB.Flags.Index.extend({
     toString : function() {
 	return "Sync";
     },
-    is_synced :1
+    is_synced : 1
 });
 SyncDB.Flags.Hashed = SyncDB.Flags.Base.extend({
     toString : function() {
@@ -1119,10 +1139,10 @@ SyncDB.Flags.Hashed = SyncDB.Flags.Base.extend({
 	}
     }
 });
-SyncDB.Flags.Auto = SyncDB.Flags.Base.extend({ 
+SyncDB.Flags.Automatic = SyncDB.Flags.Base.extend({ 
     is_automatic: 1
 });
-SyncDB.Flags.AutoIncrement = SyncDB.Flags.Auto.extend({
+SyncDB.Flags.AutoIncrement = SyncDB.Flags.Automatic.extend({
     get_val : function (db, name, type, cb) {
 	var n = "_syncdb_CNT_" + db.name + "_" + name;
 	if (!SyncDB.Flags.AutoCache[n])
