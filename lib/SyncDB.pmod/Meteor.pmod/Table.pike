@@ -27,7 +27,7 @@ void create(string name, SyncDB.Schema schema, SyncDB.Table db) {
 			]), .Insert));
     in->register_type(.SyncReq, "_syncreq",
 			Serialization.Types.Struct("_syncreq", ([
-			    "version" : Serialization.Types.List(i),
+			    "version" : Serialization.Types.OneTypedList(i),
 			    "id" : s,
 			    //"bloom" : ..,
 			])));
@@ -40,9 +40,9 @@ void create(string name, SyncDB.Schema schema, SyncDB.Table db) {
 			]), .Select));
     out->register_type(.Sync, "_sync",
 		       Serialization.Types.Struct("_sync", ([
-			    "rows" : Serialization.Types.List(
+			    "rows" : Serialization.Types.OneTypedList(
 					    schema->parser_out()),
-			    "version" : Serialization.Types.List(i),
+			    "version" : Serialization.Types.OneTypedList(i),
 			    "id" : s,
 			]), .Sync));
     // we probably dont need this one. _sync is the new
@@ -50,7 +50,7 @@ void create(string name, SyncDB.Schema schema, SyncDB.Table db) {
     out->register_type(.Update, "_update",
 		       Serialization.Types.Struct("_update", ([
 			    "row" : schema->parser_out(),
-			    "id" : sn,
+			    "id" : s,
 			]), .Update));
     out->register_type(.Error, "_error",
 		       Serialization.Types.Struct("_error", ([
@@ -102,7 +102,7 @@ void generate_sync(int err, SyncDB.Version version, array(mapping) rows) {
     if (m_delete(blacklist, version)) return;
 
     if (sizeof(sessions)) {
-	string s = out->encode(.Sync("", (array)version, ({ row })))->render();
+	string s = out->encode(.Sync("", (array)version, rows))->render();
 	foreach (sessions; object o;) {
 	    // check bloom filter or shit like that
 	    o->send(s);
