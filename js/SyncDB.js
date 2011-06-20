@@ -450,7 +450,10 @@ SyncDB.Schema = UTIL.Base.extend({
 	    var type = arguments[i];
 	    var name = type.name;
 	    this.m[name] = type;
-	    if (type.is_key) this.key = name;
+	    if (type.is_key) {
+		this.id = type;
+		this.key = name;
+	    }
 	    if (type.get_val) this.autos.push(name);
 	}
     },
@@ -557,25 +560,27 @@ SyncDB.Table = UTIL.Base.extend({
 
 	if (!key) SyncDB.error(SyncDB.Error.Retard("Man, this schema wont work.\n"));
 
-	for (var field in schema) if (schema.hasOwnProperty(field)) {
+	for (var i = 0; i < schema.fields.length; i++) {
+	    var type = schema.fields[i];
+	    var field = type.name;
 	    //UTIL.log("scanning %s:%o.\n", field, schema[field]);
-	    if (schema[field].is_indexed) {
+	    if (type.is_indexed) {
 		//UTIL.log("   is indexed.\n");
 
 		//UTIL.log("generating index for %s", field);
-		this.I[field] = this.index("_syncdb_"+this.name+"_I"+field, schema[field], key);
+		this.I[field] = this.index("_syncdb_"+this.name+"_I"+field, type, key);
 		//UTIL.log("INDEX: %o", this.I[field]);
 
-		this["select_by_"+field] = this.generate_select(field, schema[field]);
-		if (schema[field].is_unique)
-		    this["update_by_"+field] = this.generate_update(field, schema[field]);
-		if (schema[field].is_key) {
+		this["select_by_"+field] = this.generate_select(field, type);
+		if (type.is_unique)
+		    this["update_by_"+field] = this.generate_update(field, type);
+		if (type.is_key) {
 		    //UTIL.log("   is key.\n");
 		    this.update_by = this["update_by_"+field];
 		    this.select_by = this["select_by_"+field];
 		    this.remove_by
 		      = this["remove_by_"+field] =
-			this.generate_remove(field, schema[field]);
+			this.generate_remove(field, type);
 		}
 
 	    }
@@ -1003,9 +1008,9 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 		    this.schema.m[i].index_insert(this.I[i], row[i], row[key]);
 		    //UTIL.log("update %o=%o(%o) in %o(%o)", row[i], row[key], key, this.I[i], i);
 		}
-		SyncDB.LS.set(this.schema[key].get_key(this.name, key, row[key]), this.parser.encode(row).render(),
+		SyncDB.LS.set(this.schema.id.get_key(this.name, key, row[key]), this.parser.encode(row).render(),
 			      this.M(function (error) {
-				  //UTIL.log("stored in %o.", this.schema[key].get_key(this.name, key, row[key]));
+				  //UTIL.log("stored in %o.", this.schema.id.get_key(this.name, key, row[key]));
 				  if (error) callback(error, row);
 				  else callback(false, row);
 			      })
@@ -1250,7 +1255,7 @@ SyncDB.Types.Range = SyncDB.Types.Vector.extend({
 SyncDB.Types.Date = SyncDB.Types.Base.extend({ 
     toString : function() { return "Date"; },
     parser : function() {
-	new serialization.Date();
+	return new serialization.Date();
     }
 });
 SyncDB.Types.Array = SyncDB.Types.Base.extend({
