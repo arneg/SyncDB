@@ -587,6 +587,8 @@ SyncDB.Table = UTIL.Base.extend({
 	}
     },
     get_version : function() {},
+    // I am not sure what this thing was supposed to do.
+    sync : function(version) {},
     index : function() {
 	return null;
     },
