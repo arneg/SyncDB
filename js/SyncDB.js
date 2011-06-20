@@ -79,7 +79,7 @@ SyncDB.Filter.And = SyncDB.Filter.Base.extend({
 	return results;
     }
 });
-SyncDB.Filter.False = SuncDB.Filter.Base.extend({
+SyncDB.Filter.False = SyncDB.Filter.Base.extend({
     index_lookup : function(index) {
 	return [];
     }
@@ -91,7 +91,7 @@ SyncDB.Filter.Equal = SyncDB.Filter.Base.extend({
 	// return this.low_get(index, this.args[0]);
     }
 });
-SyncDB.Filter.True = SuncDB.Filter.Base.extend({
+SyncDB.Filter.True = SyncDB.Filter.Base.extend({
     index_lookup : function(index) {
 	return this.index.values();
     }
