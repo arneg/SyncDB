@@ -1202,6 +1202,45 @@ SyncDB.Types.String = SyncDB.Types.Base.extend({
     },
     toString : function() { return "String"; }
 });
+SyncDB.Types.Vector = SyncDB.Types.Base.extend({
+    constructor : function(name, types) {
+	this.types = types;
+	this.base.apply(this, [ name ].concat(Array.prototype.slice.call(arguments, 1)));
+    },
+    parser : function() {
+	var l = new Array(this.types.length+2);
+	l[0] = "_vector";
+	l[1] = false;
+	for (var i = 0; i < l.length-2; i++)
+	    l[i+2] = this.types[i].parser();
+	return UTIL.create(serialization.Tuple, l);
+    }
+});
+SyncDB.Range = Base.extend({
+    constructor : function(start, stop) {
+	this.start = start;
+	this.stop = stop;
+    }
+});
+SyncDB.Types.Range = SyncDB.Types.Vector.extend({
+    constructor : function(name, from, to) {
+	this.base.apply(this, [ name, [ from, to ] ].concat(Array.prototype.slice.call(arguments, 3)));
+    },
+    parser : function() {
+	return new serialization.Tuple("_range", SyncDB.Range,
+				       this.types[0].parser(),
+				       this.types[1].parser()).extend({
+	    encode : function(range) {
+		return this.base([ range.start, range.stop ]);
+	    }
+	});
+    }
+});
+SyncDB.Types.Date = SyncDB.Types.Base.extend({ 
+    parser : function() {
+	new serialization.Date();
+    }
+});
 SyncDB.Types.Array = SyncDB.Types.Base.extend({
     constructor : function(name, type) {
 	this.type = type;
