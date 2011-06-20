@@ -762,8 +762,8 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 
 		if (o instanceof SyncDB.Meteor.Sync) { // we dont care for id. just clean it up, man!
 		    if (this.sync_callback) 
-			foreach (o->rows;; mapping row) {
-			    this.sync_callback(o.version, row);
+			for(var j = 0; j < o.rows.length; j++) {
+			    this.sync_callback(o.version, o.rows[j]);
 			}
 		    continue;
 		}
