@@ -492,7 +492,7 @@ void insert(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... e
 	query("LOCK TABLES %s WRITE;", table_names()*" WRITE,");
 
 	// first do the ones which have the fid AUTO_INCREMENT
-	// use those automatic values to populare the link ids in the main table
+	// use those automatic values to populate the link ids in the main table
 	// insert the main one
 	// insert the others
 
