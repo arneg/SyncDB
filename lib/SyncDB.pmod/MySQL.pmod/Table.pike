@@ -403,6 +403,7 @@ void select(object filter, function(int(0..1), array(mapping)|mixed:void) cb,
     if (!err) {
 	cb(0, sanitize_result(rows), @extra);
     } else {
+	werror("SELECT ERROR: %s\n%s", describe_error(err), describe_backtrace(err[1]));
 	cb(1, err, @extra); // convert sql -> atom errors etc.
     }
 }
