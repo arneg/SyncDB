@@ -56,24 +56,53 @@ SyncDB = {
 	}
     }
 };
+/* 
+ * what do we need for index lookup in a filter:
+ * - the index (matching one field)
+ *  * needs to have right api for this filter (e.g. range lookups, etc)
+ * - hence it needs the schema
+ *
+ */
 SyncDB.Filter = {};
 SyncDB.Filter.Base = UTIL.Base.extend({
-    constructor : function() {
-	this.args = Array.prototype.slice.apply(arguments);
+    _types : {
+	field : new serialization.String()
     },
-    low_get : function(index, key) {
-	if (UTIL.objectp(key)) {
-	    return key.index_lookup(index);
-	} else index.get(key);
+    constructor : function(field) {
+	this.field = field;
+	this.args = Array.prototype.slice.apply(arguments);
+    }
+});
+SyncDB.Filter.Or = SyncDB.Filter.Base.extend({
+    _types : {
+	args : function(p) {
+	    return new serialization.Array(p);
+	}
+    },
+    index_lookup : function(table) {
+	var results = this.args[0].index_lookup(table)
+
+	for (var i = 1; i < this.args.length; i++) {
+	    results = UTIL.array_or(this.args[i].index_lookup(table), results);
+	}
+
+	return results;
     }
 });
 SyncDB.Filter.And = SyncDB.Filter.Base.extend({
+    _types : {
+	args : function(p) {
+	    return new serialization.Array(p);
+	}
+    },
     index_lookup : function(index) {
-	var results = this.low_get(index, this.args[0]);
+	var results = this.args[0].index_lookup(index);
 
 	for (var i = 1; i < this.args.length; i++) {
 	    if (!results.length) break;
-	    results = UTIL.array_and(this.low_get(index, this.args[i]), results);
+	    var t = this.args[i].index_lookup(index);
+	    if (!t) return 0;
+	    results = UTIL.array_and(t, results);
 	}
 
 	return results;
@@ -84,28 +113,59 @@ SyncDB.Filter.False = SyncDB.Filter.Base.extend({
 	return [];
     }
 });
-SyncDB.Filter.Equal = SyncDB.Filter.Base.extend({
-    index_lookup : function(index) {
-	return index.get(this.args[0]);
-	// we could allow for types here, probably the way to go
-	// return this.low_get(index, this.args[0]);
-    }
-});
 SyncDB.Filter.True = SyncDB.Filter.Base.extend({
     index_lookup : function(index) {
-	return this.index.values();
+	return index.values();
     }
 });
-SyncDB.Filter.Or = SyncDB.Filter.Base.extend({
-    index_lookup : function(index) {
-	var results = this.low_get(index, this.args[0]);
+SyncDB.Filter.Overlaps = SyncDB.Filter.Base.extend({
+    _types : {
+	field : new serialization.String(),
+	value : new serialization.Any()
+    },
+    index_lookup : function(table) {
+	var type = table.m[this.field];
+	var index = table.get_index(this.field);
+	if (!index || !index.overlaps) return 0;
 
-	for (var i = 1; i < this.args.length; i++) {
-	    results = UTIL.array_or(this.low_get(index, this.args[i]), results);
-	}
-
-	return results;
+	return index.overlaps(type.parser().decode(this.value));
     }
+});
+SyncDB.Filter.Equal = SyncDB.Filter.Base.extend({
+    _types : {
+	field : new serialization.String(),
+	value : new serialization.Any()
+    },
+    constructor : function(field, value) {
+	this.value = value;
+	this.base(field);
+    },
+    // assume here that table is in sync or cached
+    index_lookup : function(table) {
+	var type = table.m[this.field];
+	// no use to ask, we are not in sync and doing a lookup
+	// on a non-unique field. we never now if we get a complete
+	// result
+	if (!table.is_sync && !type.is_unique) return 0;
+	var index = table.get_index(this.field);
+	if (!index) return 0;
+	var v = index.get(type.parser().decode(this.value));
+	// we get an empty result and we are only cached, so
+	// on the remote db, there could be something, which
+	// we dont have any entries in cache but can not deny
+	// their existance in the chained db.
+	if (!v.length && !table.is_sync) return 0;
+	// our result is authoritative, even if empty.
+	return v;
+    }
+});
+SyncDB.Serialization = {};
+SyncDB.Serialization.Filter = serialization.generate_structs({
+    _or : SyncDB.Filter.Or,
+    _and : SyncDB.Filter.And,
+    _equal : SyncDB.Filter.Equal,
+    _true : SyncDB.Filter.True,
+    _false : SyncDB.Filter.False,
 });
 SyncDB.KeyValueMapping = UTIL.Base.extend({
     constructor : function() {
@@ -346,7 +406,7 @@ SyncDB.LocalField = UTIL.Base.extend({
 	    }));
 	    return this;
 	}
-	cb(this.value);
+	UTIL.call_later(cb, null, this.value);
 	return this;
     },
     set : function(value) {
@@ -440,7 +500,6 @@ SyncDB.MultiIndex = SyncDB.LocalField.extend({
 	return "MultiIndex("+this.name+","+this.type+")";
     }
 });
-SyncDB.Serialization = {};
 SyncDB.Schema = UTIL.Base.extend({
     constructor : function() {
 	this.m = {};
@@ -705,9 +764,9 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 		{ id : s, version : new serialization.Array(int), rows : new serialization.Array(this.parser_in) });
 	this.out = new serialization.Polymorphic();
 	regtype(this.out, "_syncreq", SyncDB.Meteor.SyncReq,
-		{ id : s, version : new serialization.Array(int) });
+		{ id : s, version : new serialization.Array(int), filter : SyncDB.Serialization.Filter });
 	regtype(this.out, "_select", SyncDB.Meteor.Select,
-		{ id : s, row : this.parser_in });
+		{ id : s, filter : SyncDB.Serialization.Filter });
 	regtype(this.out, "_insert", SyncDB.Meteor.Insert,
 		{ id : s, row : this.parser_out });
 	// TODO: is an update allowed to change hidden fields?
@@ -1071,12 +1130,6 @@ SyncDB.Flags.Mandatory = SyncDB.Flags.Base.extend({
     },
     is_mandatory : 1
 });
-SyncDB.Flags.Cached = SyncDB.Flags.Index.extend({
-    toString : function() {
-	return "Cached";
-    },
-    is_cached : 1
-});
 SyncDB.Flags.WriteOnly = SyncDB.Flags.Base.extend({
     toString : function() {
 	return "WriteOnly";
@@ -1088,12 +1141,6 @@ SyncDB.Flags.ReadOnly = SyncDB.Flags.Base.extend({
 	return "ReadOnly";
     },
     is_readable : 0
-});
-SyncDB.Flags.Sync = SyncDB.Flags.Index.extend({
-    toString : function() {
-	return "Sync";
-    },
-    is_synced : 1
 });
 SyncDB.Flags.Hashed = SyncDB.Flags.Base.extend({
     toString : function() {
@@ -1185,7 +1232,11 @@ SyncDB.Types = {
 	},
 	index_remove : function(index, key, id) {
 	    return index.remove(key, id);    
-	}
+	},
+	Equal : function(value) {
+	    return new SyncDB.Filter.Equal(this.name, this.parser().encode(value));
+	},
+	filter : function(
     })
 };
 SyncDB.Types.Integer = SyncDB.Types.Base.extend({
@@ -1245,6 +1296,7 @@ SyncDB.Types.Range = SyncDB.Types.Vector.extend({
 	this.base.apply(this, [ name, [ from, to ] ].concat(Array.prototype.slice.call(arguments, 3)));
     },
     parser : function() {
+	UTIL.log("%o, %o\n", this.types[0].parser(), this.types[0]);
 	return new serialization.Tuple("_range", SyncDB.Range,
 				       this.types[0].parser(),
 				       this.types[1].parser()).extend({
