@@ -23,7 +23,7 @@ class Equal(string field, mixed|Serialization.Atom atom) {
 	    error("Trying to index non-indexable field.");
 	if (!type->is_readable)
 	    error("Trying to index non-readable field.");
-	if (Program.inherits(o, Serialization.Atom)) 
+	if (Program.inherits(object_program(o), Serialization.Atom)) 
 	    o = type->parser()->decode(o);
 	return sprintf("%s = '%s'", table->get_sql_name(field), type->encode_sql(o));
     }
