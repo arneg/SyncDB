@@ -1,31 +1,31 @@
-class Or(array(object) ... filters) {
+class Or(object ... filters) {
 
     string encode_sql(object table) {
 	if (!sizeof(filters)) error("empty filter!");
-	return "(" + [array(string)]filters->encode_sql(table) * " OR " + ")";
+	return "(" + filters->encode_sql(table) * " OR " + ")";
     }
 }
 
-class And(array(object) ... filters) {
+class And(object ... filters) {
 
     string encode_sql(object table) {
 	if (!sizeof(filters)) error("empty filter!");
-	return "(" + [array(string)]filters->encode_sql(table) * " AND " + ")";
+	return "(" + filters->encode_sql(table) * " AND " + ")";
     }
 }
 
-class Equal(string field, mixed|Serialization.Atom atom) {
+class Equal(string field, mixed atom) {
 
     string encode_sql(object table) {
-	object o = atom;
-	object type = table->m[field];
+	mixed o = atom;
+	object type = table->schema[field];
 	if (!type->is_index)
 	    error("Trying to index non-indexable field.");
 	if (!type->is_readable)
 	    error("Trying to index non-readable field.");
-	if (Program.inherits(object_program(o), Serialization.Atom)) 
+	if (objectp(o) && Program.inherits(object_program(o), Serialization.Atom)) 
 	    o = type->parser()->decode(o);
-	return sprintf("%s = '%s'", table->get_sql_name(field), type->encode_sql(o));
+	return sprintf("%s=%s", table->get_sql_name(field), type->encode_sql_value(o));
     }
 }
 
