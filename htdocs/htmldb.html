@@ -9,12 +9,24 @@
 <script type="text/javascript" src="../js/SyncDB.js"></script>
 <script type="text/javascript">
 /*
-    */
     var schema = new SyncDB.Schema({
 	    id : new SyncDB.Types.Integer(new SyncDB.Flags.Key(), new SyncDB.Flags.AutoIncrement()),
 	    foo : new SyncDB.Types.String(new SyncDB.Flags.Cached()),
 	});
-    var con = new meteor.Connection("http://dev.webhaveninternational.com/dbsync/server.pike", {});
+    */
+    var schema = (new SyncDB.Schema((new SyncDB.Types.Integer("id",
+	    (new SyncDB.Flags.Key()),
+	    (new SyncDB.Flags.Automatic()),
+	    (new SyncDB.Flags.ReadOnly()))),
+	(new SyncDB.Types.String("name")),
+	(new SyncDB.Types.String("email")),
+	(new SyncDB.Types.Range("date",
+	    (new SyncDB.Types.Date("startdate")),
+	    (new SyncDB.Types.Date("stopdate")))),
+	(new SyncDB.Types.String("firstname")),
+	(new SyncDB.Types.String("lastname"))));
+
+    var con = new meteor.Connection("/SyncDB/server.pike", {});
     var mplex = new meteor.Multiplexer(con);
     var chan = mplex.get_channel("control");
     var db = new SyncDB.LocalTable("test", schema
