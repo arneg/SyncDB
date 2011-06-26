@@ -564,7 +564,7 @@ array(mapping)|mapping sanitize_result(array(mapping)|mapping rows) {
 }
 
 string get_sql_name(string field) {
-    return schema[field]->sql_name(name);
+    return schema[field]->sql_name(table);
 }
 
 /*
