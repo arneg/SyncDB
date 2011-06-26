@@ -18,7 +18,12 @@ class Base(void|string id, void|mapping row) {
 	return sprintf("%O(%O, %O)", this_program, id, row);
     }
 }
+class Select(void|string id, object filter) {
+    string _sprintf(int type) {
+	return sprintf("%O(%O, %O)", this_program, id, filter);
+    }
+}
 class Insert { inherit Base; }
-class Select { inherit Base; }
 class Update { inherit Base; }
+
 
