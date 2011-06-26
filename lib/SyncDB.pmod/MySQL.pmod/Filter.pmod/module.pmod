@@ -1,14 +1,16 @@
 class Or(array(object) ... filters) {
 
     string get_sql(object table) {
-	return "(" + filters->get_sql(table) * " OR " + ")";
+	if (!sizeof(filters)) error("empty filter!");
+	return "(" + [array(string)]filters->get_sql(table) * " OR " + ")";
     }
 }
 
 class And(array(object) ... filters) {
 
     string get_sql(object table) {
-	return "(" + filters->get_sql(table) * " AND " + ")";
+	if (!sizeof(filters)) error("empty filter!");
+	return "(" + [array(string)]filters->get_sql(table) * " AND " + ")";
     }
 }
 
@@ -16,8 +18,8 @@ class Equal(string field, mixed|Serialization.Atom atom) {
 
     string get_sql(object table) {
 	object o = atom;
-	object type = table->m[field]
-	if (Program.inherits(o, Serialization.Atom)) 
+	object type = table->m[field];
+	if (Program.inherits(object_program(o), Serialization.Atom)) 
 	    o = type->parser()->decode(o);
 	return sprintf("%s = '%s'", table->get_sql_name(field), type->encode_sql(o));
     }
