@@ -12,7 +12,7 @@ void create(string name, SyncDB.Schema schema, SyncDB.Table db) {
     in = Serialization.Types.Polymorphic();
     in->register_type(.Select, "_select", 
 		      Serialization.Types.Struct("_select", ([
-			    "row" : schema->parser_out(),
+			    "filter" : SyncDB.Serialization.Filter,
 			    "id" : s,
 			]), .Select));
     in->register_type(.Update, "_update",
