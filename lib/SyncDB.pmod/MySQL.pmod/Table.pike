@@ -384,36 +384,24 @@ void create(string dbname, Sql.Sql con, SyncDB.Schema schema, string table) {
 }
 
 
-void select(mapping keys, function(int(0..1),array(mapping)|mixed:void) cb2, mixed ... extra) {
-    int(0..1) noerr;
+void select(object filter, function(int(0..1), array(mapping)|mixed:void) cb,
+	    mixed ... extra) {
     array(mapping) rows;
-    mixed err;
-    array(string) a = allocate(sizeof(keys));
-    int i = 0;
-    mixed cb(int(0..1) error, mixed bla) {
-	return cb2(error, bla, @extra);
-    };
-    
-    if (!Array.all(map(map(indices(keys), Function.curry(`[])(schema)), `->, "is_index"), `!=, 0)) {
-	werror("!! %O\n", indices(keys));
-    }
 
-    err = catch {
-	//query("LOCK TABLES %s READ;", table);
-	string index = filter(table_objects()->index(keys), `!=, 0) * " AND ";
+    mixed err = catch {
+	string index = filter->encode_sql(this);
 	if (!sizeof(index)) {
-	    cb(1, "Need indexable field(s).\n"); // needs error type, i guess
+	    // needs error type, i guess
+	    cb(1, "Need indexable field(s).\n", @extra);
 	    return;
 	}
 	rows = query(sprintf(select_sql, index));
-	//query("UNLOCK TABLES;");
-	noerr = 1;
     };
 
-    if (noerr) {
-	cb(0, sanitize_result(rows));
+    if (!err) {
+	cb(0, sanitize_result(rows), @extra);
     } else {
-	cb(1, err); // convert sql -> atom errors etc.
+	cb(1, err, @extra); // convert sql -> atom errors etc.
     }
 }
 
@@ -570,6 +558,10 @@ array(mapping)|mapping sanitize_result(array(mapping)|mapping rows) {
 	return map(rows, sanitize_result);
     }
 
+}
+
+string get_sql_name(string field) {
+    return schema[field]->sql_name(name);
 }
 
 /*
