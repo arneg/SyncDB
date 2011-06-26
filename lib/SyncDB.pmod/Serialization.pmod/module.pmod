@@ -1,6 +1,6 @@
 object Version = Serialization.Factory.generate_struct(SyncDB.Version(), "_version");
 
-object Flag, Type, Schema;
+object Flag, Type, Schema, Filter;
 
 // this ignore boundaries
 class Range {
@@ -33,11 +33,13 @@ class pSchema {
 }
 
 void create(mapping|void overwrites) {
+    object black_magic;
     Flag = Serialization.Factory.generate_structs(([
 	"_automatic" : SyncDB.Flags.Automatic(),
 	"_foreign" : SyncDB.Flags.Foreign(),
 	//"_hash" : SyncDB.Flags.Hash(),
 	"_hidden" : SyncDB.Flags.Hidden(),
+	"_trivial" : SyncDB.Flags.Trivial(),
 	"_index" : SyncDB.Flags.Index(),
 	"_join" : SyncDB.Flags.Join(),
 	"_key" : SyncDB.Flags.Key(),
@@ -51,7 +53,22 @@ void create(mapping|void overwrites) {
 	"string" : Serialization.Types.Symbol(),
     ]));
 
-    object black_magic = Serialization.Types.OneTypedList(Flag);
+    black_magic = Serialization.Types.OneTypedList(Flag);
+    Filter = Serialization.Factory.generate_structs(([
+	"_and" : SyncDB.Mysql.Filter.And(({})),
+	"_or" : SyncDB.Mysql.Filter.Or(({})),
+	"_equal" : SyncDB.Mysql.Filter.Equal(({})),
+	"_true" : SyncDB.Mysql.Filter.True(({})),
+	"_false" : SyncDB.Mysql.Filter.False(({})),
+    ]), lambda(object o, string s) {
+	if (s == "filters") return black_magic;
+	return 0;
+    }, ([
+	"string" : Serialization.Types.Symbol(),
+    ]));
+    black_magic->etype = Filter;
+
+    black_magic = Serialization.Types.OneTypedList(Flag);
     Type = Serialization.Factory.generate_structs(([
 	"_integer" : SyncDB.Types.Integer(""),
 	"_string" : SyncDB.Types.String(""),
