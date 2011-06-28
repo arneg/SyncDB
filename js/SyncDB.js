@@ -5,6 +5,7 @@ UTIL.Base = Base.extend({
     }
 });
 SyncDB = {
+    _tables : {},
     warn : function(err) {
 	// support sprintf like syntax here!
 	UTIL.log("SyncDB WARN: %o", err);
@@ -605,7 +606,6 @@ SyncDB.Table = UTIL.Base.extend({
 	    return !type.is_hidden && !type.is_automatic;
 	});
 	this.db = db;
-	this.I = {};
 	if (db) db.add_update_callback(this.M(this.update));
 	//UTIL.log("schema: %o\n", schema);
 	var key = schema.key;
@@ -619,9 +619,6 @@ SyncDB.Table = UTIL.Base.extend({
 	    if (type.is_indexed) {
 		//UTIL.log("   is indexed.\n");
 
-		//UTIL.log("generating index for %s", field);
-		this.I[field] = this.index("_syncdb_"+this.name+"_I"+field, type, key);
-		//UTIL.log("INDEX: %o", this.I[field]);
 
 		this["select_by_"+field] = this.generate_select(field, type);
 		if (type.is_unique)
@@ -671,8 +668,23 @@ SyncDB.Table = UTIL.Base.extend({
 	// allow us to generate partial results at least.
 	if (!callback) callback = SyncDB.getcb;
 	callback = UTIL.once(callback);
-	(this.db ? this.db : this).low_select(filter, extra.length == 0 ? this.M(callback) : this.M(function(error, rows) {
-	    callback.apply(this, [error, row].concat(extra));
+
+	var f = extra.length ? function(error, rows) {
+	    callback.apply(window, [error, row].concat(extra));
+	} : callback;
+
+	this.low_select(filter, this.M(function(error, rows) {
+	    if (error instanceof SyncDB.Error.NoSync && this.db) {
+		if (this.update_index)
+		    this.db.select(filter, this.M(function(error, rows) {
+			if (!error) this.update_index(filter, rows);
+			f(error, rows);
+		    }));
+		else
+		    this.db.select(filter, f);
+		return;
+	    }
+	    f(error, rows);
 	}));
     },
     generate_update : function(name, type) {
@@ -870,6 +882,16 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	    this.sync(this.config.version());
 	}));
 	this.base(name, schema, db);
+	this.I = {};
+	for (var i = 0; i < schema.fields.length; i++) {
+	    var type = schema.fields[i];
+	    if (type.is_index || type.is_key) {
+		var field = type.name;
+		//UTIL.log("generating index for %s", field);
+		this.I[field] = this.index("_syncdb_"+this.name+"_I"+field, type, schema.key);
+		//UTIL.log("INDEX: %o", this.I[field]);
+	    }
+	}
 	if (db) {
 	    db.sync_callback = UTIL.make_method(this, function(version, row) {
 		var db;
@@ -957,24 +979,28 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	// with some mechanism to allow this index_lookup call
 	// to return a partial results, which may in addition
 	// contain another Filter and some results
-	var ids = filter.index_lookup(this);
+	var ids;
+	try {
+	    ids = filter.index_lookup(this);
+	} catch (error) {
+	    UTIL.call_later(callback, null, error);
+	}
 	//UTIL.log("ids: %o\n", ids);
 	if (ids.length) {
 	    if (ids.length == 1) {
 		return f(ids[0], callback);
 	    }
-	    var failed = 0;
+	    var failed = false;
 	    var c = 0;
 	    var aggregate = function(error, row) {
+		if (failed) return;
 		if (error) {
-		    if (!failed) {
-			failed = 1;
-			callback(error, row);
-		    }
+		    failed = true;
+		    callback(error, row);
 		    return;
 		}
 		ids[c++] = row;
-		if (c == ids.length) callback(0, ids);
+		if (c == ids.length) callback(false, ids);
 	    };
 	    // here comes your event aggregator!
 	    for (var i = 0; i < ids.length; i++) {
@@ -1065,6 +1091,15 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	this.insert(row, callback);
 	this.db = db;
     }
+});
+SyncDB.CachedTable = SyncDB.LocalTable.extend({
+    low_select : function(filter, callback) {
+	this.base(filter, this.M(function(error, rows) {
+	    if (error instanceof SyncDB.Error.NotFound)
+		error = new SyncDB.Error.NoSync();
+	    callback(error, rows);
+	}));
+    },
 });
 SyncDB.Flags = {
     Base : UTIL.Base.extend({
@@ -1187,7 +1222,9 @@ SyncDB.Types = {
 	    return Array.prototype.slice.apply(arguments).join("_");
 	},
 	get_index : function(name, key_type) {
-	    if (this.is_unique)
+	    if (this.is_key) 
+		return new SyncDB.KeyIndex(name, this, key_type);
+	    else if (this.is_unique)
 		return new SyncDB.MappingIndex(name, this, key_type);
 	    else //if (this.is_indexed)
 		return new SyncDB.MultiIndex(name, this, key_type);
