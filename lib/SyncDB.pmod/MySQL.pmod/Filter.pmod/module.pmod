@@ -22,10 +22,10 @@ class And(object ... filters) {
     }
 }
 
-class Equal(string field, mixed atom) {
+class Equal(string field, mixed value) {
 
     string encode_sql(object table) {
-	mixed o = atom;
+	mixed o = value;
 	object type = table->schema[field];
 	if (!type->is_index)
 	    error("Trying to index non-indexable field.");
@@ -37,7 +37,7 @@ class Equal(string field, mixed atom) {
     }
 
     string _sprintf(int type) {
-	return sprintf("Equal(%O, %O)", field, atom);
+	return sprintf("Equal(%O, %O)", field, value);
     }
 }
 

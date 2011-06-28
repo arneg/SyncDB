@@ -55,13 +55,14 @@ void create(mapping|void overwrites) {
 
     black_magic = Serialization.Types.OneTypedList(Flag);
     Filter = Serialization.Factory.generate_structs(([
-	"_and" : SyncDB.Mysql.Filter.And(({})),
-	"_or" : SyncDB.Mysql.Filter.Or(({})),
-	"_equal" : SyncDB.Mysql.Filter.Equal(({})),
-	"_true" : SyncDB.Mysql.Filter.True(({})),
-	"_false" : SyncDB.Mysql.Filter.False(({})),
+	"_and" : SyncDB.MySQL.Filter.And(),
+	"_or" : SyncDB.MySQL.Filter.Or(),
+	"_equal" : SyncDB.MySQL.Filter.Equal("foo", Serialization.Atom("_foo", "bar")),
+	"_true" : SyncDB.MySQL.Filter.True("foo"),
+	"_false" : SyncDB.MySQL.Filter.False("foo"),
     ]), lambda(object o, string s) {
 	if (s == "filters") return black_magic;
+	if (s == "value") return Serialization.Types.Atom();
 	return 0;
     }, ([
 	"string" : Serialization.Types.Symbol(),
