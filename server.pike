@@ -9,17 +9,29 @@ object table; // tæble
 array(object) plexers = ({ });
 
 void create() {
-    object schema =  SyncDB.Schema(([
-	"id" : SyncDB.Types.Integer(SyncDB.Flags.Key(),
+    object schema = SyncDB.Schema(
+	SyncDB.Types.Integer("id", SyncDB.Flags.Key(),
 				    SyncDB.Flags.Automatic(),
 				    SyncDB.Flags.Join(([ "two" : "id" ]))),
-	"firstname" : SyncDB.Types.String(SyncDB.Flags.Foreign("two")),
-	"lastname" : SyncDB.Types.String(),
-	"email" : SyncDB.Types.String(),
-	"mobile" : SyncDB.Types.String()
-    ]));
-    table = SyncDB.Meteor.Table("ignore", schema, 
-	    SyncDB.MySQL.Table("ignore", Sql.Sql("mysql://root@localhost/eventapp"), schema, "newsubscribers"));
+	SyncDB.Types.String("name"),
+	SyncDB.Types.String("email"),
+	//"date" : SyncDB.Types.Vector(SyncDB.Types.Date(Calendar.Second), ({ "startdate", "stopdate" })),
+	/*
+	SyncDB.Types.Vector("date", ({ 
+	    SyncDB.Types.Date("startdate", Calendar.Second),
+	    SyncDB.Types.Date("stopdate", Calendar.Second)
+	})),
+	*/
+	SyncDB.Types.Range("date", 
+	    SyncDB.Types.Date("startdate", Calendar.Second),
+	    SyncDB.Types.Date("stopdate", Calendar.Second)
+	),
+	// two
+	SyncDB.Types.String("firstname", SyncDB.Flags.Foreign("two", "firstname")),
+	SyncDB.Types.String("lastname", SyncDB.Flags.Foreign("two", "lastname")),
+    );
+    table = SyncDB.Meteor.Table("one", schema, 
+	    SyncDB.MySQL.Table("one", Sql.Sql("mysql://root@localhost/interSync"), schema, "one"));
 }
 
 void answer(object r, int code, string data) {
@@ -65,12 +77,14 @@ mapping parse(Protocols.HTTP.Server.Request r) {
 	if (id->method == "GET" && !has_index(id->variables, "id")) {
 		session = get_new_session();
 		object multiplexer = Meteor.Multiplexer(session);
+#ifdef DB_SERVER_DEBUG
 		if (!table->incoming) {
 		    werror("!incoming: %O, %O\n", table, table->incoming);
 		}
+#endif
 		multiplexer->get_channel("control")->set_cb(table->incoming);
 		// TODO:: inform table of new connection
-		plexers += ({ multiplexer });
+		//plexers += ({ multiplexer });
 
 		write("new session %O created just now.\n", session->client_id);
 
@@ -89,7 +103,7 @@ mapping parse(Protocols.HTTP.Server.Request r) {
 
 	// we should check whether or not this is hitting a max connections limit somewhere.
 	if ((session = sessions[id->variables["id"]])) {
-		werror("SERVER: call_out(handle_id, 0, %O(%O))\n", id, id->vars);
+		werror("SERVER: call_out(handle_id, 0, id)\n");
 		call_out(session->handle_id, 0, id);
 		return Roxen.http_pipe_in_progress();
 	}
