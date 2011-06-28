@@ -23,6 +23,11 @@ class Select(void|string id, object filter) {
 	return sprintf("%O(%O, %O)", this_program, id, filter);
     }
 }
+class Reply(string id, array(mapping) rows) {
+    string _sprintf(int type) {
+	return sprintf("%O(%O, %d rows)", this_program, id, sizeof(rows));
+    }
+}
 class Insert { inherit Base; }
 class Update { inherit Base; }
 

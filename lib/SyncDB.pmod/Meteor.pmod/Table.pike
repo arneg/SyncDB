@@ -33,11 +33,12 @@ void create(string name, SyncDB.Schema schema, SyncDB.Table db) {
 			])));
 
     out = Serialization.Types.Polymorphic();
-    out->register_type(.Select, "_select", 
-		      Serialization.Types.Struct("_select", ([
-			    "row" : schema->parser_out(),
+    out->register_type(.Reply, "_reply", 
+		      Serialization.Types.Struct("_reply", ([
+			    "rows" : Serialization.Types.OneTypedList(
+					schema->parser_out()),
 			    "id" : s,
-			]), .Select));
+			]), .Reply));
     out->register_type(.Sync, "_sync",
 		       Serialization.Types.Struct("_sync", ([
 			    "rows" : Serialization.Types.OneTypedList(
@@ -67,11 +68,8 @@ void generate_reply(int err, array(mapping)|mapping row, object session, object 
 	reply = .Error(message->id, sprintf("%O", row));
     } else switch (object_program(message)) {
     case .Select:
-	if (arrayp(row) && sizeof(row)) {
-	    if (sizeof(row) > 1) 
-		werror("WARN: selecting several rows, while only one is"
-		       " supported.\n");
-	    reply = .Select(message->id, row[0]);
+	if (arrayp(row)) {
+	    reply = .Reply(message->id, row);
 	    break;
 	} else error("invalid type for row detected.\n");
     case .Update:
@@ -120,7 +118,7 @@ void incoming(object session, Serialization.Atom a) {
     switch (object_program(message)) {
     case .Select:
 	werror("TABLE: select(%O, %O, %O, %O) (%O)\n", message->row, generate_reply, session, message, object_program(message));
-	db->select(message->row, generate_reply, session, message);
+	db->select(message->filter, generate_reply, session, message);
 	break;
     case .Update:
 	werror("TABLE: update(%O, %O, %O, %O) (%O)\n", message->row, generate_reply, session, message, object_program(message));
