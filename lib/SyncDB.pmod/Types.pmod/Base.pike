@@ -42,8 +42,9 @@ string encode_sql_value(mixed v) {
 
 mixed decode_sql(string table, mapping row, mapping|void new) {
     string n = sql_name(table);
-    if (has_index(row, n)) {
-	mixed v = decode_sql_value(row[n]);
+    mixed v;
+    if (has_index(row, n) && (v = row[n])) {
+	v = decode_sql_value(v);
 	if (new) new[name] = v;
 	return v;
     }

@@ -17,13 +17,13 @@ mapping encode_sql(string table, mapping row, void|mapping new) {
 }
 
 mixed decode_sql(string table, mapping row, void|mapping new) {
-    if (new) {
-	::decode_sql(table, row, new);
-	new[name] = SyncDB.Interval(@new[name]);
-	return new[name];
-    } else {
-	return SyncDB.Interval(@::decode_sql(table, row));
+    mixed v = ::decode_sql(table, row);
+
+    if (arrayp(v)) {
+	v = SyncDB.Interval(@v);
+	if (new) new[name] = v;	
     }
+    return v;
 }
 
 object parser() {

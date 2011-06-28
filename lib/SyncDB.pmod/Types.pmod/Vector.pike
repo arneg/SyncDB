@@ -25,7 +25,8 @@ mapping encode_sql(string table, mapping row, void|mapping new) {
 mixed decode_sql(string table, mapping row, void|mapping new) {
     array ret = allocate(sizeof(fields));
     foreach (fields; int i; object type) {
-	ret[i] = type->decode_sql(table, row);
+	if (zero_type(ret[i] = type->decode_sql(table, row)))
+	    return UNDEFINED;
     }
     if (new) new[name] = ret;
     return ret;
