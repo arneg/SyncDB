@@ -1,7 +1,7 @@
 inherit .Base;
 
-object parser() {
-    return Serialization.Types.Or(Serialization.Types.String(), Serialization.Types.False());
+object get_parser() {
+    return Serialization.Types.String();
 }
 
 string encode_sql_value(mixed val) {

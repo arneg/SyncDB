@@ -22,7 +22,7 @@ object decode_sql_value(string s) {
     return prog(Calendar.dwim_time(s + " UTC")->ux);
 }
 
-object parser() {
+object get_parser() {
     return Serialization.Types.Time(prog);
 }
 

@@ -26,7 +26,7 @@ mixed decode_sql(string table, mapping row, void|mapping new) {
     return v;
 }
 
-object parser() {
+object get_parser() {
 #ifdef TEST_RESOLVER
     return SyncDB.Serialization.Range(fields[0]->parser());
 #else

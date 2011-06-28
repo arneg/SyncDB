@@ -9,7 +9,8 @@ string table;
 constant _types = ([
     "name" : "string",
     "table" : -1,
-    "priority" : -1
+    "priority" : -1,
+    "_parser" : -1
 ]);
 
 mixed `->(string index) {
@@ -75,4 +76,17 @@ string encode_json(string p, void|array extra) {
     if (!extra) extra = ({});
     extra = ({ Standards.JSON.encode(name) }) + extra + filter(map(flags, Standards.JSON.encode), sizeof);
     return sprintf("(new %s(%s))", p, extra * (",\n"+" "*8));
+}
+
+object get_parser();
+
+object _parser;
+object parser() {
+    if (!_parser) {
+	_parser = get_parser();
+	if (!this->is_mandatory) {
+	    _parser = Serialization.Types.Or(_parser, Serialization.Types.False());
+	}
+    }
+    return _parser;
 }

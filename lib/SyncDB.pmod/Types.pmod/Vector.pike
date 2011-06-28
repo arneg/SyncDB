@@ -32,8 +32,8 @@ mixed decode_sql(string table, mapping row, void|mapping new) {
     return ret;
 }
 
-object parser() {
-    return Serialization.Types.Tuple(@fields->parser());
+object get_parser() {
+    return Serialization.Types.Tuple(@fields->get_parser());
 }
 
 array(string) sql_names(string table) {
