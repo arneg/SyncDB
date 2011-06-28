@@ -67,41 +67,50 @@ SyncDB.Filter.Base = UTIL.Base.extend({
 	} else index.get(key);
     }
 });
+SyncDB.Filter.False = SyncDB.Filter.Base.extend({
+    index_lookup : function(table) {
+	return [];
+    }
+});
+SyncDB.Filter.Equal = SyncDB.Filter.Base.extend({
+    constructor : function(field, value) {
+	this.field = field;
+	this.value = value;
+    },
+    index_lookup : function(table) {
+	if (table.I[this.field]) {
+	    var type = table.schema.m[this.field];
+	    var v = type.parser().decode(this.value);
+	    return table.I[this.field].get(v);
+	} else UTIL.error("no index for %s", this.field);
+    }
+});
+SyncDB.Filter.True = SyncDB.Filter.Base.extend({
+    constructor : function(field) {
+	this.field = field;
+    },
+    index_lookup : function(table) {
+	return table.I[this.field].values();
+    }
+});
 SyncDB.Filter.And = SyncDB.Filter.Base.extend({
     index_lookup : function(index) {
-	var results = this.low_get(index, this.args[0]);
+	var results = this.args[0].index_lookup(table);
 
 	for (var i = 1; i < this.args.length; i++) {
 	    if (!results.length) break;
-	    results = UTIL.array_and(this.low_get(index, this.args[i]), results);
+	    results = UTIL.array_and(this.args[i].index_lookup(table), results);
 	}
 
 	return results;
     }
 });
-SyncDB.Filter.False = SyncDB.Filter.Base.extend({
-    index_lookup : function(index) {
-	return [];
-    }
-});
-SyncDB.Filter.Equal = SyncDB.Filter.Base.extend({
-    index_lookup : function(index) {
-	return index.get(this.args[0]);
-	// we could allow for types here, probably the way to go
-	// return this.low_get(index, this.args[0]);
-    }
-});
-SyncDB.Filter.True = SyncDB.Filter.Base.extend({
-    index_lookup : function(index) {
-	return this.index.values();
-    }
-});
 SyncDB.Filter.Or = SyncDB.Filter.Base.extend({
-    index_lookup : function(index) {
-	var results = this.low_get(index, this.args[0]);
+    index_lookup : function(table) {
+	var results = this.args[0].index_lookup(table);
 
 	for (var i = 1; i < this.args.length; i++) {
-	    results = UTIL.array_or(this.low_get(index, this.args[i]), results);
+	    results = UTIL.array_or(this.args[i].index_lookup(table), results);
 	}
 
 	return results;
@@ -373,6 +382,16 @@ SyncDB.LocalField = UTIL.Base.extend({
 	    }, this);
     }
 });
+/**
+ * This is a fake index, which is only used to allow us to use one standard api
+ * for the keys aswell.
+ */
+SyncDB.KeyIndex = Base.extend({
+    constructor : function(name, type, id) { },
+    get : function(index) {
+	return [ index ];
+    }
+});
 SyncDB.MappingIndex = SyncDB.LocalField.extend({
     constructor : function(name, type, id) {
 	this.type = type;
@@ -448,10 +467,12 @@ SyncDB.Schema = UTIL.Base.extend({
 	this.autos = [];
 	for (var i = 0; i < arguments.length; i++) {
 	    var type = arguments[i];
-	    m[type.name] = type;
-	    if (type.is_key) this.key = name;
+	    this.m[type.name] = type;
+	    if (type.is_key) {
+		this.key = type.name;
+		this.id = type;
+	    }
 	    if (type.get_val) this.autos.push(name);
-	    this[type.name] = type;
 	}
     },
     hashCode : function() {
@@ -603,25 +624,18 @@ SyncDB.Table = UTIL.Base.extend({
 	} } else return remove;
     },
     generate_select : function(name, type) {
-	var select = this.select(name, type);
-	this["local_select_by_"+name] = select;
-	var db = this.db;	
-	if (!select) SyncDB.error("could not generate select() for %o %o\n", name, type);
 	return function(value, callback) {
-	    var extra = Array.prototype.slice.call(arguments, 2);
-	    if (!callback) callback = SyncDB.getcb;
-	    callback = UTIL.once(callback);
-	    select(value, function(error, row) {
-		if (!error) return callback.apply(this, [error, row].concat(extra));
-		if (!db) return callback.apply(this, [error, row].concat(extra));
-		db["select_by_"+name].apply(this, [value, callback].concat(extra));
-		// we wont need to sync the result, otherwise we would already be
-		// finished.
-		//
-		// maybe we want to cache the ones we have requested. but then we
-		// have a update callback
-	    });
+	    return this.select(type.Equal(value), callback);
 	};
+    },
+    select : function(filter, callback) {
+	var extra = Array.prototype.slice.call(arguments, 2);
+	// allow us to generate partial results at least.
+	if (!callback) callback = SyncDB.getcb;
+	callback = UTIL.once(callback);
+	(this.db ? this.db : this).low_select(filter, extra.length == 0 ? this.M(callback) : this.M(function(error, rows) {
+	    callback.apply(this, [error, row].concat(extra));
+	}));
     },
     generate_update : function(name, type) {
 	var update = this.update(name, type);
@@ -755,16 +769,12 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
     send : function(o) {
 	this.channel.send(this.out.encode(o).render());
     },
-    select : function(name, type) {
-	return this.M(function(value, callback) {
-	    var id = UTIL.get_unique_key(5, this.requests);	
-	    var row = this.get_empty(function (type) { return !type.is_hidden; });
-	    //UTIL.log("name: %o, value: %o\n", name, value);
-	    row[name] = value;
-	    this.requests[id] = callback;
-	    this.send(new SyncDB.Meteor.Select(id, row));
-	    return id;
-	});
+    low_select : function(filter, callback) {
+	var id = UTIL.get_unique_key(5, this.requests);	
+	//UTIL.log("name: %o, value: %o\n", name, value);
+	this.requests[id] = callback;
+	this.send(new SyncDB.Meteor.Select(id, filter));
+	return id;
     },
     update : function(name, type) {
 	return this.M(function(value, row, callback) {
@@ -817,7 +827,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 
 		this.config.version(version);
 
-		this["local_select_by_" + schema.key](row[schema.key], this.M(function(err, oldrow) {
+		this.low_select(schema.id.Equal(row[schema.key]), this.M(function(err, oldrow) {
 		    // check if version is better than before!
 
 		    if (err) {
@@ -880,10 +890,10 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	    throw("deleteing on !keys does not work yet.");
 	}
     },
-    select : function(name, type) {
+    low_select : function(filter, callback) {
 	var f = this.M(function(value, callback) {
 	    var key = this.schema.key;
-	    var k = type.get_key(this.name, key, value);
+	    var k = this.schema.id.get_key(this.name, key, value);
 	    //UTIL.log("trying to fetch %o from local storage %o.\n", key, [ this.name, name, value] );
 	    SyncDB.LS.get(k, this.M(function(error, value) {
 		if (!error) {
@@ -892,62 +902,39 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 		} else callback(error);
 	    }));
 	});
-	if (type.is_key) {
-	    return f;
-	} else if (type.is_indexed) {
-	    var index = this.I[name];
-	    if (!index) SyncDB.error("Could not find index "+name);
-	    if (!type.is_unique)
-		return this.M(function(value, callback) {
-		    // probe the index and check sync.
-		    //
-		    // TODO: allow for partial results here. e.g. come up
-		    // with some mechanism to allow this index_lookup call
-		    // to return a partial results, which may in addition
-		    // contain another Filter and some results
-		    var ids = type.index_lookup(index, value);
-		    //UTIL.log("ids: %o\n", ids);
-		    if (ids.length) {
-			if (ids.length == 1) {
-			    return f(ids[0], callback);
-			}
-			var failed = 0;
-			var c = 0;
-			var aggregate = function(error, row) {
-			    if (error) {
-				if (!failed) {
-				    failed = 1;
-				    callback(error, row);
-				}
-				return;
-			    }
-			    ids[c++] = row;
-			    if (c == ids.length) callback(0, ids);
-			};
-			// here comes your event aggregator!
-			for (var i = 0; i < ids.length; i++) {
-			    f(ids[i], aggregate);
-			}
-			return;
-		    } 
+	// probe the index and check sync.
+	//
+	// TODO: allow for partial results here. e.g. come up
+	// with some mechanism to allow this index_lookup call
+	// to return a partial results, which may in addition
+	// contain another Filter and some results
+	var ids = filter.index_lookup(this);
+	//UTIL.log("ids: %o\n", ids);
+	if (ids.length) {
+	    if (ids.length == 1) {
+		return f(ids[0], callback);
+	    }
+	    var failed = 0;
+	    var c = 0;
+	    var aggregate = function(error, row) {
+		if (error) {
+		    if (!failed) {
+			failed = 1;
+			callback(error, row);
+		    }
+		    return;
+		}
+		ids[c++] = row;
+		if (c == ids.length) callback(0, ids);
+	    };
+	    // here comes your event aggregator!
+	    for (var i = 0; i < ids.length; i++) {
+		f(ids[i], aggregate);
+	    }
+	    return;
+	} 
 
-		    return callback(new SyncDB.Error.NoSync());
-		});
-	    else// if (type.is_synced) 
-		return this.M(function(value, callback) {
-		    // probe the index and check sync.
-		    var ids = type.index_lookup(index, value);
-		    if (ids.length) {
-			return f(ids[0], callback);
-		    } 
-		    if (type.is_unique) 
-			return callback(new SyncDB.Error.NotFound());
-		    else
-			return callback(0, []);
-		});
-	}
-
-	return null;
+	return callback(false, []);
     },
 	     /*
     update : function() {
