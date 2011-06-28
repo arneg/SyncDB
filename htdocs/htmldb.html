@@ -29,7 +29,7 @@
     var con = new meteor.Connection("/SyncDB/server.pike", {});
     var mplex = new meteor.Multiplexer(con);
     var chan = mplex.get_channel("control");
-    var db = new SyncDB.LocalTable("test", schema
+    var db = new SyncDB.CachedTable("test", schema
 	   /**/,	new SyncDB.MeteorTable("test", schema, chan) /**/
     );
     function indices(obj) {
