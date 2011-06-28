@@ -16,16 +16,16 @@ SyncDB = {
 	throw(err);
     },
     Error : {
-	NoSync : Base.extend({ 
+	NoSync : Base.extend({
 	    toString : function () { return "NoSync"; },
 	}),
-	Set : Base.extend({ 
+	Set : Base.extend({
 	    toString : function () { return "Set"; },
 	}),
-	NoIndex : Base.extend({ 
+	NoIndex : Base.extend({
 	    toString : function () { return "NoIndex"; },
 	}),
-	NotFound : Base.extend({ 
+	NotFound : Base.extend({
 	    toString : function () { return "NotFound"; },
 	})
     },
@@ -56,7 +56,7 @@ SyncDB = {
 	}
     }
 };
-/* 
+/*
  * what do we need for index lookup in a filter:
  * - the index (matching one field)
  *  * needs to have right api for this filter (e.g. range lookups, etc)
@@ -406,7 +406,7 @@ SyncDB.LocalField = UTIL.Base.extend({
 	if (this.will_set) return;
 	this.will_set = true;
 
-	UTIL.call_later(function() { 
+	UTIL.call_later(function() {
 		this.will_set = false;
 		if (this.value == undefined) {
 		    SyncDB.LS.remove(this.name, function () {});
@@ -433,14 +433,14 @@ SyncDB.MappingIndex = SyncDB.LocalField.extend({
 	this.base(name, new serialization.Object(type.parser()), {});
     },
     set : function(index, id) {
-	if (!this.value) 
+	if (!this.value)
 	    SyncDB.error("You are too early!!");
 	this.value[index] = id;
 	// adding something can be done cheaply, by appending the tuple
 	this.sync();
     },
     get : function(index) {
-	if (!this.value) 
+	if (!this.value)
 	    SyncDB.error("You are too early!!");
 	if (!this.value[index]) return [];
 	return [ this.value[index] ];
@@ -464,7 +464,7 @@ SyncDB.MultiIndex = SyncDB.LocalField.extend({
 	this.base(name, new serialization.Object(new serialization.SimpleSet()), {});
     },
     set : function(index, id) {
-	if (!this.value) 
+	if (!this.value)
 	    SyncDB.error("You are too early!!");
 	if (!this.value[index]) {
 	    this.value[index] = { };
@@ -548,7 +548,7 @@ SyncDB.TableConfig = SyncDB.LocalField.extend({
 	this.base(name, new serialization.Struct(null, {
 			    version : new serialization.Array(new serialization.Integer()),
 			    schema : new SyncDB.Serialization.Schema()
-			}), 
+			}),
 		  {
 		    version : ({ }),
 		    schema : new SyncDB.Schema()
@@ -562,7 +562,7 @@ SyncDB.TableConfig = SyncDB.LocalField.extend({
 	    this.value.version = arguments[0];
 	    this.sync();
 	}
-	return this.value.version; 
+	return this.value.version;
     },
     schema : function() {
 	if (arguments.length) {
@@ -570,7 +570,7 @@ SyncDB.TableConfig = SyncDB.LocalField.extend({
 	    this.sync();
 	}
 	//UTIL.trace();
-	return this.value.schema; 
+	return this.value.schema;
     }
 });
 // NOTE:
@@ -714,16 +714,27 @@ SyncDB.Meteor = {
 	constructor : function(id, error) {
 	    this.id = id;
 	    this.error = error;
-	},
+	}
     }),
     Base : Base.extend({
 	constructor : function(id, row) {
 	    this.id = id;
 	    this.row = row;
-	},
+	}
+    }),
+    Select : Base.extend({
+	constructor : function(id, filter) {
+	    this.id = id;
+	    this.filter = filter;
+	}
+    }),
+    Reply : Base.extend({
+	constructor : function(id, rows) {
+	    this.id = id;
+	    this.rows = rows;
+	}
     })
 };
-SyncDB.Meteor.Select = SyncDB.Meteor.Base.extend({});
 SyncDB.Meteor.Update = SyncDB.Meteor.Base.extend({});
 SyncDB.Meteor.Insert = SyncDB.Meteor.Base.extend({});
 SyncDB.Meteor.Sync = SyncDB.Meteor.Base.extend({});
@@ -731,21 +742,21 @@ SyncDB.Meteor.SyncReq = SyncDB.Meteor.Base.extend({});
 
 SyncDB.MeteorTable = SyncDB.Table.extend({
     constructor : function(name, schema, channel, db) {
-	this.requests = {};	
+	this.requests = {};
 	this.channel = channel;
 	this.atom_parser = new serialization.AtomParser();
 	this.base(name, schema, db);
 	var int = new serialization.Integer();
 	var s = new serialization.String();
 	var regtype = function(poly, atype, ptype, m) {
-	    poly.register_type(atype, ptype, 
+	    poly.register_type(atype, ptype,
 			       new serialization.Struct(atype, m, ptype));
 	};
 	this.incoming = new serialization.Polymorphic();
 	regtype(this.incoming, "_error", SyncDB.Meteor.Error,
 		{ id : s, error : s });
-	regtype(this.incoming, "_select", SyncDB.Meteor.Select,
-		{ id : s, row : this.parser_in });
+	regtype(this.incoming, "_reply", SyncDB.Meteor.Reply,
+		{ id : s, rows : new serialization.Array(this.parser_in) });
 	regtype(this.incoming, "_sync", SyncDB.Meteor.Sync,
 		{ id : s, version : new serialization.Array(int), rows : new serialization.Array(this.parser_in) });
 	this.out = new serialization.Polymorphic();
@@ -772,7 +783,7 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 		}
 
 		if (o instanceof SyncDB.Meteor.Sync) { // we dont care for id. just clean it up, man!
-		    if (this.sync_callback) 
+		    if (this.sync_callback)
 			for(var j = 0; j < o.rows.length; j++) {
 			    this.sync_callback(o.version, o.rows[j]);
 			}
@@ -783,9 +794,9 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 
 		if (f) {
 		    if (a[i].type == "_error") {
-			f(o.error);	    
+			f(o.error);
 		    } else {
-			f(0, o.row);	    
+			f(0, o.rows);
 		    }
 		} else UTIL.log("could not find reply handler for %o:%o\n", a[i].type, o);
 	    }
@@ -808,7 +819,7 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	this.channel.send(this.out.encode(o).render());
     },
     low_select : function(filter, callback) {
-	var id = UTIL.get_unique_key(5, this.requests);	
+	var id = UTIL.get_unique_key(5, this.requests);
 	//UTIL.log("name: %o, value: %o\n", name, value);
 	this.requests[id] = callback;
 	this.send(new SyncDB.Meteor.Select(id, filter));
@@ -816,7 +827,7 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
     },
     update : function(name, type) {
 	return this.M(function(value, row, callback) {
-	    var id = UTIL.get_unique_key(5, this.requests);	
+	    var id = UTIL.get_unique_key(5, this.requests);
 	    row[name] = value;
 	    this.requests[id] = callback;
 	    this.send(new SyncDB.Meteor.Update(id, row));
@@ -827,7 +838,7 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
     remove : function(name, type) {
 	return this.M(function(value, row, callback) {
 	    UTIL.error("METEOR REMOVE not supported, yet.");
-	    var id = UTIL.get_unique_key(5, this.requests);	
+	    var id = UTIL.get_unique_key(5, this.requests);
 	    row[name] = value;
 	    this.requests[id] = callback;
 	    //this.send(new SyncDB.Meteor.Remove(id, row));
@@ -846,7 +857,7 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
     }
 });
 SyncDB.LocalTable = SyncDB.Table.extend({
-    constructor : function(name, schema, db) { 
+    constructor : function(name, schema, db) {
 	(this.config = new SyncDB.TableConfig("_syncdb_"+name)).get(this.M(function() {
 	    if (this.config.schema().hashCode() != schema.hashCode()) {
 		UTIL.log("SCHEMA changed. cleaning local databse %o != %o (new)", this.config.schema(), schema);
@@ -970,7 +981,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 		f(ids[i], aggregate);
 	    }
 	    return;
-	} 
+	}
 
 	return callback(false, []);
     },
@@ -1056,7 +1067,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
     }
 });
 SyncDB.Flags = {
-    Base : UTIL.Base.extend({ 
+    Base : UTIL.Base.extend({
 	is_readable : 1,
 	is_writable : 1,
 	toString : function() {
@@ -1064,7 +1075,7 @@ SyncDB.Flags = {
 	}
     })
 };
-SyncDB.Flags.Unique = SyncDB.Flags.Base.extend({ 
+SyncDB.Flags.Unique = SyncDB.Flags.Base.extend({
     toString : function() {
 	return "Unique";
     },
@@ -1077,7 +1088,7 @@ SyncDB.Flags.Key = SyncDB.Flags.Unique.extend({
     is_indexed : 1,
     is_key : 1
 });
-SyncDB.Flags.Index = SyncDB.Flags.Base.extend({ 
+SyncDB.Flags.Index = SyncDB.Flags.Base.extend({
     toString : function() {
 	return "Index";
     },
@@ -1111,7 +1122,7 @@ SyncDB.Flags.Hashed = SyncDB.Flags.Base.extend({
 	}
     }
 });
-SyncDB.Flags.Automatic = SyncDB.Flags.Base.extend({ 
+SyncDB.Flags.Automatic = SyncDB.Flags.Base.extend({
     is_automatic: 1
 });
 SyncDB.Flags.AutoIncrement = SyncDB.Flags.Automatic.extend({
@@ -1178,7 +1189,7 @@ SyncDB.Types = {
 	get_index : function(name, key_type) {
 	    if (this.is_unique)
 		return new SyncDB.MappingIndex(name, this, key_type);
-	    else //if (this.is_indexed) 
+	    else //if (this.is_indexed)
 		return new SyncDB.MultiIndex(name, this, key_type);
 	},
 	index_lookup : function(index, key) {
@@ -1190,12 +1201,11 @@ SyncDB.Types = {
 	    return index.set(key, id);
 	},
 	index_remove : function(index, key, id) {
-	    return index.remove(key, id);    
+	    return index.remove(key, id);
 	},
 	Equal : function(value) {
 	    return new SyncDB.Filter.Equal(this.name, this.parser().encode(value));
-	},
-	filter : function(
+	}
     })
 };
 SyncDB.Types.Integer = SyncDB.Types.Base.extend({
@@ -1265,7 +1275,7 @@ SyncDB.Types.Range = SyncDB.Types.Vector.extend({
 	});
     }
 });
-SyncDB.Types.Date = SyncDB.Types.Base.extend({ 
+SyncDB.Types.Date = SyncDB.Types.Base.extend({
     toString : function() { return "Date"; },
     parser : function() {
 	return new serialization.Date();
@@ -1284,7 +1294,7 @@ SyncDB.Types.Array = SyncDB.Types.Base.extend({
     },
     toString : function() { return "Array"; },
     get_index : function(name, key_type) {
-	return this.type.get_index(name, key_type);	    
+	return this.type.get_index(name, key_type);
     },
     index_insert : function(index, key, id) {
 	for (var i = 0; i < key.length; i++)
@@ -1388,7 +1398,7 @@ SyncDB.Connector = SyncDB.LocalField.extend({
 			    if (err) UTIL.log("Something fishy happeneed in Connector#commit: %o", err);
 			    this.cb(key, error, row);
 			}));
-		} else 
+		} else
 		    this.cb(key, error, row);
 	    });
 	    this.value[key] = 1;
