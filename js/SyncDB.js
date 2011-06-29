@@ -158,19 +158,23 @@ SyncDB.KeyValueMapping = UTIL.Base.extend({
     is_permanent : false,
     set : function(key, value, cb) {
 	this.m[key] = value;
-	UTIL.call_later(cb, null, false, value);
+	cb(false, value);
+	//UTIL.call_later(cb, null, false, value);
     },
     get : function(key, cb) {
-	UTIL.call_later(cb, null, false, this.m[key]);
+	cb(false, this.m[key]);
+	//UTIL.call_later(cb, null, false, this.m[key]);
     },
     remove : function(key, cb) {
 	var v = this.m[key];
 	delete this.m[key];
-	UTIL.call_later(cb, null, false, v);
+	cb(false, v);
+	//UTIL.call_later(cb, null, false, v);
     },
     clear : function(cb) {
 	this.m = {};
-	UTIL.call_later(cb, null, false);
+	cb(false);
+	//UTIL.call_later(cb, null, false);
     },
     toString : function() {
 	return "SyncDB.KeyValueMapping";
@@ -181,9 +185,11 @@ if (UTIL.App.has_local_storage) {
 	set : function(key, value, cb) {
 	    try {
 		localStorage[key] = value;
-		UTIL.call_later(cb, null, false, value);
+		cb(false, value);
+		//UTIL.call_later(cb, null, false, value);
 	    } catch (err) {
-		UTIL.call_later(cb, null, err);
+		cb(err);
+		//UTIL.call_later(cb, null, err);
 	    }
 	},
 	is_permanent : true,
@@ -191,9 +197,11 @@ if (UTIL.App.has_local_storage) {
 	    var value;
 	    try {
 		value = localStorage[key];
-		UTIL.call_later(cb, null, false, value);
+		cb(false, value);
+		//UTIL.call_later(cb, null, false, value);
 	    } catch(err) {
-		UTIL.call_later(cb, null, err);
+		cb(err);
+		//UTIL.call_later(cb, null, err);
 	    }
 
 	},
@@ -201,15 +209,18 @@ if (UTIL.App.has_local_storage) {
 	    try {
 		var value = localStorage[key];
 		delete localStorage[key];
-		UTIL.call_later(cb, null, false, value);
+		cb(false, value);
+		//UTIL.call_later(cb, null, false, value);
 	    } catch (err) {
-		UTIL.call_later(cb, null, err);
+		cb(err);
+		//UTIL.call_later(cb, null, err);
 	    }
 	},
 	clear : function(cb) {
 	    // TODO: remove only sync_db entries. ;_)
 	    localStorage.clear();
-	    UTIL.call_later(cb, null, false);
+	    cb(false);
+	    //UTIL.call_later(cb, null, false);
 	},
 	toString : function() {
 	    return "SyncDB.KeyValueStorage";
@@ -390,7 +401,8 @@ SyncDB.LocalField = UTIL.Base.extend({
 	    }));
 	    return this;
 	}
-	UTIL.call_later(cb, null, this.value);
+	cb(this.value);
+	//UTIL.call_later(cb, null, this.value);
 	return this;
     },
     set : function(value) {
@@ -985,7 +997,8 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	    ids = filter.index_lookup(this);
 	} catch (error) {
 	    //UTIL.log("index_lookup error: %o", error);
-	    UTIL.call_later(callback, null, error);
+	    callback(error);
+	    //UTIL.call_later(callback, null, error);
 	    return;
 	}
 	//UTIL.log("ids: %o\n", ids);
