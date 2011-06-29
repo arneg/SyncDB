@@ -707,11 +707,17 @@ SyncDB.Table = UTIL.Base.extend({
 	};
     },
     insert : function(row, callback) {
-	var f = this.M(function (error, row) {
+	var f = this.M(function (error, n) {
+	    UTIL.log("inserted %o", n);
 	    // TODO: if this was lost, we loose sync.
-	    if (!error) this.low_insert(row, callback);
+	    if (!error) try { 
+		    this.low_insert(n, callback);
+		} catch (e) {
+		    callback(e, n);
+		}
 	    else callback(error, row);
 	});
+
 	if (this.db) {
 	    this.db.insert(row, f);
 	} else {
@@ -858,16 +864,19 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 			for(var j = 0; j < o.rows.length; j++) {
 			    this.sync_callback(o.version, o.rows[j]);
 			}
-		    continue;
+		    if (!o.id) continue;
 		}
 
 		var f = this.requests[o.id];
 
 		if (f) {
-		    if (a[i].type == "_error") {
+		    if (o instanceof SyncDB.Meteor.Sync) { // reply to _insert
+			if (o.rows.length != 1) UTIL.error("strange reply to _insert with multiple rows.");
+			f(false, o.rows[0]);
+		    } else if (a[i].type == "_error") {
 			f(o.error);
 		    } else {
-			f(0, o.rows);
+			f(false, o.rows);
 		    }
 		} else UTIL.log("could not find reply handler for %o:%o\n", a[i].type, o);
 	    }
@@ -960,7 +969,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 		    // check if version is better than before!
 
 		    if (err) {
-			this.local_insert(row, function(err, row) {});
+			this.low_insert(row, function(err, row) {});
 		    } else {
 			this["local_update_by_"+schema.key](row[schema.key], row, function(err, oldrow) {});
 		    }
@@ -1131,12 +1140,6 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 			}
 			callback(false, row);
 		      }));
-    },
-    local_insert : function(row, callback) {
-	var db = this.db;
-	this.db = undefined;
-	this.insert(row, callback);
-	this.db = db;
     }
 });
 SyncDB.CachedTable = SyncDB.LocalTable.extend({
@@ -1159,7 +1162,7 @@ SyncDB.CachedTable = SyncDB.LocalTable.extend({
 	rows = filter.index_insert(this, rows);
 
 	for (var i = 0; i < rows.length; i++) {
-	    this.local_insert(rows[i], function() {});
+	    this.low_insert(rows[i], function() {});
 	}
     }
 });
