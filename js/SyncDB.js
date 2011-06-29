@@ -72,25 +72,18 @@ SyncDB.Filter.Base = UTIL.Base.extend({
     constructor : function(field) {
 	this.field = field;
 	this.args = Array.prototype.slice.apply(arguments);
+    },
+    index_insert : function() {},
+    filter : function(rows) {
+	return [];
     }
 });
-SyncDB.Filter.Or = SyncDB.Filter.Base.extend({
+SyncDB.Filter.And = SyncDB.Filter.Base.extend({
     _types : {
 	args : function(p) {
 	    return new serialization.Array(p);
 	}
     },
-    index_lookup : function(table) {
-	var results = this.args[0].index_lookup(table)
-
-	for (var i = 1; i < this.args.length; i++) {
-	    results = UTIL.array_or(this.args[i].index_lookup(table), results);
-	}
-
-	return results;
-    }
-});
-SyncDB.Filter.And = SyncDB.Filter.Or.extend({
     index_lookup : function(table) {
 	var results = this.args[0].index_lookup(table);
 
@@ -103,6 +96,25 @@ SyncDB.Filter.And = SyncDB.Filter.Or.extend({
 
 	return results;
     }
+});
+SyncDB.Filter.Or = SyncDB.Filter.And.extend({
+    index_lookup : function(table) {
+	var results = this.args[0].index_lookup(table)
+
+	for (var i = 1; i < this.args.length; i++) {
+	    results = UTIL.array_or(this.args[i].index_lookup(table), results);
+	}
+
+	return results;
+    },
+    /*
+    index_insert : function(index, schema, rows) {
+	var results = this.args[0].index_insert(
+	for (var i = 0; i < this.args.length; i++) {
+	    
+	}
+    }
+    */
 });
 SyncDB.Filter.False = SyncDB.Filter.Base.extend({
     index_lookup : function(table) {
@@ -124,6 +136,25 @@ SyncDB.Filter.Equal = SyncDB.Filter.Base.extend({
 	    var v = type.parser().decode(this.value);
 	    return table.I[this.field].get(v);
 	} else UTIL.error("no index for %s", this.field);
+    },
+    filter : function(schema, rows) {
+	var type = schema.m[this.field];
+	var v = type.parser().decode(this.value);
+	var ret = [];
+	for (var i = 0; i < rows.length; i++)
+	    if (rows[i][this.field] == v) ret.push(rows[i]);
+	return ret;
+    },
+    index_insert : function(table, rows) {
+	var index;
+	if (index = table.I[this.field]) {
+	    var type = table.schema.m[this.field];
+	    var v = type.parser().decode(this.value);
+	    for (var i = 0; i < rows.length; i++) {
+		index.set(v, rows[i][table.schema.key]);
+	    }
+	    return rows;
+	} else return [];
     }
 });
 SyncDB.Filter.True = SyncDB.Filter.Base.extend({
@@ -675,6 +706,22 @@ SyncDB.Table = UTIL.Base.extend({
 	    return this.select(type.Equal(value), callback);
 	};
     },
+    insert : function(row, callback) {
+	var f = this.M(function (error, row) {
+	    // TODO: if this was lost, we loose sync.
+	    if (!error) this.low_insert(row, callback);
+	    else callback(error, row);
+	});
+	if (this.db) {
+	    this.db.insert(row, f);
+	} else {
+	    row = UTIL.copy(row);
+	    this.schema.get_auto_set(this, function(as) {
+		for (var x in as) row[x] = as[x];
+		f(false, row);
+	    });
+	}
+    },
     select : function(filter, callback) {
 	var extra = Array.prototype.slice.call(arguments, 2);
 	// allow us to generate partial results at least.
@@ -872,8 +919,7 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
     sync : function(version) {
 	this.send(new SyncDB.Meteor.SyncReq("foo", version));
     },
-    // TODO: this does not support chaining. we have to do this properly
-    insert : function(row, callback) {
+    low_insert : function(row, callback) {
 	var id = UTIL.get_unique_key(5, this.requests);
 	this.requests[id] = callback;
 	this.send(new SyncDB.Meteor.Insert(id, row));
@@ -1073,35 +1119,18 @@ SyncDB.LocalTable = SyncDB.Table.extend({
     update : function() {
     },
     */
-    insert : function(row, callback) { // TODO:: this should rather make the db a draft and store locally, i guess,
-				    // then send the _insert (if this.db exists) and if that returns ok, remove draft status
-				    // (given no other pending modifications), but i'm lost in the select/update/draft logic.
+    low_insert : function(row, callback) {
 	var key = this.schema.key;
-	var f = this.M(function(error, row) {
-	    if (!error) {
-		for (var i in this.I) {
-		    this.schema.m[i].index_insert(this.I[i], row[i], row[key]);
-		    //UTIL.log("update %o=%o(%o) in %o(%o)", row[i], row[key], key, this.I[i], i);
-		}
-		SyncDB.LS.set(this.schema.id.get_key(this.name, key, row[key]), this.parser.encode(row).render(),
-			      this.M(function (error) {
-				  //UTIL.log("stored in %o.", this.schema.id.get_key(this.name, key, row[key]));
-				  if (error) callback(error, row);
-				  else callback(false, row);
-			      })
-		);
-	    } else callback(error, row);
-	});
 
-	if (this.db) {
-	    this.db.insert(row, f);
-	} else {
-	    row = UTIL.copy(row);
-	    this.schema.get_auto_set(this, function(as) {
-		for (var x in as) row[x] = as[x];
-		f(false, row);
-	    });
-	}
+	SyncDB.LS.set(this.schema.id.get_key(this.name, key, row[key]), this.parser.encode(row).render(),
+		      this.M(function (error) {
+			//UTIL.log("stored in %o.", this.schema.id.get_key(this.name, key, row[key]));
+			if (error) return callback(error, row);
+			for (var i in this.I) {
+			    this.schema.m[i].index_insert(this.I[i], row[i], row[key]);
+			}
+			callback(false, row);
+		      }));
     },
     local_insert : function(row, callback) {
 	var db = this.db;
@@ -1113,7 +1142,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 SyncDB.CachedTable = SyncDB.LocalTable.extend({
     low_select : function(filter, callback) {
 	this.base(filter, this.M(function(error, rows) {
-	    UTIL.log("localtable says: %o, %o", error, rows);
+	    //UTIL.log("localtable says: %o, %o", error, rows);
 	    if (error instanceof SyncDB.Error.NotFound)
 		error = new SyncDB.Error.NoSync();
 	    callback(error, rows);
@@ -1123,13 +1152,14 @@ SyncDB.CachedTable = SyncDB.LocalTable.extend({
 	//UTIL.log("update_index(%o, %o)", filter, rows);
 	// TODO: we want to support more complex queries here. also, the insert is async, so we
 	// have to properly check return values, etc
-	if (filter instanceof SyncDB.Filter.Equal) {
-	    var index = this.I[filter.field];
-	    var v = this.schema.m[filter.field].parser().decode(filter.value);
-	    if (index) for (var i = 0; i < rows.length; i++) {
-		index.set(v, rows[i][this.schema.key]);
-		this.local_insert(rows[i], function() {});
-	    }
+	// also this insert should be handled by the filter itself. e.g. filters need to be able to
+	// filter rows so that we can support Or. And would always be forbidden
+	//
+	// TODO: we might want to use all rows, even when they are then only accessible 
+	rows = filter.index_insert(this, rows);
+
+	for (var i = 0; i < rows.length; i++) {
+	    this.local_insert(rows[i], function() {});
 	}
     }
 });
