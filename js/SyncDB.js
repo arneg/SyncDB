@@ -991,7 +991,9 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	//UTIL.log("ids: %o\n", ids);
 	if (ids.length) {
 	    if (ids.length == 1) {
-		return f(ids[0], callback);
+		return f(ids[0], function(error, rows) {
+		    callback(error, !error ? [ rows ] : rows);
+		});
 	    }
 	    var failed = false;
 	    var c = 0;
