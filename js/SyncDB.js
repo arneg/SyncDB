@@ -443,7 +443,7 @@ SyncDB.MappingIndex = SyncDB.LocalField.extend({
     get : function(index) {
 	if (!this.value)
 	    SyncDB.error("You are too early!!");
-	if (!this.value[index]) return [];
+	if (!this.value[index]) throw(new SyncDB.Error.NotFound());
 	return [ this.value[index] ];
     },
     remove : function(index, value) {
@@ -478,7 +478,7 @@ SyncDB.MultiIndex = SyncDB.LocalField.extend({
     get : function(index) {
 	if (!this.value)
 	    SyncDB.error("You are too early!!");
-	if (!this.value || !this.value[index]) return [];
+	if (!this.value || !this.value[index]) throw(new SyncDB.Error.NotFound());
 	return UTIL.keys(this.value[index]);
     },
     remove : function(index, value) {
@@ -967,6 +967,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	    var k = this.schema.id.get_key(this.name, key, value);
 	    //UTIL.log("trying to fetch %o from local storage %o.\n", key, [ this.name, name, value] );
 	    SyncDB.LS.get(k, this.M(function(error, value) {
+		//UTIL.log("LS returned %s -> %s", k, value);
 		if (!error) {
 		    if (UTIL.stringp(value)) callback(false, this.parser.decode(serialization.parse_atom(value)));
 		    else callback(new SyncDB.Error.NotFound());
@@ -983,7 +984,9 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	try {
 	    ids = filter.index_lookup(this);
 	} catch (error) {
+	    //UTIL.log("index_lookup error: %o", error);
 	    UTIL.call_later(callback, null, error);
+	    return;
 	}
 	//UTIL.log("ids: %o\n", ids);
 	if (ids.length) {
@@ -1095,11 +1098,25 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 SyncDB.CachedTable = SyncDB.LocalTable.extend({
     low_select : function(filter, callback) {
 	this.base(filter, this.M(function(error, rows) {
+	    UTIL.log("localtable says: %o, %o", error, rows);
 	    if (error instanceof SyncDB.Error.NotFound)
 		error = new SyncDB.Error.NoSync();
 	    callback(error, rows);
 	}));
     },
+    update_index : function(filter, rows) {
+	//UTIL.log("update_index(%o, %o)", filter, rows);
+	// TODO: we want to support more complex queries here. also, the insert is async, so we
+	// have to properly check return values, etc
+	if (filter instanceof SyncDB.Filter.Equal) {
+	    var index = this.I[filter.field];
+	    var v = this.schema.m[filter.field].parser().decode(filter.value);
+	    if (index) for (var i = 0; i < rows.length; i++) {
+		index.set(v, rows[i][this.schema.key]);
+		this.local_insert(rows[i], function() {});
+	    }
+	}
+    }
 });
 SyncDB.Flags = {
     Base : UTIL.Base.extend({
@@ -1222,9 +1239,7 @@ SyncDB.Types = {
 	    return Array.prototype.slice.apply(arguments).join("_");
 	},
 	get_index : function(name, key_type) {
-	    if (this.is_key) 
-		return new SyncDB.KeyIndex(name, this, key_type);
-	    else if (this.is_unique)
+	    if (this.is_unique || this.is_key)
 		return new SyncDB.MappingIndex(name, this, key_type);
 	    else //if (this.is_indexed)
 		return new SyncDB.MultiIndex(name, this, key_type);
