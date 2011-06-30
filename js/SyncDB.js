@@ -73,7 +73,11 @@ SyncDB.Filter.Base = UTIL.Base.extend({
 	this.field = field;
 	this.args = Array.prototype.slice.apply(arguments);
     },
-    index_insert : function() {},
+    index_insert : function() {
+	UTIL.log("hmm");
+	UTIL.trace();
+	return [];
+    },
     filter : function(rows) {
 	return [];
     }
@@ -107,14 +111,17 @@ SyncDB.Filter.Or = SyncDB.Filter.And.extend({
 
 	return results;
     },
-    /*
-    index_insert : function(index, schema, rows) {
-	var results = this.args[0].index_insert(
+    index_insert : function(table, rows) {
+	var results = [];
+
 	for (var i = 0; i < this.args.length; i++) {
-	    
+	    var r = this.args[i].filter(table.schema, rows);
+	    if (r.length)
+		results = UTIL.array_or(this.args[i].index_insert(table, r), results);
 	}
+
+	return results;
     }
-    */
 });
 SyncDB.Filter.False = SyncDB.Filter.Base.extend({
     index_lookup : function(table) {
@@ -460,16 +467,6 @@ SyncDB.LocalField = UTIL.Base.extend({
 	    }, this);
     }
 });
-/**
- * This is a fake index, which is only used to allow us to use one standard api
- * for the keys aswell.
- */
-SyncDB.KeyIndex = Base.extend({
-    constructor : function(name, type, id) { },
-    get : function(index) {
-	return [ index ];
-    }
-});
 SyncDB.MappingIndex = SyncDB.LocalField.extend({
     constructor : function(name, type, id) {
 	this.type = type;
@@ -486,8 +483,11 @@ SyncDB.MappingIndex = SyncDB.LocalField.extend({
     get : function(index) {
 	if (!this.value)
 	    SyncDB.error("You are too early!!");
-	if (!this.value[index]) throw(new SyncDB.Error.NotFound());
+	if (!this.has(index)) throw(new SyncDB.Error.NotFound());
 	return [ this.value[index] ];
+    },
+    has : function(index) {
+	return this.value.hasOwnProperty(index);
     },
     remove : function(index, value) {
 	delete this.value[index];
@@ -510,7 +510,7 @@ SyncDB.MultiIndex = SyncDB.LocalField.extend({
     set : function(index, id) {
 	if (!this.value)
 	    SyncDB.error("You are too early!!");
-	if (!this.value[index]) {
+	if (!this.has(index)) {
 	    this.value[index] = { };
 	}
 	this.value[index][id] = 1;
@@ -521,13 +521,16 @@ SyncDB.MultiIndex = SyncDB.LocalField.extend({
     get : function(index) {
 	if (!this.value)
 	    SyncDB.error("You are too early!!");
-	if (!this.value || !this.value[index]) throw(new SyncDB.Error.NotFound());
+	if (!this.has(index)) throw(new SyncDB.Error.NotFound());
 	return UTIL.keys(this.value[index]);
+    },
+    has : function(index) {
+	return this.value.hasOwnProperty(index);
     },
     remove : function(index, value) {
 	if (!this.value)
 	    SyncDB.error("You are too early!!");
-	if (this.value[index]) {
+	if (this.has(index)) {
 	    delete this.value[index][value];
 	    if (!this.value[index].length) delete this.value[index];
 	    this.sync();
@@ -721,12 +724,19 @@ SyncDB.Table = UTIL.Base.extend({
 	if (this.db) {
 	    this.db.insert(row, f);
 	} else {
-	    row = UTIL.copy(row);
-	    this.schema.get_auto_set(this, function(as) {
-		for (var x in as) row[x] = as[x];
-		f(false, row);
+	    this.auto_set(row, function(n) {
+		f(false, n);
 	    });
 	}
+    },
+    auto_set : function(row, cb) {
+	this.schema.get_auto_set(this, function(as) {
+	    if (as.length) {
+		row = UTIL.copy(row);
+		for (var x in as) row[x] = as[x];
+	    }
+	    cb(row);
+	});
     },
     select : function(filter, callback) {
 	var extra = Array.prototype.slice.call(arguments, 2);
@@ -739,6 +749,7 @@ SyncDB.Table = UTIL.Base.extend({
 	} : callback;
 
 	this.low_select(filter, this.M(function(error, rows) {
+	    //UTIL.log("low_select -> %o %o", error, rows);
 	    if (error instanceof SyncDB.Error.NoSync && this.db) {
 		if (this.update_index)
 		    this.db.select(filter, this.M(function(error, rows) {
@@ -905,6 +916,9 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	this.send(new SyncDB.Meteor.Select(id, filter));
 	return id;
     },
+    auto_set : function(row, f) {
+	f(row);
+    },
     update : function(name, type) {
 	return this.M(function(value, row, callback) {
 	    var id = UTIL.get_unique_key(5, this.requests);
@@ -1051,7 +1065,8 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	try {
 	    ids = filter.index_lookup(this);
 	} catch (error) {
-	    //UTIL.log("index_lookup error: %o", error);
+	    UTIL.log("index_lookup error: %o", error);
+	    UTIL.log("index_lookup error: %s", UTIL.describe_error(error));
 	    callback(error);
 	    //UTIL.call_later(callback, null, error);
 	    return;
@@ -1115,7 +1130,8 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 		    }
 		    for (var i in this.I) {
 			type.index_remove(this.I[i], row_[i], row_[key]);
-			type.index_insert(this.I[i], row[i], row[key]);
+			if (this.schema.m[i].is_unique || this.I[i].has(row[i]))
+			    type.index_insert(this.I[i], row[i], row[key]);
 		    }
 		    return f(row[key], row, callback);
 		}));
@@ -1136,7 +1152,8 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 			//UTIL.log("stored in %o.", this.schema.id.get_key(this.name, key, row[key]));
 			if (error) return callback(error, row);
 			for (var i in this.I) {
-			    this.schema.m[i].index_insert(this.I[i], row[i], row[key]);
+			    if (this.schema.m[i].is_unique || this.I[i].has(row[i]))
+				this.schema.m[i].index_insert(this.I[i], row[i], row[key]);
 			}
 			callback(false, row);
 		      }));
