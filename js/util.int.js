@@ -42,6 +42,9 @@ UTIL.Int = {
 /* This hash is intented to be used with bloom filters for integers. */
 UTIL.Int.Hash = Base.extend({
     constructor : function() {
+	this.init();
+    },
+    init : function() {
 	this.state = [ 0, 0, 0 ];
     },
     block_bytes : 12,
