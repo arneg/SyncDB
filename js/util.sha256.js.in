@@ -62,6 +62,7 @@
     s2 = (W)[((j)+1)&0x0f];						      \
     (T1) += ((W)[(j)&0x0f] += sigma1(s1) + (W)[((j)+9)&0x0f] + sigma0(s2));   \
 } while(0)
+/** @namespace */
 UTIL.SHA256 = {
     /* test if the JS-interpreter is working properly */
     self_test : function() {
@@ -183,7 +184,13 @@ UTIL.SHA256 = {
 	return UTIL.SHA256.low_update(hash.concat(), data, data.length);
     }
 };
-UTIL.SHA256.Hash = Base.extend({
+UTIL.SHA256.Hash = UTIL.Hash.extend(
+    /** @lends UTIL.SHA256.Hash */
+    {
+    /**
+     * @constructs UTIL.SHA256.Hash 
+     * @augments UTIL.Hash
+     */
     constructor : function() {
 	this.init();
     },

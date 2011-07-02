@@ -4,8 +4,9 @@
  * integer and we only truncate at the end. TODO: we should check if these
  * assumptions holds true.
  */
+/** @namespace */
 UTIL.Int = {
-    /*
+    /**
      * 32 bit integer mixing function by thomas wang
      * http://www.concentric.net/~ttwang/tech/inthash.htm
      */
@@ -18,17 +19,16 @@ UTIL.Int = {
 	i = i ^ (i >>> 16);
 	return i & 0xffffffff;
     },
-    /*
+    /**
      * 32 bit integer mixing function used in the java hashmap
-     * implementation to improve bad user supplied hashing
-     * functions
+     * implementation.
      */
     hashmap : function(i) {
 	i ^= (i >>> 20) ^ (i >>> 12);
 	i ^= (i >>> 7) ^ (i >>> 4);
 	return i & 0xffffffff;
     },
-    /* 32 bit integer mixing function by bob jenkins.  */
+    /** 32 bit integer mixing function by bob jenkins.  */
     jenkins : function(i) {
 	i = (i+0x7ed55d16) + (i<<12);
 	i = (i^0xc761c23c) ^ (i>>>19);
@@ -39,8 +39,16 @@ UTIL.Int = {
 	return i & 0xffffffff;
     }
 };
-/* This hash is intented to be used with bloom filters for integers. */
-UTIL.Int.Hash = Base.extend({
+UTIL.Int.Hash = UTIL.Hash.extend(
+    /**
+     * @lends UTIL.Int.Hash 
+     */
+    {
+    /** 
+     * Non cryptographic integer hashing. This hash is intented to be used with bloom filters for integers. 
+     * @constructs UTIL.Int.Hash 
+     * @augments UTIL.Hash
+     */
     constructor : function() {
 	this.init();
     },
