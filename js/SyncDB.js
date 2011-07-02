@@ -157,6 +157,7 @@ SyncDB.Filter.Equal = SyncDB.Filter.Base.extend({
 	if (index = table.I[this.field]) {
 	    var type = table.schema.m[this.field];
 	    var v = type.parser().decode(this.value);
+	    //UTIL.log("inserting %d rows.", rows.length);
 	    for (var i = 0; i < rows.length; i++) {
 		index.set(v, rows[i][table.schema.key]);
 	    }
@@ -439,7 +440,7 @@ SyncDB.LocalField = UTIL.Base.extend({
 
 	if (!this.value) { // cache this, we will fetch
 	    SyncDB.LS.get(this.name, this.M(function(err, value) {
-		UTIL.log("got %o %o", err, value);
+		//UTIL.log("got %o %o", err, value);
 		if (err) {
 		    UTIL.log("error: %o");
 		    cb(undefined);
@@ -447,7 +448,7 @@ SyncDB.LocalField = UTIL.Base.extend({
 		    if (UTIL.stringp(value))
 			this.value = this.parser.decode(serialization.parse_atom(value));
 		    else if (this.def) {
-			UTIL.log("setting default to %o", this.def);
+			//UTIL.log("setting default to %o", this.def);
 			this.value = this.def;
 			delete this.def;
 			this.sync();
@@ -495,7 +496,7 @@ SyncDB.MappingIndex = SyncDB.LocalField.extend({
 		removed : new serialization.Integer()
 	    }), {
 		m : {},
-		filter : new UTIL.Bloom.Filter(256, 0.001, tkey.hash()),
+		filter : new UTIL.Bloom.Filter(32, 0.001, tkey.hash()),
 		removed : 0
 	});
     },
@@ -503,8 +504,8 @@ SyncDB.MappingIndex = SyncDB.LocalField.extend({
 	if (!this.value)
 	    SyncDB.error("You are too early!!");
 	this.value.m[index] = id;
-	this.value.filter.set(index);
-	this.regen_filter();
+	if (this.value.filter.set(index))
+	    this.regen_filter();
 	// adding something can be done cheaply, by appending the tuple
 	this.sync();
     },
@@ -520,15 +521,16 @@ SyncDB.MappingIndex = SyncDB.LocalField.extend({
     regen_filter : function() {
 	// decide when to regenerate here. Lets say, we 
 	var p = this.value.filter.prob();
-	if (p > 0.01) {
+	if (p > 0.002) {
 	    UTIL.log("probability is bad: %f. regenerating filter.", p);
-	    var n = this.value.m.length;
+	    var n = UTIL.keys(this.value.m).length;
 	    var filter = new UTIL.Bloom.Filter(n, 0.001, this.tkey.hash());
 	    for (var key in this.value.m)
 		if (this.value.m.hasOwnProperty(key))
 		    filter.set(key);
+	    UTIL.log("new probability is %f. n: %d, m: %d", filter.prob(), filter.n, filter.table_mag);
 	    this.value.filter = filter;
-	    this.n = n;
+	    this.sync();
 	} else UTIL.log("probability is still good enough: %f", p);
     },
     remove : function(index, value) {
