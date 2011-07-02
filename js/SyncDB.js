@@ -303,13 +303,14 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 	    if (this.q) {
 		this.q.push(function() { this.get(val, cb); });
 	    } else {
+		cb = UTIL.safe(cb);
 		this.q = [];
 		this.db.transaction(this.M(function (tx) {
 		    tx.executeSql("SELECT * FROM sLsA WHERE key=?;", [val], this.M(function(tx, data) {
 			if (!data.rows.length) {
 			    cb(false, undefined);
 			} else if (data.rows.length == 1) {
-			    cb(false, data.rows.item(0).value);
+			    cb(false, this.decode(data.rows.item(0).value));
 			} else {
 			    // FUCKUP
 			}
@@ -326,9 +327,10 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 	    if (this.q) {
 		this.q.push(function() { this.set(key, val, cb); });
 	    } else {
+		cb = UTIL.safe(cb);
 		this.q = [];
 		this.db.transaction(this.M(function (tx) {
-		    tx.executeSql("INSERT OR REPLACE INTO sLsA (key, value) VALUES(?, ?);", [ key, val ],
+		    tx.executeSql("INSERT OR REPLACE INTO sLsA (key, value) VALUES(?, ?);", [ key, this.encode(val) ],
 				  this.M(function(tx, data) {
 				    if (data.rowsAffected != 1) cb(true);
 				    else cb(false, val);
@@ -345,6 +347,7 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 	    if (this.q) {
 		this.q.push(function() { this.remove(key, cb); });
 	    } else {
+		cb = UTIL.safe(cb);
 		this.q = [];
 		this.db.transaction(this.M(function (tx) {
 		    tx.executeSql("SELECT * FROM sLsA WHERE key=?;", [key],
@@ -352,7 +355,7 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 			    tx.executeSql("DELETE FROM sLsA WHERE key=?;", [key],
 					  this.M(function (tx) {
 					      UTIL.log("tx: %o. data: %o", tx, data);
-					      cb(false, data.rows.item(0).value);
+					      cb(false, this.decode(data.rows.item(0).value));
 					      this.replay();
 					  }),
 					  this.M(function (tx, err) {
@@ -367,6 +370,19 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 		}));
 	    }
 	},
+	encode : function(s) {
+	    var a = new Array(s.length);
+	    for (var i = 0; i < s.length; i++)
+		a[i] = s.charCodeAt(i) + 1;
+	    return UTF8.encode(String.fromCharCode.apply(window, a));
+	},
+	decode : function(s) {
+	    s = UTF8.decode(s);
+	    var a = new Array(s.length);
+	    for (var i = 0; i < s.length; i++)
+		a[i] = s.charCodeAt(i) - 1;
+	    return String.fromCharCode.apply(window, a);
+	},
 	replay : function() {
 	    var q = this.q;
 	    this.q = undefined;
@@ -375,7 +391,7 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 	    }
 	},
 	clear : function(cb) {
-	    if (!cb) cb = function() {};
+	    cb = UTIL.safe(cb);
 	    this.db.transaction(this.M(function (tx) {
 		tx.executeSql("DROP TABLE sLsA;", [], this.M(function() {
 			      this.init(cb);
