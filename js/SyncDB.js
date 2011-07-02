@@ -423,6 +423,7 @@ SyncDB.LocalField = UTIL.Base.extend({
 
 	if (!this.value) { // cache this, we will fetch
 	    SyncDB.LS.get(this.name, this.M(function(err, value) {
+		UTIL.log("got %o %o", err, value);
 		if (err) {
 		    UTIL.log("error: %o");
 		    cb(undefined);
@@ -430,6 +431,7 @@ SyncDB.LocalField = UTIL.Base.extend({
 		    if (UTIL.stringp(value))
 			this.value = this.parser.decode(serialization.parse_atom(value));
 		    else if (this.def) {
+			UTIL.log("setting default to %o", this.def);
 			this.value = this.def;
 			delete this.def;
 			this.sync();
@@ -468,15 +470,25 @@ SyncDB.LocalField = UTIL.Base.extend({
     }
 });
 SyncDB.MappingIndex = SyncDB.LocalField.extend({
-    constructor : function(name, type, id) {
-	this.type = type;
-	this.id = id;
-	this.base(name, new serialization.Object(type.parser()), {});
+    constructor : function(name, tkey, tid) {
+	this.tkey = tkey;
+	this.type = tid;
+	this.base(name, new serialization.Struct("_index", {
+		m : new serialization.Object(tid.parser()), 
+		filter : new serialization.Bloom(tkey.hash()),
+		removed : new serialization.Integer()
+	    }), {
+		m : {},
+		filter : new UTIL.Bloom.Filter(256, 0.001, tkey.hash()),
+		removed : 0
+	});
     },
     set : function(index, id) {
 	if (!this.value)
 	    SyncDB.error("You are too early!!");
-	this.value[index] = id;
+	this.value.m[index] = id;
+	this.value.filter.set(index);
+	this.regen_filter();
 	// adding something can be done cheaply, by appending the tuple
 	this.sync();
     },
@@ -484,20 +496,38 @@ SyncDB.MappingIndex = SyncDB.LocalField.extend({
 	if (!this.value)
 	    SyncDB.error("You are too early!!");
 	if (!this.has(index)) throw(new SyncDB.Error.NotFound());
-	return [ this.value[index] ];
+	return [ this.value.m[index] ];
     },
     has : function(index) {
-	return this.value.hasOwnProperty(index);
+	return this.value.m.hasOwnProperty(index);
+    },
+    regen_filter : function() {
+	// decide when to regenerate here. Lets say, we 
+	var p = this.value.filter.prob();
+	if (p > 0.01) {
+	    UTIL.log("probability is bad: %f. regenerating filter.", p);
+	    var n = this.value.m.length;
+	    var filter = new UTIL.Bloom.Filter(n, 0.001, this.tkey.hash());
+	    for (var key in this.value.m)
+		if (this.value.m.hasOwnProperty(key))
+		    filter.set(key);
+	    this.value.filter = filter;
+	    this.n = n;
+	} else UTIL.log("probability is still good enough: %f", p);
     },
     remove : function(index, value) {
-	delete this.value[index];
+	// keep track of deletes, so we know how bad our filter got.
+	// regenerate as needed.
+	delete this.value.m[index];
+	this.value.filter.remove(index);
+	this.regen_filter();
 	this.sync();
     },
     toString : function() {
 	return "MappingIndex("+this.name+","+this.type+")";
     },
     values : function() {
-	return UTIL.values(this.value);
+	return UTIL.values(this.value.m);
     }
 });
 SyncDB.MultiIndex = SyncDB.LocalField.extend({
@@ -1335,6 +1365,9 @@ SyncDB.Types.Integer = SyncDB.Types.Base.extend({
     toString : function() { return "Integer"; },
     increment : function(old) {
 	return old + 1;
+    },
+    hash : function() {
+	return new UTIL.Int.Hash();
     }
 });
 SyncDB.Types.String = SyncDB.Types.Base.extend({
@@ -1344,7 +1377,10 @@ SyncDB.Types.String = SyncDB.Types.Base.extend({
     random : function() {
 	return UTIL.get_random_key(10);
     },
-    toString : function() { return "String"; }
+    toString : function() { return "String"; },
+    hash : function() {
+	return new UTIL.SHA256.Hash();
+    }
 });
 SyncDB.Types.Vector = SyncDB.Types.Base.extend({
     // ideally this would somehow use inheritance, but I like
