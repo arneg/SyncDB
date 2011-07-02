@@ -81,7 +81,7 @@ UTIL.Bloom.Filter = Base.extend({
 		}
 	    })
 	}
-	if (n) this.n++;
+	this.n++;
     },
     get : function(key) {
 	for (var i = 0; i < arguments.length; i++) {
@@ -116,7 +116,7 @@ serialization.BitVector = serialization.Struct.extend({
 	for (var i = 0; i < c; i ++) {
 	    s[i] = bv.get_int(i*8, 8);
 	}
-	UTIL.log("encoding %d: %o -> %o", c, s, String.fromCharCode.apply(window, s));
+	//UTIL.log("encoding %d: %o -> %o", c, s, String.fromCharCode.apply(window, s));
 	return this.base({
 	    field : String.fromCharCode.apply(window, s),
 	    length : bv.length
@@ -199,6 +199,18 @@ UTIL.BitVector = Base.extend({
 	}
 	if (val) for (var i = of.length; i < this.field.length; i++) {
 	    this.field[i] = val;
+	}
+    },
+    toString : function(base) {
+	if (base == 2) {
+	    var ret = "";
+	    for (var i = 0; i < this.field.length-1; i++)
+		ret += UTIL.sprintf("%032b", this.field[i]);
+	    ret += UTIL.sprintf("%0"+((this.length%32)||32)+"b",
+				this.field[i]);
+	    return ret;
+	} else {
+	    return UTIL.sprintf("UTIL.BitVector(%d)", this.length);
 	}
     }
 });
