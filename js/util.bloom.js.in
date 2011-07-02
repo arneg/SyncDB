@@ -1,4 +1,8 @@
 #include "bits.h"
+/**
+ * @namespace
+ * Bloom filter module.
+ */
 UTIL.Bloom = {
     table_mag : function(n, p) {
 	var t = Math.floor(
@@ -12,7 +16,7 @@ UTIL.Bloom = {
     },
     hash_length : function(n, p) {
 	return UTIL.Bloom.table_mag(n, p) * UTIL.Bloom.amount_hashes(p);
-    },
+    }
 };
 #define HASH_LOOP(key, CODE) do { 			\
     this.hash.init();					\
@@ -25,7 +29,10 @@ UTIL.Bloom = {
 	do CODE while(0);				\
 	_n += this.table_mag;				\
     } } while(0)
-UTIL.Bloom.Filter = Base.extend({
+UTIL.Bloom.Filter = Base.extend(
+    /** @lends UTIL.Bloom.Filter */
+    {
+    /** @constructs UTIL.Bloom.Filter */
     constructor : function(n, p, hash, table) {
 	this.hash = hash;
 	this.n = 0;
