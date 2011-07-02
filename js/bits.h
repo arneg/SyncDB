@@ -1,17 +1,17 @@
 #if 1
-#define BITVECTOR(n) (new Array(Math.ceil((n)/32)))
-#define BV_IS_SET(v, n) !!((v)[(n)>>>5] & (1 << ((n)%32)))
-#define BV_SET(v, n) ((v)[(n)>>>5]) |= 1 << ((n)%32);
-#define BV_UNSET(v, n) ((v)[(n)>>>5]) &= ~(1 << ((n)%32));
+#define BITVECTOR(n) (new Array(Math.ceil((n)>>>5)))
+#define BV_IS_SET(v, n) !!((v)[(n)>>>5] & (1 << ((n)&31)))
+#define BV_SET(v, n) do { ((v)[(n)>>>5]) |= 1 << ((n)&31); } while(0)
+#define BV_UNSET(v, n) do { ((v)[(n)>>>5]) &= ~(1 << ((n)&31)); } while(0)
 #define BV_SET_BIT(v, n, bit) do {\
-    if (bit) BV_SET(v, n);	  \
-    else BV_UNSET(v, n);	  \
+    if (bit) { BV_SET(v, n); }	  \
+    else { BV_UNSET(v, n); }	  \
 } while (0)
 #define BV_GET_INT(v, n, len, x) do {\
     var t = (v)[(n)>>>5];	  \
-    t >>>= n % 32;		  \
-    if (len > 32 - (n%32)) {	  \
-	t |= (v)[(n)>>>5 + 1] << n % 32;\
+    t >>>= n &31;		  \
+    if (len > 32 - (n&31)) {	  \
+	t |= (v)[(n)>>>5 + 1] << n & 31;\
     }				  \
     (x) = t & (1 << len) - 1;	  \
 } while(0)

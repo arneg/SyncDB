@@ -14,9 +14,23 @@ UTIL.Bloom = {
 	return UTIL.Bloom.table_mag(n, p) * UTIL.Bloom.amount_hashes(p);
     },
 };
+#define HASH_LOOP(key, CODE) do { 			\
+    this.hash.init();					\
+    this.hash.update((key));				\
+    var _h = this.hash.digest();				\
+    var _n = 0;						\
+    for (var _j = 0; _j < this.amount_hashes; _j++) {	\
+	var _t;						\
+	BV_GET_INT(_h, _n, this.table_mag, _t);		\
+	do CODE while(0);				\
+	_n += this.table_mag;				\
+    } } while(0)
 UTIL.Bloom.Filter = Base.extend({
-    constructor : function(n, p, hash) {
+    constructor : function(n, p, hash, table) {
 	this.hash = hash;
+	this.n = 0;
+	this.removed = 0;
+	this.p = p;
 	/*
 	 * Let n be number of elements in the table, and p the required
 	 * probability of false posisitves. Then, the amount of bits in the 
@@ -24,69 +38,148 @@ UTIL.Bloom.Filter = Base.extend({
 	 * 	m = - (n ln p)/((ln 2)^2)
 	 * The number of different hash functions giving hashes in [0, m-1]
 	 * is optimal at k = ln2 (m/n).
+	 * let R the amount of removed entries. Then the probability for
+	 * false positives due to removed entries is R/n
 	 */
-	this.table_mag = UTIL.Bloom.table_mag(n, p); /* conservative start value: 8192 ,) */
+	if (table) {
+	    if (table.length & (table.length - 1))
+		UTIL.error("Non power of two table length.");
+	    this.table = table;
+	    this.table_mag = Math.round(Math.log(table.length)/Math.LN2);
+	} else {
+	    this.table_mag = UTIL.Bloom.table_mag(n, p); 
+	    this.table = new UTIL.BitVector(1 << this.table_mag);
+	}
 	this.amount_hashes = UTIL.Bloom.amount_hashes(p);
 
 	if (this.amount_hashes * this.table_mag > hash.block_bytes * 8) {
-	    UTIL.error("Requirements cannot be fulfilled. Would need %d bits of hash key (\"Too big to fail\"-condition).", this.amount_hashes * this.table_mag);
-	}
+	    UTIL.log("Requirements cannot be fulfilled. Would need %d bits of hash key (\"Too big to fail\"-condition). has: %d",
+		       this.amount_hashes * this.table_mag,
+		       hash.block_bytes * 8);
 
-	this.table = BITVECTOR(1 << this.table_mag);
+	    this.amount_hashes = Math.ceil(hash.block_bytes * 8 / this.table_mag);
+	    if (this.amount_hashes == 0)
+		UTIL.error("Hash has less bits that table size. What year is this?\n");
+	}
+    },
+    prob : function() {
+	// this is not strictly correct. but maybe a sufficient thing for
+	// now. we need to look into this.
+	if (this.removed >= this.n) return 1;
+	if (this.n == 0) return 0;
+	return Math.min(1, this.removed/this.n 
+		+ Math.pow((1 - Math.exp(- this.amount_hashes 
+		    * this.n / (1 << this.table_mag))), this.amount_hashes));
     },
     set : function(key) {
+	var n = false;
 	for (var i = 0; i < arguments.length; i++) {
-	    this.hash.init();
-	    this.hash.update(arguments[i]);
-	    var h = this.hash.digest();
-	    var n = 0;
-	    for (var j = 0; j < this.amount_hashes; j++) {
-		var t;
-		BV_GET_INT(h, n, this.table_mag, t);
-		BV_SET(this.table, t);
-		n += this.table_mag;
-	    }
+	    HASH_LOOP(arguments[i], {
+		if (this.table.get(_t) == 0) {
+		    n = true;
+		    this.table.set(_t);
+		}
+	    })
 	}
+	if (n) this.n++;
     },
     get : function(key) {
 	for (var i = 0; i < arguments.length; i++) {
-	    this.hash.init();
-	    this.hash.update(arguments[i]);
-	    var h = this.hash.digest();
-	    var n = 0;
-	    for (var j = 0; j < this.amount_hashes; j++) {
-		var t;
-		BV_GET_INT(h, n, this.table_mag, t);
-		if (!BV_IS_SET(this.table, t))
+	    HASH_LOOP(arguments[i], {
+		if (this.table.get(_t) == 0)
 		    return false;
-		n += this.table_mag;
-	    }
+	    })
 	}
 	return true;
+    },
+    // this is purely for bookkeeping purposes. you can "remove"
+    // entries twice, so this might be biased. but you cannot remove
+    // ones that the tree knows it doesnt have. so the ones that would
+    // normally be removed are the real ones and some p in 1 false
+    // positives.
+    remove : function(key) {
+	if (this.get(key))
+	    this.removed ++;
     }
 });
-UTIL.BitVector = Base.extend({
-    constructor : function(len, val) {
-	if (UTIL.arrayp(len)) {
-	    this.field = len;
-	    return;
+if (window.serialization) {
+serialization.BitVector = serialization.Struct.extend({
+    constructor : function(prog) {
+	this.base("_bitvector", {
+	    length : new serialization.Integer(),
+	    field : new serialization.Bytes()
+	});
+    },
+    encode : function(bv) {
+	var c = bv.length >>> 3 + (!!(bv.length & 7) ? 1 : 0);
+	var s = new Array(c);
+	for (var i = 0; i < c; i ++) {
+	    s[i] = bv.get_int(i*8, 8);
 	}
-	this.field = new Array(len >>> 5 + ((len % 32) ? 1 : 0));
-	if (val) for (var i = 0; i < this.field.length; i++) {
-	    this.field[i] = val;
+	UTIL.log("encoding %d: %o -> %o", c, s, String.fromCharCode.apply(window, s));
+	return this.base({
+	    field : String.fromCharCode.apply(window, s),
+	    length : bv.length
+	});
+    },
+    can_encode : function(bv) {
+	return bv instanceof UTIL.BitVector;
+    },
+    decode : function(atom) {
+	var o = this.base(atom);
+	var c = o.length >>> 5 + (!!(o.length & 31) ? 1 : 0);
+	var a = new Array(c);
+	for (var i = 0; i < c; i++) {
+	    a[i] = o.field.charCodeAt(i*4)
+	     | o.field.charCodeAt(i*4+1) << 8
+	     | o.field.charCodeAt(i*4+2) << 16
+	     | o.field.charCodeAt(i*4+3) << 24;
+	}
+	return new UTIL.BitVector(a, o.length);
+    }
+});
+serialization.Bloom = serialization.Struct.extend({
+    constructor : function(hash) {
+	this.hash = hash;
+	this.base("_bloom", {
+	    table : new serialization.BitVector(),
+	    n : new serialization.Integer(),
+	    removed : new serialization.Integer(),
+	    p : new serialization.Float()
+	});
+    },
+    can_encode : function(b) {
+	return b instanceof UTIL.Bloom.Filter;
+    },
+    decode : function(atom) {
+	var o = this.base(atom);
+	var b = new UTIL.Bloom.Filter(o.n, o.p, this.hash, o.table);
+	b.n = o.n;
+	b.removed = o.removed;
+	return b;
+    }
+});
+}
+// TODO: this should probably use the same defines
+UTIL.BitVector = Base.extend({
+    constructor : function(a, b) {
+	if (UTIL.arrayp(a)) {
+	    this.field = a;
+	    this.length = b;
+	} else {
+	    this.length = a;
+	    this.field = BITVECTOR(a);
+	    if (b) for (var i = 0; i < this.field.length; i++) {
+		this.field[i] = b;
+	    }
 	}
     },
     get : function(idx) {
-	var acc = Math.floor(idx >>> 5);
-	var f = this.field[acc];
-
-	return (f & (1 << (idx % 32))) ? 1 : 0;
+	return BV_IS_SET(this.field, idx) ? 1 : 0;
     },
     set : function(idx, val) {
-	var acc = Math.floor(idx >>> 5);
-	if (!(this.field[acc] & (1 << (idx % 32))) != !val) {
-	    this.field[acc] ^= (1 << (idx % 32));
-	}
+	if (arguments.length == 1) val = 1;
+	BV_SET_BIT(this.field, idx, val);
     },
     clear : function() {
 	for (var i = 0; i < this.field.length; i++) {
@@ -94,12 +187,9 @@ UTIL.BitVector = Base.extend({
 	}
     },
     get_int : function(n, len) {
-	var t = this.field[n >>> 5];
-	t >>>= n % 32;
-	if (len > 32 - (n%32)) {
-	    t |= this.field[n >>> 5 + 1] << n % 32;
-	}
-	return t & (1 << len) - 1;
+	var t;
+	BV_GET_INT(this.field, n, len, t);
+	return t;
     },
     enlarge : function(len, val) {
 	var of = this.field;
