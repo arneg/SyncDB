@@ -4,6 +4,7 @@ UTIL.Base = Base.extend({
 	return UTIL.make_method(this, f);
     }
 });
+/** @namespace */
 SyncDB = {
     _tables : {},
     warn : function(err) {
@@ -64,6 +65,7 @@ SyncDB = {
  * - hence it needs the schema
  *
  */
+/** @namespace */
 SyncDB.Filter = {};
 SyncDB.Filter.Base = UTIL.Base.extend({
     _types : {
@@ -182,6 +184,7 @@ SyncDB.Filter.Overlaps = SyncDB.Filter.Equal.extend({
 	return index.overlaps(type.parser().decode(this.value));
     }
 });
+/** @namespace */
 SyncDB.Serialization = {};
 SyncDB.Serialization.Filter = serialization.generate_structs({
     _or : SyncDB.Filter.Or,
@@ -846,6 +849,7 @@ SyncDB.Table = UTIL.Base.extend({
 	// this gets triggered on update / delete
     }
 });
+/** @namespace */
 SyncDB.Meteor = {
     Error : Base.extend({
 	constructor : function(id, error) {
@@ -1232,6 +1236,7 @@ SyncDB.CachedTable = SyncDB.LocalTable.extend({
 	}
     }
 });
+/** @namespace */
 SyncDB.Flags = {
     Base : UTIL.Base.extend({
 	is_readable : 1,
@@ -1316,6 +1321,7 @@ SyncDB.Serialization.Flag = serialization.generate_structs({
     _unique : SyncDB.Flags.Unique,
     _writeonly : SyncDB.Flags.WriteOnly
 });
+/** @namespace */
 SyncDB.Types = {
     Base : UTIL.Base.extend({
 	_types : {
