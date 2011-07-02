@@ -168,7 +168,10 @@ serialization.Bloom = serialization.Struct.extend({
 });
 }
 // TODO: this should probably use the same defines
-UTIL.BitVector = Base.extend({
+UTIL.BitVector = Base.extend(
+    /** @lends UTIL.BitVector */
+    {
+    /** @constructs UTIL.BitVector */
     constructor : function(a, b) {
 	if (UTIL.arrayp(a)) {
 	    this.field = a;
