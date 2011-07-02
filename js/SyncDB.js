@@ -537,9 +537,10 @@ SyncDB.MappingIndex = SyncDB.LocalField.extend({
 	// keep track of deletes, so we know how bad our filter got.
 	// regenerate as needed.
 	delete this.value.m[index];
-	this.value.filter.remove(index);
-	this.regen_filter();
-	this.sync();
+	if (this.value.filter.remove(index)) {
+	    this.regen_filter();
+	    this.sync();
+	}
     },
     toString : function() {
 	return "MappingIndex("+this.name+","+this.type+")";
