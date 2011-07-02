@@ -1,3 +1,4 @@
+/** A hmac implementation */
 var HMAC = Base.extend({
     constructor : function(hashp) {
 	this.hashp = hashp;
