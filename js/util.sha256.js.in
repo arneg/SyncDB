@@ -168,22 +168,45 @@ UTIL.SHA256 = {
 	UTIL.error("Bad argument to low_update.");
     },
     /* Finish the computation by operations such as padding */
+    consume_string : function(data, W, len, offset) {
+	var i;
+	if (arguments.length < 4) offset = 0;
+	if (!len) len = 64;
+	else len = Math.min(64, len);
+	for (i = 0; i < len>>>2; i++) {
+	    W[i] = (data.charCodeAt(offset) << 24)
+		 | (data.charCodeAt(offset+1) << 16)
+		 | (data.charCodeAt(offset+2) << 8)
+		 | (data.charCodeAt(offset+3));
+	    offset += 4;
+	}
+	i = 0;
+	switch (len&3) {
+	case 3:
+	    i |= (data.charCodeAt(offset+2) << 8);
+	case 2:
+	    i |= (data.charCodeAt(offset+1) << 16)
+	case 1:
+	    i |= (data.charCodeAt(offset) << 24)
+	    W[len>>2] = i;
+	}
+    },
     low_final : function(hash, data, len) {
-	var t;
-	len*=8;
+	len *= 8;
+	var W = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+
+	UTIL.SHA256.consume_string(data, W, data.length);
+	W[ data.length >>> 2] |= 0x80 << (8*(3 - (data.length&3)));
 
         if (data.length <= 56) {
-		t = new Array(64 - data.length);
+	    W[15] = len;
+	    return UTIL.SHA256.transform(hash, W);
 	} else {
-		t = new Array(128 - data.length);
+	    UTIL.SHA256.transform(hash, W);
 	}
-	t[0] = 0x80;
 
-	for (var i = 0; i < 4; i++)
-	    t[t.length-1-i] = (len>>>(i*8))&0xff;
-	data += String.fromCharCode.apply(window, t);
-
-	return UTIL.SHA256.low_update(hash.concat(), data, data.length);
+	W = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,len];
+	return UTIL.SHA256.transform(hash, W);
     }
 };
 UTIL.SHA256.Hash = UTIL.Hash.extend(
