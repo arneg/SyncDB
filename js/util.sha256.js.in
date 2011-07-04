@@ -133,10 +133,11 @@ UTIL.SHA256 = {
     /* Read the next chunk of data and update the SHA256 computation */
     low_update : function(hash, data, len) {
 	var curpos = 0;
-	var W = new Array(16);
+	var W;
 
 	if (UTIL.arrayp(data)) {
 	    if (data.length == 64) {
+		W = new Array(16);
                 for(var j=0; j<16; j++) {
 			W[j] = (data[curpos] << 24)
 			     | (data[curpos+1] << 16)
@@ -150,6 +151,7 @@ UTIL.SHA256 = {
 	    }
 	/* Transform as many times as possible */
 	} else {
+	    W = new Array(16);
 	    for(var i=0; i+63<len; i+=64) {
 		for (var j=0; j<16; j++) {
 			W[j] = (data.charCodeAt(curpos) << 24)
