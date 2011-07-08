@@ -489,6 +489,43 @@ SyncDB.LocalField = UTIL.Base.extend({
 	    }, this);
     }
 });
+SyncDB.RangeIndex = SyncDB.LocalField.extend({
+    constructor : function(name, tkey, tid) {
+	this.tkey = tkey;
+	this.tid= tid;
+	this.base(name, new serialization.Struct("_range_index", {
+	    m : new serialization.MultiRangeSet(tkey.parser(), tid.parser()),
+	    filter : new serialization.RangeSet(tkey.parser(), tid.parser())
+	}), {
+	    m : new CritBit.MultiRangeSet(),
+	    filter : new CritBit.RangeSet()
+	});
+    },
+    set : function(index, id) {
+	if (!this.value)
+	    SyncDB.error("You are too early!!");
+	this.value.m.insert(index, id);
+	this.value.filter.insert(index);
+    },
+    has : function(index) {
+	return this.value.filter.contains(index);
+    },
+    overlaps : function(index) {
+	if (!this.value)
+	    SyncDB.error("You are too early!!");
+	if (!this.has(index)) throw(new SyncDB.Error.NotFound());
+	var a = this.value.m.overlaps(index);
+	if (!a.length) return [];
+	var ret = new Array(a.length);
+	for (var i = 0; i < a.length; i ++) {
+	    ret[i] = a[i].value();
+	}
+	return ret;
+    },
+    get : function(index) {
+	return this.overlaps(index);
+    }
+});
 SyncDB.MappingIndex = SyncDB.LocalField.extend({
     constructor : function(name, tkey, tid) {
 	this.tkey = tkey;
@@ -1431,10 +1468,17 @@ SyncDB.Types.Vector = SyncDB.Types.Base.extend({
 	return UTIL.create(serialization.Tuple, l);
     }
 });
-SyncDB.Range = Base.extend({
-    constructor : function(start, stop) {
-	this.start = start;
-	this.stop = stop;
+SyncDB.Range = CritBit.Range.extend({
+    constructor : function(a, b, value) {
+	this.base(a, b);
+	if (arguments.length > 2)
+	    this.value = value;
+    },
+    toString : function() {
+	if (this.hasOwnProperty("value"))
+	    return UTIL.sprintf("[%o..%o]<%o>", this.a, this.b, this.value);
+	else
+	    return UTIL.sprintf("[%o..%o]", this.a, this.b);
     }
 });
 SyncDB.Types.Range = SyncDB.Types.Vector.extend({
@@ -1448,9 +1492,11 @@ SyncDB.Types.Range = SyncDB.Types.Vector.extend({
 				       this.types[0].parser(),
 				       this.types[1].parser()).extend({
 	    encode : function(range) {
-		return this.base([ range.start, range.stop ]);
+		return this.base([ range.a, range.b ]);
 	    }
 	});
+    },
+    get_index : function() {
     }
 });
 SyncDB.Types.Date = SyncDB.Types.Base.extend({
