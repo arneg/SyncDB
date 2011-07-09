@@ -105,8 +105,11 @@ UTIL.Bloom.Filter = Base.extend(
     // normally be removed are the real ones and some p in 1 false
     // positives.
     remove : function(key) {
-	if (this.get(key))
+	if (this.get(key)) {
 	    this.removed ++;
+	    return true;
+	}
+	return false;
     }
 });
 if (window.serialization) {
