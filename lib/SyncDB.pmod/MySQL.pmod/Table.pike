@@ -21,6 +21,7 @@ SyncDB.Version version;
  *    and optional.
  */
 
+#define DB_DEBUG
 mixed query(mixed ... args) {
     string s = sprintf(@args);
 #ifdef DB_DEBUG

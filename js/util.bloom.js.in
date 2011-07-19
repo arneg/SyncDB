@@ -64,7 +64,7 @@ UTIL.Bloom.Filter = Base.extend(
 		       this.amount_hashes * this.table_mag,
 		       hash.block_bytes * 8);
 
-	    this.amount_hashes = Math.ceil(hash.block_bytes * 8 / this.table_mag);
+	    this.amount_hashes = Math.floor(hash.block_bytes * 8 / this.table_mag);
 	    if (this.amount_hashes == 0)
 		UTIL.error("Hash has less bits that table size. What year is this?\n");
 	}

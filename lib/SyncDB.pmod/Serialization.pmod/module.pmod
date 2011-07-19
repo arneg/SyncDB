@@ -60,6 +60,7 @@ void create(mapping|void overwrites) {
 	"_equal" : SyncDB.MySQL.Filter.Equal("foo", Serialization.Atom("_foo", "bar")),
 	"_true" : SyncDB.MySQL.Filter.True("foo"),
 	"_false" : SyncDB.MySQL.Filter.False("foo"),
+	"_overlaps" : SyncDB.MySQL.Filter.Overlaps("foo", Serialization.Atom("_foo", "bar")),
     ]), lambda(object o, string s) {
 	if (s == "filters") return black_magic;
 	if (s == "value") return Serialization.Types.Atom();

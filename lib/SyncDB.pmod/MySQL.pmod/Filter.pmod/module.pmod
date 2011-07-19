@@ -28,9 +28,9 @@ class Equal(string field, mixed value) {
 	mixed o = value;
 	object type = table->schema[field];
 	if (!type->is_index)
-	    error("Trying to index non-indexable field.");
+	    error("Trying to index non-indexable field.\n");
 	if (!type->is_readable)
-	    error("Trying to index non-readable field.");
+	    error("Trying to index non-readable field.\n");
 	if (objectp(o) && Program.inherits(object_program(o), Serialization.Atom)) 
 	    o = type->parser()->decode(o);
 	return sprintf("%s=%s", table->get_sql_name(field), type->encode_sql_value(o));
@@ -56,5 +56,24 @@ class False(string field) {
     }
     string _sprintf(int type) {
 	return sprintf("False(%O)", field);
+    }
+}
+
+class Overlaps(string field, Serialization.Atom value) {
+    string encode_sql(object table) {
+	object range;
+	object type = table->schema[field];
+	if (!Program.inherits(object_program(type), SyncDB.Types.Range))
+	    error("Overlaps requires a range.\n");
+	range = type->parser()->decode(value);
+
+	return sprintf("(%s <= %s AND %s >= %s)",
+		       type->fields[0]->sql_name(table->table),
+		       type->fields[0]->encode_sql_value(range->stop),
+		       type->fields[1]->sql_name(table->table),
+		       type->fields[1]->encode_sql_value(range->start));
+    }
+    string _sprintf(int type) {
+	return sprintf("Overlaps(%O)", field);
     }
 }

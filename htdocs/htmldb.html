@@ -4,6 +4,7 @@
 <script type="text/javascript" src="../js/ppp/mapping.js"></script>
 <script type="text/javascript" src="../js/ppp/mmp.js"></script>
 <script type="text/javascript" src="../js/ppp/serialization.js"></script>
+<script type="text/javascript" src="../js/ppp/critbit.js"></script>
 <script type="text/javascript" src="../js/ppp/meteor.js"></script>
 <script type="text/javascript" src="../js/util.bloom.js"></script>
 <script type="text/javascript" src="../js/util.int.js"></script>
@@ -24,7 +25,7 @@
 	(new SyncDB.Types.String("email")),
 	(new SyncDB.Types.Range("date",
 	    (new SyncDB.Types.Date("startdate")),
-	    (new SyncDB.Types.Date("stopdate")))),
+	    (new SyncDB.Types.Date("stopdate")), new SyncDB.Flags.Index())),
 	(new SyncDB.Types.String("firstname")),
 	(new SyncDB.Types.String("lastname"))));
 

@@ -24,7 +24,8 @@ void create() {
 	*/
 	SyncDB.Types.Range("date", 
 	    SyncDB.Types.Date("startdate", Calendar.Second),
-	    SyncDB.Types.Date("stopdate", Calendar.Second)
+	    SyncDB.Types.Date("stopdate", Calendar.Second),
+	    SyncDB.Flags.Index()
 	),
 	// two
 	SyncDB.Types.String("firstname", SyncDB.Flags.Foreign("two", "firstname")),

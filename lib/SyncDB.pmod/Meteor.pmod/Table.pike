@@ -81,6 +81,7 @@ void generate_reply(int err, array(mapping)|mapping row, object session, object 
 	if (object_program(message) != .SyncReq && sizeof(sessions)) {
 	    blacklist[row->version] = 1;
 	    string s = out->encode(.Sync("", (array)row->version, ({ row })))->render();
+	    werror("sending update to %d clients\n", sizeof(sessions));
 	    foreach (sessions; object o;) {
 		if (o == session) continue;
 		// check bloom filter or shit like that

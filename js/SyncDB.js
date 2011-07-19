@@ -158,10 +158,13 @@ SyncDB.Filter.Equal = SyncDB.Filter.Base.extend({
 	var index;
 	if (index = table.I[this.field]) {
 	    var type = table.schema.m[this.field];
-	    var v = type.parser().decode(this.value);
-	    //UTIL.log("inserting %d rows.", rows.length);
+	    UTIL.log("inserting %d rows.", rows.length);
 	    for (var i = 0; i < rows.length; i++) {
-		index.set(v, rows[i][table.schema.key]);
+		index.set(rows[i][this.field], rows[i][table.schema.key]);
+	    }
+	    if (index.set_filter) {
+		var v = type.parser().decode(this.value);
+		index.set_filter(v);
 	    }
 	    return rows;
 	} else return [];
@@ -177,10 +180,12 @@ SyncDB.Filter.True = SyncDB.Filter.Base.extend({
 });
 SyncDB.Filter.Overlaps = SyncDB.Filter.Equal.extend({
     index_lookup : function(table) {
-	var type = table.m[this.field];
-	var index = table.get_index(this.field);
-	if (!index || !index.overlaps) return 0;
-
+	UTIL.log("%o index_lookup(%o)", this, table);
+	var type = table.schema.m[this.field];
+	var index = table.I[this.field];
+	UTIL.log("index: %o\n", index);
+	if (!index || !index.overlaps)
+	    throw(new SyncDB.Error.NotFound());
 	return index.overlaps(type.parser().decode(this.value));
     }
 });
@@ -192,6 +197,7 @@ SyncDB.Serialization.Filter = serialization.generate_structs({
     _equal : SyncDB.Filter.Equal,
     _true : SyncDB.Filter.True,
     _false : SyncDB.Filter.False,
+    _overlaps : SyncDB.Filter.Overlaps
 });
 SyncDB.KeyValueMapping = UTIL.Base.extend({
     constructor : function() {
@@ -494,8 +500,10 @@ SyncDB.RangeIndex = SyncDB.LocalField.extend({
 	this.tkey = tkey;
 	this.tid= tid;
 	this.base(name, new serialization.Struct("_range_index", {
-	    m : new serialization.MultiRangeSet(tkey.parser(), tid.parser()),
-	    filter : new serialization.RangeSet(tkey.parser(), tid.parser())
+	    m : new serialization.MultiRangeSet(
+		new serialization.Range(tkey.parser(), tid.parser())),
+	    filter : new serialization.RangeSet(
+		new serialization.Range(tkey.parser()))
 	}), {
 	    m : new CritBit.MultiRangeSet(),
 	    filter : new CritBit.RangeSet()
@@ -507,7 +515,12 @@ SyncDB.RangeIndex = SyncDB.LocalField.extend({
 	this.value.m.insert(index, id);
 	this.value.filter.insert(index);
     },
+    set_filter : function(range) {
+	UTIL.log("adding range: %o", range);
+	this.value.filter.insert(range);
+    },
     has : function(index) {
+	UTIL.log("type; %o", index);
 	return this.value.filter.contains(index);
     },
     overlaps : function(index) {
@@ -1056,7 +1069,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	this.I = {};
 	for (var i = 0; i < schema.fields.length; i++) {
 	    var type = schema.fields[i];
-	    if (type.is_index || type.is_key) {
+	    if (type.is_indexed || type.is_key) {
 		var field = type.name;
 		//UTIL.log("generating index for %s", field);
 		this.I[field] = this.index("_syncdb_"+this.name+"_I"+field, type, schema.key);
@@ -1384,10 +1397,12 @@ SyncDB.Types = {
 	    // FORWARD loop for priorities
 	    for (var i = 0; i < this.flags.length; i++) {
 		//UTIL.log("scanning %o\n", this.flags[i]);
-		for (var name in this.flags[i]) {
+		for (var sym in this.flags[i]) {
 		    //UTIL.log(name);
-		    if (UTIL.has_prefix(name, "is_") || UTIL.has_prefix(name, "get_")) {
-			if (!this.hasOwnProperty(name)) this[name] = this.flags[i][name];
+		    if (UTIL.has_prefix(sym, "is_")
+			|| UTIL.has_prefix(sym, "get_")) {
+			if (!this.hasOwnProperty(sym))
+			    this[sym] = this.flags[i][sym];
 		    }
 		}
 	    }
@@ -1468,37 +1483,40 @@ SyncDB.Types.Vector = SyncDB.Types.Base.extend({
 	return UTIL.create(serialization.Tuple, l);
     }
 });
-SyncDB.Range = CritBit.Range.extend({
-    constructor : function(a, b, value) {
-	this.base(a, b);
-	if (arguments.length > 2)
-	    this.value = value;
-    },
-    toString : function() {
-	if (this.hasOwnProperty("value"))
-	    return UTIL.sprintf("[%o..%o]<%o>", this.a, this.b, this.value);
-	else
-	    return UTIL.sprintf("[%o..%o]", this.a, this.b);
-    }
-});
 SyncDB.Types.Range = SyncDB.Types.Vector.extend({
     toString : function() { return "Range"; },
     constructor : function(name, from, to) {
 	this.base.apply(this, [ name, [ from, to ] ].concat(Array.prototype.slice.call(arguments, 3)));
     },
     parser : function() {
-	UTIL.log("%o, %o\n", this.types[0].parser(), this.types[0]);
-	return new serialization.Tuple("_range", SyncDB.Range,
-				       this.types[0].parser(),
-				       this.types[1].parser()).extend({
-	    encode : function(range) {
-		return this.base([ range.a, range.b ]);
-	    }
-	});
+	UTIL.log("making parser: %o, %o\n", this.types[0].parser(), this.types[0]);
+	return new serialization.Range(this.types[0].parser());
     },
-    get_index : function() {
+    get_index : function(name, key_type) {
+	if (this.is_unique || this.is_key)
+	    UTIL.error("Ranges cannot be unique (yet).");
+	else //if (this.is_indexed)
+	    return new SyncDB.RangeIndex(name, this, key_type);
+    },
+    Overlaps : function(range) {
+	return new SyncDB.Filter.Overlaps(this.name, this.parser().encode(range));
     }
 });
+SyncDB.Date = function() {
+    Date.apply(this, Array.prototype.slice.call(arguments));
+    this.sizeof = function() {
+	return CritBit.Size(0,32);
+    };
+    this.count_prefix = function(d1) {
+	var a = Math.floor(this.getTime()/1000);
+	var b = Math.floor(d1.getTime()/1000);
+	return new CritBit.Size(0, 32 - CritBit.clz(a ^ b));
+    };
+    this.get_bit = function(size) {
+	return CritBit.get_bit(Math.floow(this.getTime()/1000), size);
+    };
+};
+SyncDB.Date.prototype = Date.prototype;
 SyncDB.Types.Date = SyncDB.Types.Base.extend({
     toString : function() { return "Date"; },
     parser : function() {

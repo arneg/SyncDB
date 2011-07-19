@@ -38,6 +38,7 @@ mixed decode_sql_value(string s) {
 }
 
 string encode_sql_value(mixed v) {
+    werror("casting: %O\n", v);
     return (string)v;
 }
 
