@@ -512,7 +512,8 @@ SyncDB.RangeIndex = SyncDB.LocalField.extend({
     set : function(index, id) {
 	if (!this.value)
 	    SyncDB.error("You are too early!!");
-	this.value.m.insert(index, id);
+	index.value = id;
+	this.value.m.insert(index);
 	this.value.filter.insert(index);
     },
     set_filter : function(range) {
@@ -520,7 +521,6 @@ SyncDB.RangeIndex = SyncDB.LocalField.extend({
 	this.value.filter.insert(range);
     },
     has : function(index) {
-	UTIL.log("type; %o", index);
 	return this.value.filter.contains(index);
     },
     overlaps : function(index) {
@@ -531,7 +531,7 @@ SyncDB.RangeIndex = SyncDB.LocalField.extend({
 	if (!a.length) return [];
 	var ret = new Array(a.length);
 	for (var i = 0; i < a.length; i ++) {
-	    ret[i] = a[i].value();
+	    ret[i] = a[i].value;
 	}
 	return ret;
     },
