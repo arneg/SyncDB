@@ -17,6 +17,9 @@
 	    foo : new SyncDB.Types.String(new SyncDB.Flags.Cached()),
 	});
     */
+    var d1 = new Date();
+    var d2 = new Date();
+    d1.setTime(32434234234);
     var schema = (new SyncDB.Schema((new SyncDB.Types.Integer("id",
 	    (new SyncDB.Flags.Key()),
 	    (new SyncDB.Flags.Automatic()),
@@ -35,6 +38,7 @@
     var db = new SyncDB.CachedTable("test", schema
 	   /**/,	new SyncDB.MeteorTable("test", schema, chan) /**/
     );
+    var f = schema.m.date.Overlaps(new CritBit.Range(d1, d2));
     function indices(obj) {
 	var a = [];
 	for (var x in obj) {
