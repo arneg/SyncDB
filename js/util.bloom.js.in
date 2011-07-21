@@ -117,7 +117,7 @@ serialization.BitVector = serialization.Struct.extend({
     constructor : function(prog) {
 	this.base("_bitvector", {
 	    length : new serialization.Integer(),
-	    field : new serialization.Bytes()
+	    field : new serialization.Binary()
 	});
     },
     encode : function(bv) {
