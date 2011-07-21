@@ -381,17 +381,10 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 	    }
 	},
 	encode : function(s) {
-	    var a = new Array(s.length);
-	    for (var i = 0; i < s.length; i++)
-		a[i] = s.charCodeAt(i) + 1;
-	    return UTF8.encode(String.fromCharCode.apply(window, a));
+	    return UTF8.encode(s.replace("\0", "\u0100"));
 	},
 	decode : function(s) {
-	    s = UTF8.decode(s);
-	    var a = new Array(s.length);
-	    for (var i = 0; i < s.length; i++)
-		a[i] = s.charCodeAt(i) - 1;
-	    return String.fromCharCode.apply(window, a);
+	    return UTF8.decode(s).replace("\u0100", "\0");
 	},
 	replay : function() {
 	    var q = this.q;
