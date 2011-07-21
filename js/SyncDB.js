@@ -500,10 +500,8 @@ SyncDB.RangeIndex = SyncDB.LocalField.extend({
 	this.tkey = tkey;
 	this.tid= tid;
 	this.base(name, new serialization.Struct("_range_index", {
-	    m : new serialization.MultiRangeSet(
-		new serialization.Range(tkey.parser(), tid.parser())),
-	    filter : new serialization.RangeSet(
-		new serialization.Range(tkey.parser()))
+	    m : new serialization.MultiRangeSet(tkey.parser(tid.parser())),
+	    filter : new serialization.RangeSet(tkey.parser())
 	}), {
 	    m : new CritBit.MultiRangeSet(),
 	    filter : new CritBit.RangeSet()
@@ -515,10 +513,12 @@ SyncDB.RangeIndex = SyncDB.LocalField.extend({
 	index.value = id;
 	this.value.m.insert(index);
 	this.value.filter.insert(index);
+	this.sync();
     },
     set_filter : function(range) {
 	UTIL.log("adding range: %o", range);
 	this.value.filter.insert(range);
+	this.sync();
     },
     has : function(index) {
 	return this.value.filter.contains(index);
@@ -1488,9 +1488,9 @@ SyncDB.Types.Range = SyncDB.Types.Vector.extend({
     constructor : function(name, from, to) {
 	this.base.apply(this, [ name, [ from, to ] ].concat(Array.prototype.slice.call(arguments, 3)));
     },
-    parser : function() {
+    parser : function(type) {
 	UTIL.log("making parser: %o, %o\n", this.types[0].parser(), this.types[0]);
-	return new serialization.Range(this.types[0].parser());
+	return new serialization.Range(this.types[0].parser(), type);
     },
     get_index : function(name, key_type) {
 	if (this.is_unique || this.is_key)
