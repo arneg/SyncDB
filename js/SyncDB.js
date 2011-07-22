@@ -381,10 +381,10 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 	    }
 	},
 	encode : function(s) {
-	    return UTF8.encode(s.replace("\0", "\u0100"));
+	    return UTF8.encode(s.replace(/\0/g, "\u0100"));
 	},
 	decode : function(s) {
-	    return UTF8.decode(s).replace("\u0100", "\0");
+	    return UTF8.decode(s).replace(/\u0100/g, "\0");
 	},
 	replay : function() {
 	    var q = this.q;
