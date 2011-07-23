@@ -11,6 +11,10 @@ void create(string name, program prog, SyncDB.Flags.Base ... flags) {
     ::create(name, @flags);
 }
 
+program get_critbit() {
+    return ADT.CritBit.DateTree;
+}
+
 string encode_sql_value(object date) {
     // TODO:: mysql-FROM_UNIXTIME is not an option, use ints?
     if (!(objectp(date) && Program.inherits(object_program(date), prog)))

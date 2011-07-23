@@ -34,6 +34,11 @@ object get_parser() {
 #endif
 }
 
+object get_filter_parser() {
+    return Serialization.Types.RangeSet(fields[0]->get_critbit(),
+					fields[0]->get_parser());
+}
+
 string encode_json() {
     return ::encode_json("SyncDB.Types.Range", map(fields, Standards.JSON.encode));
 }
