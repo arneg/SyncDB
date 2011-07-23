@@ -25,11 +25,17 @@ void create(string name, SyncDB.Schema schema, SyncDB.Table db) {
 			    "row" : schema->parser_in(),
 			    "id" : s,
 			]), .Insert));
+    mapping m = ([]);
+    foreach (schema->m; string name; object type) {
+	if (type->is_index) {
+	    m[name] = type->get_filter_parser();
+	}
+    }
     in->register_type(.SyncReq, "_syncreq",
 			Serialization.Types.Struct("_syncreq", ([
 			    "version" : Serialization.Types.OneTypedList(i),
 			    "id" : s,
-			    //"bloom" : ..,
+			    "filter" : Serialization.Types.Struct("_filter", m)
 			])));
 
     out = Serialization.Types.Polymorphic();
@@ -64,6 +70,8 @@ void generate_reply(int err, array(mapping)|mapping row, object session, object 
     object reply;
     if (err) {
 	werror("<<< %O\n", message);
+	// TODO we maybe dont want to send out the desribe error here. it might contain things we dont want
+	// to let the client know (sql passwords in worst case)
 
 	reply = .Error(message->id, sprintf("%O", row));
     } else switch (object_program(message)) {
@@ -76,19 +84,12 @@ void generate_reply(int err, array(mapping)|mapping row, object session, object 
     case .Insert:
 	if (!mappingp(row))
 	    error("Bad return type from db: %O\nexpected mapping.\n", row); 
-	reply = .Sync(message->id, (array) (version||row->version), ({ row }));
-	// send
-	if (object_program(message) != .SyncReq && sizeof(sessions)) {
-	    blacklist[row->version] = 1;
-	    string s = out->encode(.Sync("", (array)row->version, ({ row })))->render();
-	    werror("sending update to %d clients\n", sizeof(sessions));
-	    foreach (sessions; object o;) {
-		if (o == session) continue;
-		// check bloom filter or shit like that
-		o->send(s);
-	    }
-	}
+
+	generate_sync(0, version||row->version, ({ row }));
 	// to all others
+	break;
+    case .SyncReq:
+	werror("no support for %O, yet.\n", message);
 	break;
     default:
 	error("Unknown message type: %O\n", message);
@@ -96,25 +97,47 @@ void generate_reply(int err, array(mapping)|mapping row, object session, object 
     session->send(out->encode(reply)->render());
 }
 
+mapping(string:mapping(object:object)) filters = ([]);
+
 // get triggered by e.g. MysqlTable
 void generate_sync(int err, SyncDB.Version version, array(mapping) rows) {
     if (m_delete(blacklist, version)) return;
 
-    if (sizeof(sessions)) {
-	string s = out->encode(.Sync("", (array)version, rows))->render();
-	foreach (sessions; object o;) {
-	    // check bloom filter or shit like that
-	    o->send(s);
+    mapping updates = ([]);
+
+    if (sizeof(filters)) {
+	foreach (rows;; mapping row) {
+	    foreach (row; string name; mixed o) {
+		mapping f = filters[name];
+		if (!f) continue;
+		mixed h;
+		foreach (f; object session; object filter) {
+		    if (h) {
+			if (!h(filter)) continue;
+		    } else {
+			if (filter->prepare) {
+			    h = filter->prepare(o);
+			    if (!h(filter)) continue;
+			} else if (!filter->has(o)) continue;
+		    }
+
+		    if (has_index(updates, session)) updates[session] += ({ row });
+		    else updates[session] = ({ row });
+		}
+	    }
+	}
+	// CUBE!
+	foreach (updates; object o; array(mapping) r) {
+	    string s = out->encode(.Sync("", (array)version, r))->render();
+	    catch {
+		o->send(s);
+	    };
 	}
     }
 }
 
-mapping sessions = set_weak_flag(([ ]), Pike.WEAK_INDICES);
-
 void incoming(object session, Serialization.Atom a) {
-    werror("TABLE: incoming(%O, %O)\n", session, a);
     object message = in->decode(a);
-    werror("TABLE: decoded to %O\n", message);
 
     switch (object_program(message)) {
     case .Select:
@@ -132,7 +155,12 @@ void incoming(object session, Serialization.Atom a) {
     case .SyncReq:
 	werror("TABLE: syncreq(%O, %O, %O) (%O)\n", message->version, generate_reply, session, message);
 	SyncDB.Version v = SyncDB.Version(message->version);
-	sessions[session] = v;
+
+	foreach (message->filter; string name; object f) {
+	    if (!filters[name]) filters[name] = set_weak_flag(([ ]), Pike.WEAK_INDICES);
+	    filters[name][session] = f;
+	}
+	// check version and trigger update based on filter
 	db->syncreq(v, generate_reply, session, message);
     default:
 	error("Unknown message type: %O\n", message);
