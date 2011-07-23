@@ -13,7 +13,7 @@ void create(string name, program prog, SyncDB.Flags.Base ... flags) {
 
 string encode_sql_value(object date) {
     // TODO:: mysql-FROM_UNIXTIME is not an option, use ints?
-    if (!Program.inherits(object_program(date), prog))
+    if (!(objectp(date) && Program.inherits(object_program(date), prog)))
 	error("Type mismatch. Expected %O. Got %O\n", prog, date);
     return sprintf("FROM_UNIXTIME(%d)", date->ux + date->utc_offset());
 }

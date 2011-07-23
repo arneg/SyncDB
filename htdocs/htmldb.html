@@ -1,40 +1,29 @@
-<script type="text/javascript" src="../js/ppp/Base.js"></script>
-<script type="text/javascript" src="../js/ppp/utf8.js"></script>
-<script type="text/javascript" src="../js/ppp/util.js"></script>
-<script type="text/javascript" src="../js/ppp/mapping.js"></script>
-<script type="text/javascript" src="../js/ppp/mmp.js"></script>
-<script type="text/javascript" src="../js/ppp/serialization.js"></script>
-<script type="text/javascript" src="../js/ppp/critbit.js"></script>
-<script type="text/javascript" src="../js/ppp/meteor.js"></script>
-<script type="text/javascript" src="../js/util.bloom.js"></script>
-<script type="text/javascript" src="../js/util.int.js"></script>
-<script type="text/javascript" src="../js/util.sha256.js"></script>
-<script type="text/javascript" src="../js/SyncDB.js"></script>
+<script type="text/javascript" src="js/ppp/Base.js"></script>
+<script type="text/javascript" src="js/ppp/utf8.js"></script>
+<script type="text/javascript" src="js/ppp/util.js"></script>
+<script type="text/javascript" src="js/ppp/mapping.js"></script>
+<script type="text/javascript" src="js/ppp/mmp.js"></script>
+<script type="text/javascript" src="js/ppp/serialization.js"></script>
+<script type="text/javascript" src="js/ppp/critbit.js"></script>
+<script type="text/javascript" src="js/ppp/meteor.js"></script>
+<script type="text/javascript" src="js/util.bloom.js"></script>
+<script type="text/javascript" src="js/util.int.js"></script>
+<script type="text/javascript" src="js/util.sha256.js"></script>
+<script type="text/javascript" src="js/SyncDB.js"></script>
 <script type="text/javascript">
 /*
     var schema = new SyncDB.Schema({
 	    id : new SyncDB.Types.Integer(new SyncDB.Flags.Key(), new SyncDB.Flags.AutoIncrement()),
 	    foo : new SyncDB.Types.String(new SyncDB.Flags.Cached()),
 	});
-    */
+	*/
     var d1 = new Date();
     var d2 = new Date();
     d1.setTime(32434234234);
-    var schema = (new SyncDB.Schema((new SyncDB.Types.Integer("id",
-	    (new SyncDB.Flags.Key()),
-	    (new SyncDB.Flags.Automatic()),
-	    (new SyncDB.Flags.ReadOnly()))),
-	(new SyncDB.Types.String("name")),
-	(new SyncDB.Types.String("email")),
-	(new SyncDB.Types.Range("date",
-	    (new SyncDB.Types.Date("startdate")),
-	    (new SyncDB.Types.Date("stopdate")), new SyncDB.Flags.Index())),
-	(new SyncDB.Types.String("firstname")),
-	(new SyncDB.Types.String("lastname"))));
-
-    var con = new meteor.Connection("/SyncDB/server.pike", {});
+    var schema = <schema/>;
+    var con = new meteor.Connection("/SyncDB/" + <meteorurl/>, {});
     var mplex = new meteor.Multiplexer(con);
-    var chan = mplex.get_channel("control");
+    var chan = mplex.get_channel(<channel/>);
     var db = new SyncDB.CachedTable("test", schema
 	   /**/,	new SyncDB.MeteorTable("test", schema, chan) /**/
     );
