@@ -152,10 +152,10 @@ serialization.Bloom = serialization.Struct.extend({
     constructor : function(hash) {
 	this.hash = hash;
 	this.base("_bloom", {
-	    table : new serialization.BitVector(),
 	    n : new serialization.Integer(),
+	    p : new serialization.Float(),
 	    removed : new serialization.Integer(),
-	    p : new serialization.Float()
+	    table : new serialization.BitVector()
 	});
     },
     can_encode : function(b) {

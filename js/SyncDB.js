@@ -494,10 +494,10 @@ SyncDB.RangeIndex = SyncDB.LocalField.extend({
 	this.tid= tid;
 	this.base(name, new serialization.Struct("_range_index", {
 	    m : new serialization.MultiRangeSet(tkey.parser(tid.parser())),
-	    filter : new serialization.RangeSet(tkey.parser())
+	    filter : tkey.filter_parser()
 	}), {
 	    m : new CritBit.MultiRangeSet(),
-	    filter : new CritBit.RangeSet()
+	    filter : tkey.filter()
 	});
     },
     set : function(index, id) {
@@ -537,12 +537,13 @@ SyncDB.MappingIndex = SyncDB.LocalField.extend({
 	this.tkey = tkey;
 	this.type = tid;
 	this.base(name, new serialization.Struct("_index", {
+		filter : tkey.filter_parser(),
 		m : new serialization.Object(tid.parser()), 
-		filter : new serialization.Bloom(tkey.hash()),
 		removed : new serialization.Integer()
 	    }), {
 		m : {},
-		filter : new UTIL.Bloom.Filter(32, 0.001, tkey.hash()),
+		//filter : new UTIL.Bloom.Filter(32, 0.001, tkey.hash()),
+		filter : tkey.filter(),
 		removed : 0
 	});
     },
@@ -944,8 +945,14 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	regtype(this.incoming, "_sync", SyncDB.Meteor.Sync,
 		{ id : s, version : new serialization.Array(int), rows : new serialization.Array(this.parser_in) });
 	this.out = new serialization.Polymorphic();
+	var m = {};
+	for (var field in schema.m) if (schema.m.hasOwnProperty(field)) {
+	    if (schema.m[field].is_index) {
+		m[field] = schema.m.field.filter_parser();
+	    }
+	}
 	regtype(this.out, "_syncreq", SyncDB.Meteor.SyncReq,
-		{ id : s, version : new serialization.Array(int), filter : SyncDB.Serialization.Filter });
+		{ id : s, version : new serialization.Array(int), filter : new serialization.Object(m) });
 	regtype(this.out, "_select", SyncDB.Meteor.Select,
 		{ id : s, filter : SyncDB.Serialization.Filter });
 	regtype(this.out, "_insert", SyncDB.Meteor.Insert,
@@ -968,13 +975,12 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 
 		if (o instanceof SyncDB.Meteor.Sync) { // we dont care for id. just clean it up, man!
 		    if (this.sync_callback)
-			for(var j = 0; j < o.rows.length; j++) {
-			    this.sync_callback(o.version, o.rows[j]);
-			}
+			this.sync_callback(o.version, o.rows);
 		    if (!o.id) continue;
 		}
 
 		var f = this.requests[o.id];
+		delete this.requests[o.id];
 
 		if (f) {
 		    if (o instanceof SyncDB.Meteor.Sync) { // reply to _insert
@@ -1036,17 +1042,45 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	});
     },
     sync : function(version) {
-	this.send(new SyncDB.Meteor.SyncReq("foo", version));
+	UTIL.trace("SyncDB.MeteorTable#sync has been called for unknown reasons.");
+	// this.send(new SyncDB.Meteor.SyncReq("foo", version));
     },
     low_insert : function(row, callback) {
 	var id = UTIL.get_unique_key(5, this.requests);
 	this.requests[id] = callback;
 	this.send(new SyncDB.Meteor.Insert(id, row));
 	return id;
+    },
+    request_sync : function(version, filters, cb) {
+	var id = UTIL.get_unique_key(5, this.requests);
+	this.sync_callback = cb;
+	this.send(new SyncDB.Meteor.SyncReq(id, version, filters));
     }
 });
 SyncDB.LocalTable = SyncDB.Table.extend({
     constructor : function(name, schema, db) {
+	var done = 2;
+	var do_on_succ = UTIL.make_method(this, function() {
+	    if (db) {
+		db.request_sync(this.version(), this.get_filters(), UTIL.make_method(this, function(version, rows) {
+		    this.config.version(version);
+
+		    this.low_select(schema.id.Equal(row[schema.key]), this.M(function(err, oldrow) {
+			// check if version is better than before!
+
+			if (err) {
+			    this.low_insert(row, function(err, row) {});
+			} else {
+			    this["local_update_by_"+schema.key](row[schema.key], row, function(err, oldrow) {});
+			}
+		    }));
+
+		    if (this.sync_callback) {
+			this.sync_callback(version, [ row ]);
+		    }
+		}));
+	    }
+	});
 	(this.config = new SyncDB.TableConfig("_syncdb_"+name)).get(this.M(function() {
 	    if (this.config.schema().hashCode() != schema.hashCode()) {
 		UTIL.log("SCHEMA changed. cleaning local databse %o != %o (new)", this.config.schema(), schema);
@@ -1057,6 +1091,9 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 
 	    this.config.schema(schema);
 	    this.sync(this.config.version());
+	    if (!--done) {
+		do_on_succ();
+	    }
 	}));
 	this.base(name, schema, db);
 	this.I = {};
@@ -1065,31 +1102,23 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	    if (type.is_indexed || type.is_key) {
 		var field = type.name;
 		//UTIL.log("generating index for %s", field);
-		this.I[field] = this.index("_syncdb_"+this.name+"_I"+field, type, schema.key);
+		this.I[field] = this.index("_syncdb_"+this.name+"_I"+field, type, schema.m[schema.key]);
 		//UTIL.log("INDEX: %o", this.I[field]);
 	    }
 	}
-	if (db) {
-	    db.sync_callback = UTIL.make_method(this, function(version, row) {
-		var db;
-
-		this.config.version(version);
-
-		this.low_select(schema.id.Equal(row[schema.key]), this.M(function(err, oldrow) {
-		    // check if version is better than before!
-
-		    if (err) {
-			this.low_insert(row, function(err, row) {});
-		    } else {
-			this["local_update_by_"+schema.key](row[schema.key], row, function(err, oldrow) {});
-		    }
-		}));
-
-		if (this.sync_callback) {
-		    this.sync_callback(version, row);
-		}
-	    });
+	if (!--done) {
+	    do_on_succ();
 	}
+    },
+    get_filters : function() {
+	var m = {};
+	for (var field in this.I) if (this.I.hasOwnProperty(field)) {
+	    m[field] = this.I[field].get_filter();
+	}
+	return m;
+    },
+    version : function() {
+	return this.config.version();
     },
     clear : function(cb) {
 	var c = 1;
@@ -1106,8 +1135,8 @@ SyncDB.LocalTable = SyncDB.Table.extend({
     is_permanent : function() {
 	return SyncDB.LS.is_permanent;
     },
-    index : function(name, field_type, key_type) {
-	return field_type.get_index(name, field_type, key_type);
+    index : function(name, field_type, key_name) {
+	return field_type.get_index(name, field_type, key_name);
     },
     remove : function(name, type) {
 	var f = this.M(function(value, callback) {
@@ -1403,11 +1432,15 @@ SyncDB.Types = {
 	get_key : function() {
 	    return Array.prototype.slice.apply(arguments).join("_");
 	},
-	get_index : function(name, key_type) {
+	get_index : function(name, field_type, key_name) {
+	    /*
+	    UTIL.log("will trace 'get_index3'");
+	    UTIL.error("get_index3(%o, %o)", name, key_name);
+	    */
 	    if (this.is_unique || this.is_key)
-		return new SyncDB.MappingIndex(name, this, key_type);
+		return new SyncDB.MappingIndex(name, this, key_name);
 	    else //if (this.is_indexed)
-		return new SyncDB.MultiIndex(name, this, key_type);
+		return new SyncDB.MultiIndex(name, this, key_name);
 	},
 	index_lookup : function(index, key) {
 	    if (UTIL.objectp(key) && key.index_lookup) {
@@ -1420,12 +1453,41 @@ SyncDB.Types = {
 	index_remove : function(index, key, id) {
 	    return index.remove(key, id);
 	},
+	filter_parser : function() {
+	    if (!this.hash) {
+		UTIL.log(">>> this: %o %o.", this.name, this);
+		window.foo = this;
+		UTIL.trace();
+	    }
+	    return new serialization.Bloom(this.hash());
+	},
 	Equal : function(value) {
 	    return new SyncDB.Filter.Equal(this.name, this.parser().encode(value));
+	},
+	Bloom : function(filter) {
+	    return new SyncDB.Filter.Bloom(this.name,
+					   this.filter_parser().encode(filter));
 	}
     })
 };
-SyncDB.Types.Integer = SyncDB.Types.Base.extend({
+SyncDB.Types.Filterable = SyncDB.Types.Base.extend({
+    bloom_size: function() {
+	return 32;
+    },
+    bloom_probability : function() {
+	return 0.001;
+    },
+    filter : function() {
+	if (UTIL.functionp(this.hash)) {
+	    return new UTIL.Bloom.Filter(this.bloom_size(),
+					 this.bloom_probability(),
+					 this.hash());
+	} else {
+	    UTIL.error("RangeFilters not implemented yet.");
+	}
+    }
+});
+SyncDB.Types.Integer = SyncDB.Types.Filterable.extend({
     parser : function() {
 	return new serialization.Integer();
     },
@@ -1438,9 +1500,12 @@ SyncDB.Types.Integer = SyncDB.Types.Base.extend({
     },
     hash : function() {
 	return new UTIL.Int.Hash();
+    },
+    get_index : function() {
+	return this.base.apply(this, Array.prototype.slice.call(arguments));
     }
 });
-SyncDB.Types.String = SyncDB.Types.Base.extend({
+SyncDB.Types.String = SyncDB.Types.Filterable.extend({
     parser : function() {
 	return new serialization.String();
     },
@@ -1485,12 +1550,19 @@ SyncDB.Types.Range = SyncDB.Types.Vector.extend({
 	UTIL.log("making parser: %o, %o\n", this.types[0].parser(), this.types[0]);
 	return new serialization.Range(this.types[0].parser(), type);
     },
-    get_index : function(name, key_type) {
+    get_index : function(name, field_type, key_name) {
 	if (this.is_unique || this.is_key)
 	    UTIL.error("Ranges cannot be unique (yet).");
 	else //if (this.is_indexed)
-	    return new SyncDB.RangeIndex(name, this, key_type);
+	    return new SyncDB.RangeIndex(name, this, key_name);
     },
+    filter_parser : function() {
+	return new serialization.RangeSet(this.parser())
+    },
+    filter : function() {
+	return new CritBit.RangeSet()
+    },
+    //RangeSet : // TODO
     Overlaps : function(range) {
 	return new SyncDB.Filter.Overlaps(this.name, this.parser().encode(range));
     }
@@ -1528,8 +1600,8 @@ SyncDB.Types.Array = SyncDB.Types.Base.extend({
 	return new serialization.Array(this.type.parser());
     },
     toString : function() { return "Array"; },
-    get_index : function(name, key_type) {
-	return this.type.get_index(name, key_type);
+    get_index : function(name, field_type, key_name) {
+	return this.type.get_index(name, field_type, key_name);
     },
     index_insert : function(index, key, id) {
 	for (var i = 0; i < key.length; i++)
