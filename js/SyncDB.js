@@ -513,6 +513,9 @@ SyncDB.RangeIndex = SyncDB.LocalField.extend({
 	this.value.filter.insert(range);
 	this.sync();
     },
+    get_filter : function() {
+	return this.value.filter;
+    },
     has : function(index) {
 	return this.value.filter.contains(index);
     },
@@ -588,6 +591,9 @@ SyncDB.MappingIndex = SyncDB.LocalField.extend({
 	    this.regen_filter();
 	    this.sync();
 	}
+    },
+    get_filter : function() {
+	return this.value.filter;
     },
     toString : function() {
 	return "MappingIndex("+this.name+","+this.type+")";
@@ -923,7 +929,13 @@ SyncDB.Meteor = {
 SyncDB.Meteor.Update = SyncDB.Meteor.Base.extend({});
 SyncDB.Meteor.Insert = SyncDB.Meteor.Base.extend({});
 SyncDB.Meteor.Sync = SyncDB.Meteor.Base.extend({});
-SyncDB.Meteor.SyncReq = SyncDB.Meteor.Base.extend({});
+SyncDB.Meteor.SyncReq = SyncDB.Meteor.Base.extend({
+    constructor : function(id, version, filter) {
+	this.id = id;
+	this.version = version;
+	this.filter = filter;
+    }
+});
 
 SyncDB.MeteorTable = SyncDB.Table.extend({
     constructor : function(name, schema, channel, db) {
@@ -947,12 +959,14 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	this.out = new serialization.Polymorphic();
 	var m = {};
 	for (var field in schema.m) if (schema.m.hasOwnProperty(field)) {
-	    if (schema.m[field].is_index) {
-		m[field] = schema.m.field.filter_parser();
+	    if (schema.m[field].is_indexed) {
+		m[field] = schema.m[field].filter_parser();
 	    }
 	}
+	var Or = new serialization.Or;
+	Or.types = UTIL.values(m);
 	regtype(this.out, "_syncreq", SyncDB.Meteor.SyncReq,
-		{ id : s, version : new serialization.Array(int), filter : new serialization.Object(m) });
+		{ id : s, version : new serialization.Array(int), filter : new serialization.Object(Or) });
 	regtype(this.out, "_select", SyncDB.Meteor.Select,
 		{ id : s, filter : SyncDB.Serialization.Filter });
 	regtype(this.out, "_insert", SyncDB.Meteor.Insert,
@@ -1054,33 +1068,13 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
     request_sync : function(version, filters, cb) {
 	var id = UTIL.get_unique_key(5, this.requests);
 	this.sync_callback = cb;
+	console.log("sending sync req: %o, %o, %o.", id, version, filters);
 	this.send(new SyncDB.Meteor.SyncReq(id, version, filters));
     }
 });
 SyncDB.LocalTable = SyncDB.Table.extend({
     constructor : function(name, schema, db) {
-	var done = 2;
-	var do_on_succ = UTIL.make_method(this, function() {
-	    if (db) {
-		db.request_sync(this.version(), this.get_filters(), UTIL.make_method(this, function(version, rows) {
-		    this.config.version(version);
-
-		    this.low_select(schema.id.Equal(row[schema.key]), this.M(function(err, oldrow) {
-			// check if version is better than before!
-
-			if (err) {
-			    this.low_insert(row, function(err, row) {});
-			} else {
-			    this["local_update_by_"+schema.key](row[schema.key], row, function(err, oldrow) {});
-			}
-		    }));
-
-		    if (this.sync_callback) {
-			this.sync_callback(version, [ row ]);
-		    }
-		}));
-	    }
-	});
+	var done = 3;
 	(this.config = new SyncDB.TableConfig("_syncdb_"+name)).get(this.M(function() {
 	    if (this.config.schema().hashCode() != schema.hashCode()) {
 		UTIL.log("SCHEMA changed. cleaning local databse %o != %o (new)", this.config.schema(), schema);
@@ -1092,7 +1086,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	    this.config.schema(schema);
 	    this.sync(this.config.version());
 	    if (!--done) {
-		do_on_succ();
+		this.do_on_succ(schema, db);
 	    }
 	}));
 	this.base(name, schema, db);
@@ -1106,16 +1100,33 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 		//UTIL.log("INDEX: %o", this.I[field]);
 	    }
 	}
+	this.get_filters(UTIL.make_method(this, function() {
+	    if (!--done) {
+		this.do_on_succ(schema, db);
+	    }
+	}));
 	if (!--done) {
-	    do_on_succ();
+	    this.do_on_succ(schema, db);
 	}
     },
-    get_filters : function() {
-	var m = {};
-	for (var field in this.I) if (this.I.hasOwnProperty(field)) {
-	    m[field] = this.I[field].get_filter();
-	}
-	return m;
+    get_filters : function(cb) {
+	var again = UTIL.make_method(this, function() {
+	    var m = {};
+
+
+	    for (var field in this.I) if (this.I.hasOwnProperty(field)) {
+		if (!this.I[field].value) {
+		    if (cb) UTIL.log("waiting:");
+		    if (cb) window.setTimeout(again, 20);
+		    return;
+		}
+		m[field] = this.I[field].get_filter();
+	    }
+	    if (cb) cb(m);
+	    return m;
+	});
+
+	return again();
     },
     version : function() {
 	return this.config.version();
@@ -1223,6 +1234,27 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	}
 
 	return callback(false, []);
+    },
+    do_on_succ : function(schema, db) {
+	if (db) {
+	    db.request_sync(this.version(), this.get_filters(), UTIL.make_method(this, function(version, rows) {
+		this.config.version(version);
+
+		this.low_select(schema.id.Equal(row[schema.key]), this.M(function(err, oldrow) {
+		    // check if version is better than before!
+
+		    if (err) {
+			this.low_insert(row, function(err, row) {});
+		    } else {
+			this["local_update_by_"+schema.key](row[schema.key], row, function(err, oldrow) {});
+		    }
+		}));
+
+		if (this.sync_callback) {
+		    this.sync_callback(version, [ row ]);
+		}
+	    }));
+	}
     },
 	     /*
     update : function() {
