@@ -80,6 +80,8 @@ void create(mapping|void overwrites) {
     ]), lambda(object o, string s) {
 	if (s == "flags") return Serialization.Types.OneTypedList(Flag);
 	if (s == "fields") return black_magic;
+	if (s == "a") return -1;
+	if (s == "b") return -1;
 	return 0;
     });
     black_magic->etype = Type;

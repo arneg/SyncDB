@@ -1,6 +1,8 @@
+inherit Serialization.BasicTypes;
 inherit SyncDB.Table;
 
 object in, out;
+object type_cache = Serialization.default_type_cache;
 
 mapping blacklist = ([ ]);
 
@@ -31,12 +33,13 @@ void create(string name, SyncDB.Schema schema, SyncDB.Table db) {
 	    m[name] = type->get_filter_parser();
 	}
     }
+    object l = Mapping(UTF8String(), Serialization.Types.Or(@values(m)));
     in->register_type(.SyncReq, "_syncreq",
 			Serialization.Types.Struct("_syncreq", ([
 			    "version" : Serialization.Types.OneTypedList(i),
 			    "id" : s,
-			    "filter" : Serialization.Types.Struct("_filter", m)
-			])));
+			    "filter" : l
+			]), .SyncReq));
 
     out = Serialization.Types.Polymorphic();
     out->register_type(.Reply, "_reply", 
@@ -44,7 +47,7 @@ void create(string name, SyncDB.Schema schema, SyncDB.Table db) {
 			    "rows" : Serialization.Types.OneTypedList(
 					schema->parser_out()),
 			    "id" : s,
-			]), .Reply));
+			]), .Reply)),
     out->register_type(.Sync, "_sync",
 		       Serialization.Types.Struct("_sync", ([
 			    "rows" : Serialization.Types.OneTypedList(
@@ -89,6 +92,8 @@ void generate_reply(int err, array(mapping)|mapping row, object session, object 
 	// to all others
 	break;
     case .SyncReq:
+	reply = .Sync(message->id, (array)version, row);
+	break;
 	werror("no support for %O, yet.\n", message);
 	break;
     default:
@@ -162,6 +167,7 @@ void incoming(object session, Serialization.Atom a) {
 	}
 	// check version and trigger update based on filter
 	db->syncreq(v, generate_reply, session, message);
+	break;
     default:
 	error("Unknown message type: %O\n", message);
     }

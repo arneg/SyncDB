@@ -1005,7 +1005,7 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 		    } else {
 			f(false, o.rows);
 		    }
-		} else UTIL.log("could not find reply handler for %o:%o\n", a[i].type, o);
+		} else if (!(o instanceof SyncDB.Meteor.Sync)) UTIL.log("could not find reply handler for %o(%o):%o\n", a[i].type, a[i], o);
 	    }
 	}));
     },
@@ -1240,18 +1240,24 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	    db.request_sync(this.version(), this.get_filters(), UTIL.make_method(this, function(version, rows) {
 		this.config.version(version);
 
-		this.low_select(schema.id.Equal(row[schema.key]), this.M(function(err, oldrow) {
-		    // check if version is better than before!
+		for (var i = 0; i < rows.length; i++) {
+		    var row = rows[i];
+		    if (!row[schema.key]) console.log("error in row %o.", row);
+		    this.low_select(schema.id.Equal(row[schema.key]), this.M(function(err, oldrow) {
+			// check if version is better than before!
 
-		    if (err) {
-			this.low_insert(row, function(err, row) {});
-		    } else {
-			this["local_update_by_"+schema.key](row[schema.key], row, function(err, oldrow) {});
-		    }
-		}));
+			if (err) {
+			    this.low_insert(row, function(err, row) {});
+			} else {
+			    this["local_update_by_"+schema.key](row[schema.key],
+								row,
+								function(err, oldrow) {});
+			}
+		    }));
 
+		}
 		if (this.sync_callback) {
-		    this.sync_callback(version, [ row ]);
+		    this.sync_callback(version, rows);
 		}
 	    }));
 	}

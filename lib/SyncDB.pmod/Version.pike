@@ -6,6 +6,7 @@ void create(void|array(int)|int n) {
 }
 
 int __hash() {
+    if (!sizeof(a)) return 0;
     return hash_value(`+(@a));
 }
 
@@ -36,4 +37,8 @@ mixed cast(string type) {
     if (type == "array") {
 	return a;
     } else error("Cannot cast %O into %s\n", this, type);
+}
+
+int _sizeof() {
+    return sizeof(a);
 }

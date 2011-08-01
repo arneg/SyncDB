@@ -1,3 +1,5 @@
+inherit ADT.CritBit.Range;
+
 class Boundary(mixed x) { 
     int (0..1) `<(object b) {
 	if (!objectp(b) || !Program.inherits(object_program(b), Boundary)) {
@@ -11,6 +13,14 @@ class Boundary(mixed x) {
 	    return x > b;
 	}
 	return x > b->x;
+    }
+
+    int unix_time() {
+	return x->unix_time();
+    }
+
+    int `ux() {
+	return unix_time();
     }
 
     string _sprintf(int type) {
@@ -150,8 +160,15 @@ this_program `&(this_program i) {
     l = max(a, i->a);
     r = min(b, i->b);
 
-    if (r->overlaps(l))
-	return this_program(l, r);
+    mixed e = catch {
+	if (r->overlaps(l))
+	    return this_program(l, r);
+    };
+    if (e) {
+	werror(">> %O(%O)->overlaps(%O(%O)).\n", r, objectp(r) && object_program(r),
+	       l, objectp(l) && object_program(l));
+	error(e);
+    }
     return 0;
 }
 

@@ -3,7 +3,7 @@ class Sync(void|string id, void|array(int) version, void|array(mapping) rows) {
 	return sprintf("%O(%O, %O)", this_program, id, error);
     }
 }
-class SyncReq(void|string id, void|array(int) version, mapping filters) {
+class SyncReq(void|string id, void|array(int) version, mapping|void filter) {
     string _sprintf(int type) {
 	return sprintf("%O(%O, %O)", this_program, id, error);
     }

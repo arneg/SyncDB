@@ -94,5 +94,5 @@ object parser() {
 
 object get_filter_parser() {
     //return Serialization.Types.Bloom();
-    return MMP.Utils.Bloom.tBloomFilter(Nettle.SHA256_State);
+    return MMP.Utils.Bloom.tBloomFilter(MMP.Utils.Bloom.SHA256);
 }

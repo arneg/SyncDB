@@ -35,7 +35,7 @@ UTIL.Bloom.Filter = Base.extend(
     /** @constructs UTIL.Bloom.Filter */
     constructor : function(n, p, hash, table) {
 	this.hash = hash;
-	this.n = 0;
+	this.n = n;
 	this.removed = 0;
 	this.p = p;
 	/*

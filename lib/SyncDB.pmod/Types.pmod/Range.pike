@@ -1,10 +1,20 @@
-inherit .Vector;
+inherit ADT.CritBit.Range : range;
+inherit .Vector : base;
 
 void create(string name, object from, object to, SyncDB.Flags.Base ... flags) {
     if (object_program(to) != object_program(from))
 	error("Range only work with one single type now.\n");
-    ::create(name, ({ from, to }), @flags);
+    base::create(name, ({ from, to }), @flags);
 }
+
+mixed `a() {
+    return fields && fields[0];
+}
+
+mixed `b() {
+    return fields && fields[1];
+}
+
 
 mapping encode_sql(string table, mapping row, void|mapping new) {
     if (!new) new = ([]);

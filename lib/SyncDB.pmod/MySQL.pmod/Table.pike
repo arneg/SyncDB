@@ -528,14 +528,20 @@ void syncreq(SyncDB.Version version, function cb, mixed ... args) {
     array(mapping) rows;
     array t = table_objects();
 
-    if (sizeof(version) != sizeof(t)) error("");
+    if (sizeof(version) != sizeof(t)) {
+	if (!sizeof(version)) {
+	    version = SyncDB.Version(allocate(sizeof(t)));
+	} else 
+	    error("invalid version %O(%d), expected %d entries.", version, 
+		  sizeof(version), sizeof(t));
+    }
 
     foreach (t;int i;Table tab) {
 	t[i] = sprintf("%s.version > %d", tab->name, version[i]);	
     }
 
     rows = map(query(sprintf(select_sql, t*" OR ")), sanitize_result);
-    call_out(cb, 0, 0, map(rows, sanitize_result), @args, this_program::version);
+    call_out(cb, 0, 0, rows, @args, this_program::version);
 }
 
 array(mapping)|mapping sanitize_result(array(mapping)|mapping rows) {
