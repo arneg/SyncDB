@@ -19,3 +19,7 @@ mixed decode_sql_value(string s) {
 string encode_json() {
     return ::encode_json("SyncDB.Types.Integer");
 }
+
+object get_filter_parser() {
+    return MMP.Utils.Bloom.tBloomFilter(MMP.Utils.Bloom.IntHash);
+}
