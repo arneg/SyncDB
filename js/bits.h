@@ -9,11 +9,11 @@
 } while (0)
 #define BV_GET_INT(v, n, len, x) do {\
     var t = (v)[(n)>>>5];	  \
-    t >>>= n &31;		  \
-    if (len > 32 - (n&31)) {	  \
-	t |= (v)[(n)>>>5 + 1] << n & 31;\
+    t >>>= (n) &31;		  \
+    if ((len) > 32 - ((n)&31)) {	  \
+	t |= (v)[((n)>>>5) + 1] << (32 - ((n) & 31));\
     }				  \
-    (x) = t & (1 << len) - 1;	  \
+    (x) = t & (1 << (len)) - 1;	  \
 } while(0)
 #else
 #define BITVECTOR(n) (new UTIL.BitVector(n))

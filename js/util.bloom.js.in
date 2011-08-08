@@ -178,7 +178,7 @@ UTIL.BitVector = Base.extend(
     constructor : function(a, b) {
 	if (UTIL.arrayp(a)) {
 	    this.field = a;
-	    this.length = b;
+	    this.length = arguments.length > 1 ? b : a.length*32;
 	} else {
 	    this.length = a;
 	    this.field = BITVECTOR(a);
