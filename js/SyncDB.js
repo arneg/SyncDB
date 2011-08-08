@@ -533,6 +533,9 @@ SyncDB.RangeIndex = SyncDB.LocalField.extend({
     },
     get : function(index) {
 	return this.overlaps(index);
+    },
+    remove : function(index) {
+	UTIL.log("remove not yet supported here!");
     }
 });
 SyncDB.MappingIndex = SyncDB.LocalField.extend({
