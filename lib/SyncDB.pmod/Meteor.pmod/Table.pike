@@ -166,7 +166,7 @@ void incoming(object session, Serialization.Atom a) {
 	    filters[name][session] = f;
 	}
 	// check version and trigger update based on filter
-	db->syncreq(v, generate_reply, session, message);
+	db->syncreq(v, message->filter, generate_reply, session, message);
 	break;
     default:
 	error("Unknown message type: %O\n", message);

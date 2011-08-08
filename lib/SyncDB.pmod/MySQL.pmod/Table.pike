@@ -524,9 +524,14 @@ void insert(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... e
     }
 }
 
-void syncreq(SyncDB.Version version, function cb, mixed ... args) {
+void syncreq(SyncDB.Version version, mapping filter, function cb, mixed ... args) {
     array(mapping) rows;
     array t = table_objects();
+    array(mapping) rows_to_send;
+    int cnt;
+
+    werror("SyncDB.MySQL.Table#syncreq(version: %O, filter: %O)\n",
+	   version, filter);
 
     if (sizeof(version) != sizeof(t)) {
 	if (!sizeof(version)) {
@@ -541,7 +546,32 @@ void syncreq(SyncDB.Version version, function cb, mixed ... args) {
     }
 
     rows = map(query(sprintf(select_sql, t*" OR ")), sanitize_result);
-    call_out(cb, 0, 0, rows, @args, this_program::version);
+    rows_to_send = allocate(sizeof(rows));
+
+    foreach (rows;; mapping row) {
+	int(0..1) do_send;
+
+	foreach (filter; string name; object filter) {
+	    function lookup = filter->has || filter->`[];
+	    mixed e = catch {
+		werror("syncreq: %O %O %O.\n", row[name], filter, lookup(row[name]));
+		if (lookup(row[name])) {
+		    do_send = 1;
+		    continue;
+		}
+	    };
+	    if (e) {
+		werror("SyncDB.MySQL.Table#syncreq(...) failed: %O in %O->has(%O(%O)).\n", master()->describe_backtrace(e), filter, row[name], name);
+	    }
+	}
+
+	if (do_send) rows_to_send[cnt++] = row;
+    }
+
+    werror("SyncDB.MySQL.Table#syncreq(...) will send %d rows: %O.\n",
+	   cnt, rows_to_send[..cnt-1]);
+
+    call_out(cb, 0, 0, rows_to_send[..cnt - 1], @args, this_program::version);
 }
 
 array(mapping)|mapping sanitize_result(array(mapping)|mapping rows) {
