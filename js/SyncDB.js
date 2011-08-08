@@ -757,7 +757,7 @@ SyncDB.Table = UTIL.Base.extend({
 	    return !type.is_hidden && !type.is_automatic;
 	});
 	this.db = db;
-	if (db) db.add_update_callback(this.M(this.update));
+	//if (db) db.add_update_callback(this.M(this.update));
 	//UTIL.log("schema: %o\n", schema);
 	var key = schema.key;
 
@@ -772,11 +772,8 @@ SyncDB.Table = UTIL.Base.extend({
 
 
 		this["select_by_"+field] = this.generate_select(field, type);
-		if (type.is_unique)
-		    this["update_by_"+field] = this.generate_update(field, type);
 		if (type.is_key) {
 		    //UTIL.log("   is key.\n");
-		    this.update_by = this["update_by_"+field];
 		    this.select_by = this["select_by_"+field];
 		    this.remove_by
 		      = this["remove_by_"+field] =
@@ -868,32 +865,14 @@ SyncDB.Table = UTIL.Base.extend({
 	    f(error, rows);
 	}));
     },
-    generate_update : function(name, type) {
-	var update = this.update(name, type);
-	this["local_update_by_"+name] = update;
-	var db = this.db;
-	if (!update) SyncDB.error([ "could not generate update() for %o %o\n", name, type] );
-	return function(key, row, callback) {
-	    if (!callback) callback = SyncDB.setcb;
-	    row[name] = key;
-	    if (db) {
-		// save to local draft table and, erm also:
-		// somehow remember the ID so we can act on it later on
-		db["update_by_"+name](key, row, function(error, row) {
-		    // call function, delete draft
-
-		    if (error) {
-			callback(error, row);
-			return;
-		    }
-
-		    update(key, row, callback);
-		});
-		return;
-	    }
-
-	    update(key, row, callback);
-	};
+    update : function(id, row, callback, orow) {
+	if (this.db) {
+	    this.db.update(id, row, this.M(function(error, _row)) {
+		if (error) {
+		    callback(error, _row);
+		} else this.low_update(id, _row, callback, orow);
+	    });
+	} else return this.low_update(id, row, callback, orow);
     },
     version : function() {
 	return this.config.version();
@@ -1038,15 +1017,13 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
     auto_set : function(row, f) {
 	f(row);
     },
-    update : function(name, type) {
-	return this.M(function(value, row, callback) {
-	    var id = UTIL.get_unique_key(5, this.requests);
-	    row[name] = value;
-	    this.requests[id] = callback;
-	    this.send(new SyncDB.Meteor.Update(id, row));
-	    UTIL.log("METEOR SET.");
-	    return id;
-	});
+    low_update : function(key, row, callback, orow) {
+	var id = UTIL.get_unique_key(5, this.requests);
+	row[this.schema.key] = key;
+	this.requests[id] = callback;
+	this.send(new SyncDB.Meteor.Update(id, row));
+	UTIL.log("METEOR SET.");
+	return id;
     },
     remove : function(name, type) {
 	return this.M(function(value, row, callback) {
@@ -1252,9 +1229,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 			if (err) {
 			    this.low_insert(row, function(err, row) {});
 			} else {
-			    this["local_update_by_"+schema.key](row[schema.key],
-								row,
-								function(err, oldrow) {});
+			    this.low_update(row[schema.key], row, function(err, oldrow) {});
 			}
 		    }));
 
@@ -1265,51 +1240,39 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	    }));
 	}
     },
-	     /*
-    update : function() {
-	// this needs to be generated to update index tables and shit like that
-    },
-    */
     prune : function() { // delete everything
     },
-    // TODO: first, insert data, then put into INDEX!!!!
-    update : function(name, type) {
-	var f = this.M(function(value, row, callback) {
-	    var key = this.config.schema().key;
-	    //UTIL.log("parser: %o, data: %o\n", this.parser, row);
+    low_update : function(id, row, callback, orow) {
+	var key = this.config.schema().key;
+	this.select_by(id, this.M(function(error, row_) {
+	    if (err) {
+		callback(err);
+		UTIL.error("Some unexpected error occured. Sorry.");
+	    }
+
+	    // TODO: check if row.version != orow.version && orow.version == row_.version.
+	    // or rather do this more low level
 	    SyncDB.LS.set(type.get_key(this.name, key, value), this.parser.encode(row).render(),
 			  this.M(function(error) {
 			    if (error) {
 				callback(new SyncDB.Error.Set(this, row));
 			    } else {
+				for (var i in this.I) if (this.I.hasOwnProperty(i)) {
+				    // TODO: != is not very optimal. we should at least
+				    // check.. erm.. use something like type.eq to check that
+				    if (row_[i] != row[i]) {
+					type.index_remove(this.I[i], row_[i], row_[key]);
+					type.index_insert(this.I[i], row[i], row[key]);
+				    }
+				}
 				callback(false, row);
 			    }
 			  }));
-	});
-	if (type.is_indexed || type.is_key) {
-	    return this.M(function(value, row, callback) {
-		var key = this.config.schema().key;
-		if (!row[name]) row[name] = value;
-		this["select_by_" + name](value, this.M(function(err, row_) {
-		    if (err) {
-			UTIL.error("Some unexpected error occured. Sorry.");
-		    }
-		    for (var i in this.I) {
-			type.index_remove(this.I[i], row_[i], row_[key]);
-			if (this.schema.m[i].is_unique || this.I[i].has(row[i]))
-			    type.index_insert(this.I[i], row[i], row[key]);
-		    }
-		    return f(row[key], row, callback);
-		}));
-	    });
-	}
+	    
+	    //for (var i in this.I) if (!row.hasOwnProperty(i)) error?
 
-	SyncDB.error("Could not generate update for %o %o", name, type);
+	}));
     },
-	     /*
-    update : function() {
-    },
-    */
     low_insert : function(row, callback) {
 	var key = this.schema.key;
 
@@ -1756,7 +1719,7 @@ SyncDB.Connector = SyncDB.LocalField.extend({
 		oid = oid[0];
 		// update or delete
 		if (!row) this.online.remove_by(oid, callback);
-		else this.online.update_by(oid, row, callback);
+		else this.online.update(oid, row, callback);
 	    } else this.online.insert(row, callback);
 	}));
     }
