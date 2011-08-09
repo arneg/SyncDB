@@ -94,5 +94,9 @@ object parser() {
 
 object get_filter_parser() {
     //return Serialization.Types.Bloom();
-    return MMP.Utils.Bloom.tBloomFilter(MMP.Utils.Bloom.SHA256);
+#ifdef TEST_RESOLVER
+    return SyncDB.Serialization.BloomFilter(MMP.Utils.Bloom.SHA256);
+#else
+    return master()->resolv("SyncDB.Serialization.BloomFilter")(MMP.Utils.Bloom.SHA256);
+#endif
 }

@@ -44,8 +44,13 @@ object get_parser() {
 }
 
 object get_filter_parser() {
-    return Serialization.Types.RangeSet(fields[0]->get_critbit(),
-					fields[0]->get_parser());
+    return
+#ifdef TEST_RESOLVER
+	SyncDB.Serialization.OverlapsFilter
+#else
+	master()->resolv("SyncDB.Serialization.OverlapsFilter")
+#endif
+	    (fields[0]->get_critbit(), fields[0]->get_parser());
 }
 
 string encode_json() {

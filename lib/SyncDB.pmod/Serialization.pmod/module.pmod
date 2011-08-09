@@ -11,6 +11,38 @@ class Range {
    }
 }
 
+class OverlapsFilter {
+    inherit Serialization.Types.RangeSet;
+
+    int(0..1) can_encode(mixed o) {
+	return objectp(o) && Program.inherits(object_program(o), SyncDB.Filter.Overlaps);
+    }
+
+    mixed decode(Serialization.Atom atom) {
+	return SyncDB.Filter.Overlaps(::decode(atom));
+    }
+
+    Serialization.Atom encode(mixed o) {
+	return ::encode(o->rangefilter);
+    }
+}
+
+class BloomFilter {
+    inherit MMP.Utils.Bloom.tFilter;
+
+    int(0..1) can_encode(mixed o) {
+	return (objectp(o) && Program.inherits(object_program(o), SyncDB.Filter.Bloom));
+    }
+
+    mixed decode(Serialization.Atom atom) {
+	return SyncDB.Filter.Bloom(::decode(atom));
+    }
+
+    Serialization.Atom encode(mixed o) {
+	return ::encode(o->bloom);
+    }
+}
+
 class pSchema {
     inherit Serialization.Types.OneTypedList;
 

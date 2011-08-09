@@ -21,5 +21,9 @@ string encode_json() {
 }
 
 object get_filter_parser() {
-    return MMP.Utils.Bloom.tBloomFilter(MMP.Utils.Bloom.IntHash);
+#ifdef TEST_RESOLVER
+    return SyncDB.Serialization.BloomFilter(MMP.Utils.Bloom.IntHash);
+#else
+    return master()->resolv("SyncDB.Serialization.BloomFilter")(MMP.Utils.Bloom.IntHash);
+#endif
 }
