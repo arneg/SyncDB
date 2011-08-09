@@ -867,11 +867,11 @@ SyncDB.Table = UTIL.Base.extend({
     },
     update : function(id, row, callback, orow) {
 	if (this.db) {
-	    this.db.update(id, row, this.M(function(error, _row)) {
+	    this.db.update(id, row, this.M(function(error, row_) {
 		if (error) {
-		    callback(error, _row);
-		} else this.low_update(id, _row, callback, orow);
-	    });
+		    callback(error, row_);
+		} else this.low_update(id, row_, callback, orow);
+	    }));
 	} else return this.low_update(id, row, callback, orow);
     },
     version : function() {
@@ -1218,6 +1218,8 @@ SyncDB.LocalTable = SyncDB.Table.extend({
     do_on_succ : function(schema, db) {
 	if (db) {
 	    db.request_sync(this.version(), this.get_filters(), UTIL.make_method(this, function(version, rows) {
+		// TODO: this should be triggered on completion of all updates, otherwise
+		// something might fail and we still believe that we are up to date
 		this.config.version(version);
 
 		for (var i = 0; i < rows.length; i++) {
@@ -1243,16 +1245,18 @@ SyncDB.LocalTable = SyncDB.Table.extend({
     prune : function() { // delete everything
     },
     low_update : function(id, row, callback, orow) {
-	var key = this.config.schema().key;
+	var type = this.config.schema().id;
+	var key = type.name;
+
 	this.select_by(id, this.M(function(error, row_) {
-	    if (err) {
-		callback(err);
+	    if (error) {
+		callback(error);
 		UTIL.error("Some unexpected error occured. Sorry.");
 	    }
 
 	    // TODO: check if row.version != orow.version && orow.version == row_.version.
 	    // or rather do this more low level
-	    SyncDB.LS.set(type.get_key(this.name, key, value), this.parser.encode(row).render(),
+	    SyncDB.LS.set(type.get_key(this.name, key, row[key]), this.parser.encode(row).render(),
 			  this.M(function(error) {
 			    if (error) {
 				callback(new SyncDB.Error.Set(this, row));
