@@ -1,4 +1,3 @@
-inherit ADT.CritBit.Range : range;
 inherit .Vector : base;
 
 void create(string name, object from, object to, SyncDB.Flags.Base ... flags) {
@@ -19,7 +18,7 @@ mixed `b() {
 mapping encode_sql(string table, mapping row, void|mapping new) {
     if (!new) new = ([]);
     if (has_index(row, name)) {
-	SyncDB.Interval i = row[name];
+	ADT.Interval i = row[name];
 	mapping t = row + ([ name : ({ i->start, i->stop }) ]);
 	return ::encode_sql(table, t, new);
     }
@@ -30,7 +29,7 @@ mixed decode_sql(string table, mapping row, void|mapping new) {
     mixed v = ::decode_sql(table, row);
 
     if (arrayp(v)) {
-	v = SyncDB.Interval(@v);
+	v = ADT.Interval(@v);
 	if (new) new[name] = v;	
     }
     return v;

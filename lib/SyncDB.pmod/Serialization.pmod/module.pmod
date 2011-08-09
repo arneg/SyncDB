@@ -7,7 +7,7 @@ class Range {
    inherit Serialization.Types.Tuple;
 
    void create(object type) {
-       ::create("_range", SyncDB.Interval, type, type);
+       ::create("_range", ADT.Interval, type, type);
    }
 }
 
