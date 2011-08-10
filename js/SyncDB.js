@@ -1525,6 +1525,12 @@ SyncDB.Types.String = SyncDB.Types.Filterable.extend({
 	return new UTIL.SHA256.Hash();
     }
 });
+SyncDB.Types.Image = SyncDB.Types.Base.extend({
+    parser : function() {
+	return new serialization.Image();
+    },
+    toString : function() { return "Image"; }
+});
 SyncDB.Types.Vector = SyncDB.Types.Base.extend({
     // ideally this would somehow use inheritance, but I like
     // the idea that its inside the prototype with easy lookup
