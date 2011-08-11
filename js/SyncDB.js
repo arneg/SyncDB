@@ -768,6 +768,8 @@ SyncDB.Table = UTIL.Base.extend({
 	    return !type.is_hidden && !type.is_automatic;
 	});
 	this.db = db;
+	this.ready_ea = new UTIL.EventAggregator();
+	UTIL.call_later(this.ready_ea.start, this.ready_ea);
 	//if (db) db.add_update_callback(this.M(this.update));
 	//UTIL.log("schema: %o\n", schema);
 	var key = schema.key;
@@ -793,6 +795,9 @@ SyncDB.Table = UTIL.Base.extend({
 
 	    }
 	}
+    },
+    ready : function(f) {
+	this.ready_ea.ready(f);
     },
     get_version : function() {},
     // I am not sure what this thing was supposed to do.
@@ -1066,7 +1071,10 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 SyncDB.LocalTable = SyncDB.Table.extend({
     constructor : function(name, schema, db) {
 	var done = 3;
-	(this.config = new SyncDB.TableConfig("_syncdb_"+name)).get(this.M(function() {
+	this.config = new SyncDB.TableConfig("_syncdb_"+name);
+	this.base(name, schema, db);
+	this.config.get(this.ready_ea.get_cb());
+	this.ready(this.M(function() {
 	    if (this.config.schema().hashCode() != schema.hashCode()) {
 		UTIL.log("SCHEMA changed. cleaning local databse %o != %o (new)", this.config.schema(), schema);
 		UTIL.log("%o vs %o", this.config.schema().hashCode(), schema.hashCode());
@@ -1075,12 +1083,8 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	    } else UTIL.log("SCHEMA unchanged.");
 
 	    this.config.schema(schema);
-	    this.sync(this.config.version());
-	    if (!--done) {
-		this.do_on_succ(schema, db);
-	    }
+	    //this.sync(this.config.version());
 	}));
-	this.base(name, schema, db);
 	this.I = {};
 	for (var i = 0; i < schema.fields.length; i++) {
 	    var type = schema.fields[i];
@@ -1088,36 +1092,10 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 		var field = type.name;
 		//UTIL.log("generating index for %s", field);
 		this.I[field] = this.index("_syncdb_"+this.name+"_I"+field, type, schema.m[schema.key]);
+		SyncDB.LocalField.prototype.get.call(this.I[field], this.ready_ea.get_cb());
 		//UTIL.log("INDEX: %o", this.I[field]);
 	    }
 	}
-	this.get_filters(UTIL.make_method(this, function() {
-	    if (!--done) {
-		this.do_on_succ(schema, db);
-	    }
-	}));
-	if (!--done) {
-	    this.do_on_succ(schema, db);
-	}
-    },
-    get_filters : function(cb) {
-	var again = UTIL.make_method(this, function() {
-	    var m = {};
-
-
-	    for (var field in this.I) if (this.I.hasOwnProperty(field)) {
-		if (!this.I[field].value) {
-		    if (cb) UTIL.log("waiting:");
-		    if (cb) window.setTimeout(again, 20);
-		    return;
-		}
-		m[field] = this.I[field].get_filter();
-	    }
-	    if (cb) cb(m);
-	    return m;
-	});
-
-	return again();
     },
     version : function() {
 	return this.config.version();
@@ -1226,33 +1204,6 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 
 	return callback(false, []);
     },
-    do_on_succ : function(schema, db) {
-	if (db) {
-	    db.request_sync(this.version(), this.get_filters(), UTIL.make_method(this, function(version, rows) {
-		// TODO: this should be triggered on completion of all updates, otherwise
-		// something might fail and we still believe that we are up to date
-		this.config.version(version);
-
-		for (var i = 0; i < rows.length; i++) {
-		    var row = rows[i];
-		    if (!row[schema.key]) console.log("error in row %o.", row);
-		    this.low_select(schema.id.Equal(row[schema.key]), this.M(function(err, oldrow) {
-			// check if version is better than before!
-
-			if (err) {
-			    this.low_insert(row, function(err, row) {});
-			} else {
-			    this.low_update(row[schema.key], row, function(err, oldrow) {});
-			}
-		    }));
-
-		}
-		if (this.sync_callback) {
-		    this.sync_callback(version, rows);
-		}
-	    }));
-	}
-    },
     prune : function() { // delete everything
     },
     low_update : function(id, row, callback, orow) {
@@ -1303,7 +1254,61 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 		      }));
     }
 });
-SyncDB.CachedTable = SyncDB.LocalTable.extend({
+SyncDB.SyncedTableBase = SyncDB.LocalTable.extend({
+    constructor : function() {
+	this.base.apply(this, Array.prototype.slice.apply(arguments));
+	this.sync_ea = new UTIL.EventAggregator();
+    },
+    synced : function(f) {
+	this.sync_ea.ready(f);
+    },
+    sync : function(version, rows) {
+	this.synced(this.M(function() {
+	    this.config.version(version);
+	}));
+
+	for (var i = 0; i < rows.length; i++) {
+	    var row = rows[i];
+	    if (!row[schema.key]) console.log("error in row %o.", row);
+	    this.low_select(schema.id.Equal(row[schema.key]), this.M(function(cb, err, oldrow) {
+
+		if (err) {
+		    this.low_insert(row, cb);
+		} else {
+		    this.low_update(row[schema.key], row, cb);
+		}
+	    }, this.sync_ea.get_cb()));
+	}
+	if (this.sync_callback) {
+	    this.sync_callback(version, rows);
+	}
+	this.sync_ea.start();
+    }
+});
+SyncDB.SyncedTable = SyncDB.SyncedTableBase.extend({
+    constructor : function() {
+	this.base.apply(this, Array.prototype.slice.apply(arguments));
+	if (this.db) {
+	    this.ready(this.M(function() {
+		this.db.request_sync(this.version(), 0, UTIL.make_method(this, this.sync));
+	    }));
+	}
+    }
+});
+SyncDB.CachedTable = SyncDB.SyncedTableBase.extend({
+    constructor : function() {
+	this.base.apply(this, Array.prototype.slice.apply(arguments));
+	if (this.db) {
+	    this.ready(this.M(function() {
+		var m = {};
+
+		for (var field in this.I) if (this.I.hasOwnProperty(field)) {
+		    m[field] = this.I[field].get_filter();
+		}
+		this.db.request_sync(this.version(), m, UTIL.make_method(this, this.sync));
+	    }));
+	}
+    },
     low_select : function(filter, callback) {
 	this.base(filter, this.M(function(error, rows) {
 	    //UTIL.log("localtable says: %o, %o", error, rows);
@@ -1414,6 +1419,7 @@ SyncDB.Serialization.Flag = serialization.generate_structs({
 });
 /** @namespace */
 SyncDB.Types = {
+    // certain types are not really indexable, so this might be split
     Base : UTIL.Base.extend({
 	_types : {
 	    name : new serialization.Method(),
