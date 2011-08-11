@@ -1,7 +1,8 @@
 // vim:foldmethod=syntax
 UTIL.Base = Base.extend({
-    M : function(f) {
-	return UTIL.make_method(this, f);
+    M : function() {
+	var l = [ this ].concat(Array.prototype.slice.call(arguments));
+	return UTIL.make_method.apply(UTIL, l);
     }
 });
 /** @namespace */
@@ -439,13 +440,20 @@ SyncDB.LocalField = UTIL.Base.extend({
     },
     get : function(cb) {
 	if (!cb) UTIL.error("CallBack missing.");
+	cb = UTIL.safe(cb);
 
 	if (!this.value) { // cache this, we will fetch
+	    if (this.get_queue) {
+		this.get_queue.push(cb);
+		return;
+	    }
+	    this.get_queue = [ cb ];
 	    SyncDB.LS.get(this.name, this.M(function(err, value) {
 		//UTIL.log("got %o %o", err, value);
+		var ret;
 		if (err) {
 		    UTIL.log("error: %o");
-		    cb(undefined);
+		    ret = undefined;
 		} else {
 		    if (UTIL.stringp(value))
 			this.value = this.parser.decode(serialization.parse_atom(value));
@@ -455,8 +463,11 @@ SyncDB.LocalField = UTIL.Base.extend({
 			delete this.def;
 			this.sync();
 		    }
-		    cb(this.value);
+		    ret = this.value;
 		}
+		var q = this.get_queue;
+		delete this.get_queue;
+		for (var i = 0; i < q.length; i++) q[i](ret);
 	    }));
 	    return this;
 	}
