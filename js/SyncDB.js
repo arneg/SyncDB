@@ -1290,7 +1290,7 @@ SyncDB.SyncedTable = SyncDB.SyncedTableBase.extend({
 	this.base.apply(this, Array.prototype.slice.apply(arguments));
 	if (this.db) {
 	    this.ready(this.M(function() {
-		this.db.request_sync(this.version(), 0, UTIL.make_method(this, this.sync));
+		this.db.request_sync(this.version(), {}, UTIL.make_method(this, this.sync));
 	    }));
 	}
     }
