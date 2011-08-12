@@ -546,32 +546,38 @@ void syncreq(SyncDB.Version version, mapping filter, function cb, mixed ... args
     }
 
     rows = map(query(sprintf(select_sql, t*" OR ")), sanitize_result);
-    rows_to_send = allocate(sizeof(rows));
 
-    foreach (rows;; mapping row) {
-	int(0..1) do_send;
+    if (sizeof(filter)) {
+	rows_to_send = allocate(sizeof(rows));
 
-	foreach (filter; string name; object filter) {
-	    function lookup = filter->has || filter->`[];
-	    mixed e = catch {
-		werror("syncreq: %O %O %O.\n", row[name], filter, lookup(row[name]));
-		if (lookup(row[name])) {
-		    do_send = 1;
-		    continue;
+	foreach (rows;; mapping row) {
+	    int(0..1) do_send;
+
+	    foreach (filter; string name; object filter) {
+		function lookup = filter->has || filter->`[];
+		mixed e = catch {
+		    werror("syncreq: %O %O %O.\n", row[name], filter, lookup(row[name]));
+		    if (lookup(row[name])) {
+			do_send = 1;
+			continue;
+		    }
+		};
+		if (e) {
+		    werror("SyncDB.MySQL.Table#syncreq(...) failed: %O in %O->has(%O(%O)).\n", master()->describe_backtrace(e), filter, row[name], name);
 		}
-	    };
-	    if (e) {
-		werror("SyncDB.MySQL.Table#syncreq(...) failed: %O in %O->has(%O(%O)).\n", master()->describe_backtrace(e), filter, row[name], name);
 	    }
-	}
 
-	if (do_send) rows_to_send[cnt++] = row;
+	    if (do_send) rows_to_send[cnt++] = row;
+	}
+	rows_to_send = rows_to_send[.. cnt-1];
+    } else {
+	rows_to_send = rows;
     }
 
-    werror("SyncDB.MySQL.Table#syncreq(...) will send %d rows: %O.\n",
-	   cnt, rows_to_send[..cnt-1]);
+    werror("SyncDB.MySQL.Table#syncreq(...) will send %d rows.\n",
+	   sizeof(rows_to_send));
 
-    call_out(cb, 0, 0, rows_to_send[..cnt - 1], @args, this_program::version);
+    call_out(cb, 0, 0, rows_to_send, @args, this_program::version);
 }
 
 array(mapping)|mapping sanitize_result(array(mapping)|mapping rows) {
