@@ -1665,6 +1665,7 @@ SyncDB.Serialization.Type = serialization.generate_structs({
     _range : SyncDB.Types.Range,
     _vector : SyncDB.Types.Vector,
     _date : SyncDB.Types.Date,
+    _image : SyncDB.Types.Image
 });
 SyncDB.Serialization.Schema = serialization.Array.extend({
     constructor : function() {
