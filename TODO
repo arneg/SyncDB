@@ -93,5 +93,10 @@ Schema extension beyong string
 > my_array : new SyncDB.Types.Array(new SyncDB.Types.String())
 error: TypeError: Result of expression 'SyncDB.Types.Array' [undefined] is not a constructor.
 
-
+BROWSER ISSUES ====
+situation: tried to fill db with 39000 rows. did not work
+exactly. sqlite db file grew up to 3.8m. deleted all rows from
+sqlite, started again. sqlite file size did not decrease in the
+process, after fetching of 390000 rows SELECT COUNT(*) FROM sLsA
+returned 784. WHAT IS GOING ON?
 
