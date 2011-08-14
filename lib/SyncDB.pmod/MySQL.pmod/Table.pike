@@ -384,6 +384,13 @@ void create(string dbname, Sql.Sql con, SyncDB.Schema schema, string table) {
     update_sql += "%s";
     select_sql += " WHERE 1=1 AND %s";
     version = SyncDB.Version(sizeof(tables) + 1);
+
+    query("LOCK TABLES %s WRITE;", table_names() * " WRITE, ");
+    foreach (table_names(); int i; string name) {
+	array r = query("SELECT MAX(version) AS v FROM %s WHERE 1;", name);
+	version[i] = sizeof(r) ? (int)r[0]->v : 0;
+    }
+    query("UNLOCK TABLES;");
 }
 
 
