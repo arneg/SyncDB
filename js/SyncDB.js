@@ -234,8 +234,8 @@ if (UTIL.App.has_local_storage) {
 	set : function(key, value, cb) {
 	    try {
 		localStorage[key] = value;
-		cb(false, value);
-		//UTIL.call_later(cb, null, false, value);
+		//cb(false, value);
+		UTIL.call_later(cb, null, false, value);
 	    } catch (err) {
 		cb(err);
 		//UTIL.call_later(cb, null, err);
@@ -246,8 +246,8 @@ if (UTIL.App.has_local_storage) {
 	    var value;
 	    try {
 		value = localStorage[key];
-		cb(false, value);
-		//UTIL.call_later(cb, null, false, value);
+		//cb(false, value);
+		UTIL.call_later(cb, null, false, value);
 	    } catch(err) {
 		cb(err);
 		//UTIL.call_later(cb, null, err);
@@ -258,8 +258,8 @@ if (UTIL.App.has_local_storage) {
 	    try {
 		var value = localStorage[key];
 		delete localStorage[key];
-		cb(false, value);
-		//UTIL.call_later(cb, null, false, value);
+		//cb(false, value);
+		UTIL.call_later(cb, null, false, value);
 	    } catch (err) {
 		cb(err);
 		//UTIL.call_later(cb, null, err);
