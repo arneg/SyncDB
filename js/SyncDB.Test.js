@@ -2,7 +2,7 @@ SyncDB.Test = {
     low_run : function(tests, i, log, cb, db) {
 	if (i >= tests.length) return cb(false);
 
-	db.config.get(UTIL.make_method(this, function() {
+	db.ready(UTIL.make_method(this, function() {
 	    var o = new SyncDB.Test[tests[i]](db);
 
 	    console.log("clearing db.\n");
@@ -206,4 +206,39 @@ SyncDB.Test.Connector = SyncDB.Test.Simple.extend({
 	}
 	this.rows = [];
     }
+});
+SyncDB.Test.LocalTable = UTIL.Test.extend({
+    constructor : function(n) {
+	//SyncDB.LS.clear(function(){});
+	this.n = n
+	this.schema = new SyncDB.Schema(
+	   new SyncDB.Types.Integer("id", new SyncDB.Flags.Key()),
+	   new SyncDB.Types.String("somedata", new SyncDB.Flags.Index())
+        );
+	this.db = new SyncDB.LocalTable("test", this.schema);
+	UTIL.log("db: %o, n: ", this.db, this.n);
+    },
+    test_0_insert : function() {
+	this.c = 0;
+	var cb = UTIL.make_method(this, function(error, row) {
+	    if (error) {
+		return this.error(row);
+	    }
+	    if (this.c >= this.n) return this.success();
+	    this.db.insert({ id : this.c++, somedata : UTIL.nchars(2342, 20) }, cb);
+	});
+	cb(false);
+    },
+    test_1_select : function() {
+	this.c = 0;
+	var cb = UTIL.make_method(this, function(error, row) {
+	    // TODO: we should check if the data comes out right!
+	    if (error) {
+		return this.error(row);
+	    }
+	    if (this.c >= this.n) return this.success();
+	    this.db.select_by(this.c++, cb);
+	});
+	cb(false);
+    },
 });
