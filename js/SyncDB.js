@@ -713,7 +713,7 @@ SyncDB.TableConfig = SyncDB.LocalField.extend({
 			    schema : new SyncDB.Serialization.Schema()
 			}),
 		  {
-		    version : ({ }),
+		    version : [],
 		    schema : new SyncDB.Schema()
 		  });
     },
