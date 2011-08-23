@@ -211,8 +211,11 @@ SyncDB.KeyValueMapping = UTIL.Base.extend({
 	//UTIL.call_later(cb, null, false, value);
     },
     get : function(key, cb) {
-	cb(false, this.m[key]);
-	//UTIL.call_later(cb, null, false, this.m[key]);
+	if (UTIL.arrayp(key)) {
+	    for (var i = 0; i < key.length; i++) key[i] = this.m[key[i]];
+	} else key = this.m[key];
+	//cb(false, key);
+	UTIL.call_later(cb, null, false, key);
     },
     remove : function(key, cb) {
 	var v = this.m[key];
@@ -243,11 +246,14 @@ if (UTIL.App.has_local_storage) {
 	},
 	is_permanent : true,
 	get : function(key, cb) {
-	    var value;
 	    try {
-		value = localStorage[key];
+		if (UTIL.arrayp(key)) {
+		    for (var i = 0; i < key.length; i++)
+			key[i] = localStorage[key[i]];
+		} else 
+		    key = localStorage[key];
 		//cb(false, value);
-		UTIL.call_later(cb, null, false, value);
+		UTIL.call_later(cb, null, false, key);
 	    } catch(err) {
 		cb(err);
 		//UTIL.call_later(cb, null, err);
@@ -310,21 +316,28 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 	},
 	is_permanent : true,
 	q : [],
-	get : function(val, cb) {
+	get : function(key, cb) {
 	    if (this.q) {
-		this.q.push(function() { this.get(val, cb); });
+		this.q.push(function() { this.get(key, cb); });
 	    } else {
 		cb = UTIL.safe(cb);
 		this.q = [];
 		this.db.transaction(this.M(function (tx) {
-		    tx.executeSql("SELECT * FROM sLsA WHERE key=?;", [val], this.M(function(tx, data) {
-			if (!data.rows.length) {
-			    cb(false, undefined);
-			} else if (data.rows.length == 1) {
-			    cb(false, this.decode(data.rows.item(0).value));
-			} else {
-			    // FUCKUP
-			}
+		    var i, arr = UTIL.arrayp(key);
+		    var query = "SELECT * FROM sLsA WHERE ";
+		    if (arr) {
+			var t = new Array(key.length);
+			for (i = 0; i < t.length; i++) t[i] = "key=?";
+			query += t.join(" OR ") + ";";
+		    } else query += "key=?;";
+
+		    tx.executeSql(query, arr ? key : [key], this.M(function(tx, data) {
+			var m = {};
+			for (i = 0; i < data.rows.length; i++) m[data.rows.item(i).key] = this.decode(data.rows.item(i).value);
+			if (arr) {
+			    for (i = 0; i < key.length; i++) key[i] = m[key[i]];
+			} else key = m[key];
+			cb(false, key);
 			this.replay();
 		    }), this.M(function(tx, err) {
 			UTIL.log("err: %o", err);
