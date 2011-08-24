@@ -81,7 +81,7 @@ class Overlaps(string field, Serialization.Atom value) {
 class Lt(string field, Serialization.Atom value) {
     string encode_sql(object table) {
 	object type = table->schema[field];
-	return sprintf("%s < %s", table->get_sql_name(field), type->encode_sql_value(value));
+	return sprintf("%s < %s", table->get_sql_name(field), type->encode_sql_value(type->parser()->decode(value)));
     }
     string _sprint(int type) {
 	return sprintf("Lt(%O)", field);
@@ -91,7 +91,7 @@ class Lt(string field, Serialization.Atom value) {
 class Le(string field, Serialization.Atom value) {
     string encode_sql(object table) {
 	object type = table->schema[field];
-	return sprintf("%s <= %s", table->get_sql_name(field), type->encode_sql_value(value));
+	return sprintf("%s <= %s", table->get_sql_name(field), type->encode_sql_value(type->parser->decode(value)));
     }
     string _sprintf(int type) {
 	return sprintf("Le(%O)", field);
@@ -101,7 +101,7 @@ class Le(string field, Serialization.Atom value) {
 class Gt(string field, Serialization.Atom value) {
     string encode_sql(object table) {
 	object type = table->schema[field];
-	return sprintf("%s > %s", table->get_sql_name(field), type->encode_sql_value(value));
+	return sprintf("%s > %s", table->get_sql_name(field), type->encode_sql_value(type->parser()->decode(value)));
     }
     string _sprintf(int type) {
 	return sprintf("Gt(%O)", field);
@@ -111,7 +111,7 @@ class Gt(string field, Serialization.Atom value) {
 class Ge(string field, Serialization.Atom value) {
     string encode_sql(object table) {
 	object type = table->schema[field];
-	return sprintf("%s >= %s", table->get_sql_name(field), type->encode_sql_value(value));
+	return sprintf("%s >= %s", table->get_sql_name(field), type->encode_sql_value(type->parser()->decode(value)));
     }
     string _sprintf(int type) {
 	return sprintf("Ge(%O)", field);

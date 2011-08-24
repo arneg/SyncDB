@@ -675,7 +675,7 @@ SyncDB.CritBitIndex = SyncDB.LocalField.extend({
 	var node = this.value.m.lt(val);
 	while (node && node.value < val) {
 	    r.push(node.value);
-	    node = node.previous();
+	    node = node.backward();
 	}
 	if (!r.length) throw(new SyncDB.Error.NotFound());
 	return r;
@@ -685,7 +685,7 @@ SyncDB.CritBitIndex = SyncDB.LocalField.extend({
 	var node = this.value.m.le(val);
 	while (node && node.value <= val) {
 	    r.push(node.value);
-	    node = node.previous();
+	    node = node.backward();
 	}
 	if (!r.length) throw(new SyncDB.Error.NotFound());
 	return r;
@@ -695,7 +695,7 @@ SyncDB.CritBitIndex = SyncDB.LocalField.extend({
 	var node = this.value.m.gt(val);
 	while (node && node.value > val) {
 	    r.push(node.value);
-	    node = node.next();
+	    node = node.forward();
 	}
 	if (!r.length) throw(new SyncDB.Error.NotFound());
 	return r;
@@ -705,7 +705,7 @@ SyncDB.CritBitIndex = SyncDB.LocalField.extend({
 	var node = this.value.m.ge(val);
 	while (node && node.value >= val) {
 	    r.push(node.value);
-	    node = node.next();
+	    node = node.forward();
 	}
 	if (!r.length) throw(new SyncDB.Error.NotFound());
     }
@@ -1693,6 +1693,18 @@ SyncDB.Types.Integer = SyncDB.Types.Filterable.extend({
 	else //if (this.is_indexed)
 	    //return new SyncDB.MultiIndex(name, this, key_name);
 	    return this.base.apply(this, Array.prototype.slice.call(arguments));
+    },
+    Lt : function(val) {
+	return new SyncDB.Filter.Lt(this.name, this.parser().encode(val));
+    },
+    Le : function(val) {
+	return new SyncDB.Filter.Le(this.name, this.parser().encode(val));
+    },
+    Gt : function(val) {
+	return new SyncDB.Filter.Gt(this.name, this.parser().encode(val));
+    },
+    Ge : function(val) {
+	return new SyncDB.Filter.Ge(this.name, this.parser().encode(val));
     }
 });
 SyncDB.Types.String = SyncDB.Types.Filterable.extend({
@@ -1761,18 +1773,6 @@ SyncDB.Types.Range = SyncDB.Types.Vector.extend({
     //RangeSet : // TODO
     Overlaps : function(range) {
 	return new SyncDB.Filter.Overlaps(this.name, this.parser().encode(range));
-    },
-    Lt : function(val) {
-	return new SyncDB.Filter.Lt(this.name, this.parser().encode(val));
-    },
-    Le : function(val) {
-	return new SyncDB.Filter.Le(this.name, this.parser().encode(val));
-    },
-    Gt : function(val) {
-	return new SyncDB.Filter.Gt(this.name, this.parser().encode(val));
-    },
-    Ge : function(val) {
-	return new SyncDB.Filter.Ge(this.name, this.parser().encode(val));
     }
 });
 SyncDB.Date = function() {
