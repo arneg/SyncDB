@@ -93,6 +93,10 @@ void create(mapping|void overwrites) {
 	"_true" : SyncDB.MySQL.Filter.True("foo"),
 	"_false" : SyncDB.MySQL.Filter.False("foo"),
 	"_overlaps" : SyncDB.MySQL.Filter.Overlaps("foo", Serialization.Atom("_foo", "bar")),
+	"_le" : SyncDB.MySQL.Filter.Le("foo", Serialization.Atom("_foo", "bar")),
+	"_lt" : SyncDB.MySQL.Filter.Lt("foo", Serialization.Atom("_foo", "bar")),
+	"_ge" : SyncDB.MySQL.Filter.Ge("foo", Serialization.Atom("_foo", "bar")),
+	"_gt" : SyncDB.MySQL.Filter.Gt("foo", Serialization.Atom("_foo", "bar")),
     ]), lambda(object o, string s) {
 	if (s == "filters") return black_magic;
 	if (s == "value") return Serialization.Types.Atom();

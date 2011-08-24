@@ -190,6 +190,42 @@ SyncDB.Filter.Overlaps = SyncDB.Filter.Equal.extend({
 	return index.overlaps(type.parser().decode(this.value));
     }
 });
+SyncDB.Filter.Gt = SyncDB.Filter.Equal.extend({
+    index_lookup : function(table) {
+	var type = table.schema.m[this.field];
+	var index = table.I[this.field];
+	if (!index || !index.lookup_gt)
+	    throw new SyncDB.Error.NotFound();
+	return index.lookup_gt(type.parser().decode(this.value));
+    }
+});
+SyncDB.Filter.Ge = SyncDB.Filter.Equal.extend({
+    index_lookup : function(table) {
+	var type = table.schema.m[this.field];
+	var index = table.I[this.field];
+	if (!index || !index.lookup_ge)
+	    throw new SyncDB.Error.NotFound();
+	return index.lookup_ge(type.parser().decode(this.value));
+    }
+});
+SyncDB.Filter.Lt = SyncDB.Filter.Equal.extend({
+    index_lookup : function(table) {
+	var type = table.schema.m[this.field];
+	var index = table.I[this.field];
+	if (!index || !index.lookup_lt)
+	    throw new SyncDB.Error.NotFound();
+	return index.lookup_lt(type.parser().decode(this.value));
+    }
+});
+SyncDB.Filter.Le = SyncDB.Filter.Equal.extend({
+    index_lookup : function(table) {
+	var type = table.schema.m[this.field];
+	var index = table.I[this.field];
+	if (!index || !index.lookup_le)
+	    throw new SyncDB.Error.NotFound();
+	return index.lookup_le(type.parser().decode(this.value));
+    }
+});
 /** @namespace */
 SyncDB.Serialization = {};
 SyncDB.Serialization.Filter = serialization.generate_structs({
@@ -198,7 +234,11 @@ SyncDB.Serialization.Filter = serialization.generate_structs({
     _equal : SyncDB.Filter.Equal,
     _true : SyncDB.Filter.True,
     _false : SyncDB.Filter.False,
-    _overlaps : SyncDB.Filter.Overlaps
+    _overlaps : SyncDB.Filter.Overlaps,
+    _le : SyncDB.Filter.Le,
+    _ge : SyncDB.Filter.Ge,
+    _lt : SyncDB.Filter.Lt,
+    _gt : SyncDB.Filter.Gt
 });
 SyncDB.KeyValueMapping = UTIL.Base.extend({
     constructor : function() {
@@ -560,6 +600,114 @@ SyncDB.RangeIndex = SyncDB.LocalField.extend({
     },
     remove : function(index) {
 	UTIL.log("remove not yet supported here!");
+    }
+});
+SyncDB.CritBitIndex = SyncDB.LocalField.extend({
+    constructor : function(name, tkey, tid) {
+	this.tkey = tkey;
+	this.type = tid;
+	this.base(name, new serialization.Struct("_index", {
+		filter : tkey.filter_parser(),
+		m : new serialization.CritBit(tkey.parser(), tid.parser()), 
+		removed : new serialization.Integer()
+	    }), {
+		m : new CritBit.Tree(),
+		//filter : new UTIL.Bloom.Filter(32, 0.001, tkey.hash()),
+		filter : tkey.filter(),
+		removed : 0
+	});
+	console.log("done3");
+    },
+    set : function(index, id) {
+	if (!this.value)
+	    SyncDB.error("You are too early!!");
+	this.value.m[index] = id;
+	this.value.m.insert(index, id);
+	if (this.value.filter.set(index))
+	    this.regen_filter();
+	// adding something can be done cheaply, by appending the tuple
+	this.sync();
+    },
+    get : function(index) {
+	if (!this.value)
+	    SyncDB.error("You are too early!!");
+	if (!this.has(index)) throw(new SyncDB.Error.NotFound());
+	return [ this.value.m.index(index) ];
+    },
+    has : function(index) {
+	return this.value.m.index(index) !== null;
+    },
+    regen_filter : function() {
+	// decide when to regenerate here. Lets say, we 
+	var p = this.value.filter.prob();
+	if (p > 0.002) {
+	    UTIL.log("probability is bad: %f. regenerating filter.", p);
+	    var n = this.value.m.length();
+	    var filter = new UTIL.Bloom.Filter(n, 0.001, this.tkey.hash());
+	    this.value.m.foreach(function(key, v) {
+		filter.set(key);
+	    });
+	    UTIL.log("new probability is %f. n: %d, m: %d", filter.prob(), filter.n, filter.table_mag);
+	    this.value.filter = filter;
+	    this.sync();
+	} else UTIL.log("probability is still good enough: %f", p);
+    },
+    remove : function(index, value) {
+	// keep track of deletes, so we know how bad our filter got.
+	// regenerate as needed.
+	this.value.m.remove(index);
+	if (this.value.filter.remove(index)) {
+	    this.regen_filter();
+	    this.sync();
+	}
+    },
+    get_filter : function() {
+	return this.value.filter;
+    },
+    toString : function() {
+	return "MappingIndex("+this.name+","+this.type+")";
+    },
+    values : function() {
+	return this.value.m.values();
+    },
+    lookup_lt : function(val) {
+	var r = [];
+	var node = this.value.m.lt(val);
+	while (node && node.value < val) {
+	    r.push(node.value);
+	    node = node.previous();
+	}
+	if (!r.length) throw(new SyncDB.Error.NotFound());
+	return r;
+    },
+    lookup_le : function(val) {
+	var r = [];
+	var node = this.value.m.le(val);
+	while (node && node.value <= val) {
+	    r.push(node.value);
+	    node = node.previous();
+	}
+	if (!r.length) throw(new SyncDB.Error.NotFound());
+	return r;
+    },
+    lookup_gt : function(val) {
+	var r = [];
+	var node = this.value.m.gt(val);
+	while (node && node.value > val) {
+	    r.push(node.value);
+	    node = node.next();
+	}
+	if (!r.length) throw(new SyncDB.Error.NotFound());
+	return r;
+    },
+    lookup_ge : function(val) {
+	var r = [];
+	var node = this.value.m.ge(val);
+	while (node && node.value >= val) {
+	    r.push(node.value);
+	    node = node.next();
+	}
+	if (!r.length) throw(new SyncDB.Error.NotFound());
     }
 });
 SyncDB.MappingIndex = SyncDB.LocalField.extend({
@@ -1539,8 +1687,12 @@ SyncDB.Types.Integer = SyncDB.Types.Filterable.extend({
     hash : function() {
 	return new UTIL.Int.Hash();
     },
-    get_index : function() {
-	return this.base.apply(this, Array.prototype.slice.call(arguments));
+    get_index : function(name, field_type, key_name) {
+	if (this.is_unique || this.is_key)
+	    return new SyncDB.CritBitIndex(name, this, key_name);
+	else //if (this.is_indexed)
+	    //return new SyncDB.MultiIndex(name, this, key_name);
+	    return this.base.apply(this, Array.prototype.slice.call(arguments));
     }
 });
 SyncDB.Types.String = SyncDB.Types.Filterable.extend({
@@ -1609,6 +1761,18 @@ SyncDB.Types.Range = SyncDB.Types.Vector.extend({
     //RangeSet : // TODO
     Overlaps : function(range) {
 	return new SyncDB.Filter.Overlaps(this.name, this.parser().encode(range));
+    },
+    Lt : function(val) {
+	return new SyncDB.Filter.Lt(this.name, this.parser().encode(val));
+    },
+    Le : function(val) {
+	return new SyncDB.Filter.Le(this.name, this.parser().encode(val));
+    },
+    Gt : function(val) {
+	return new SyncDB.Filter.Gt(this.name, this.parser().encode(val));
+    },
+    Ge : function(val) {
+	return new SyncDB.Filter.Ge(this.name, this.parser().encode(val));
     }
 });
 SyncDB.Date = function() {
