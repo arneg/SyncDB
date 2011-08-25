@@ -708,6 +708,7 @@ SyncDB.CritBitIndex = SyncDB.LocalField.extend({
 	    node = node.forward();
 	}
 	if (!r.length) throw(new SyncDB.Error.NotFound());
+	return r;
     }
 });
 SyncDB.MappingIndex = SyncDB.LocalField.extend({
