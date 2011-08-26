@@ -59,19 +59,60 @@ class False(string field) {
     }
 }
 
-class Overlaps(string field, Serialization.Atom value) {
+class RangeLookup(string field, Serialization.Atom value) {
+
+    object parser(object table) {
+	return master()->resolv("SyncDB.Serialization.Range")(start(table)->parser(), stop(table)->parser());
+    }
+
+    object start(object table) {
+	object type = table->schema[field];
+	if (type->fields && arrayp(type->fields)) {
+	    return type->fields[0];
+	} else return type;
+    }
+
+    object stop(object table) {
+	object type = table->schema[field];
+	if (type->fields && arrayp(type->fields)) {
+	    return type->fields[1];
+	} else return type;
+    }
+}
+
+class Overlaps {
+    inherit RangeLookup;
+
     string encode_sql(object table) {
 	object range;
-	object type = table->schema[field];
-	if (!Program.inherits(object_program(type), SyncDB.Types.Range))
-	    error("Overlaps requires a range.\n");
-	range = type->parser()->decode(value);
+	range = parser(table)->decode(value);
+	werror("Range: %O %O", object_program(range), range);
 
 	return sprintf("(%s <= %s AND %s >= %s)",
-		       type->fields[0]->sql_name(table->table),
-		       type->fields[0]->encode_sql_value(range->stop),
-		       type->fields[1]->sql_name(table->table),
-		       type->fields[1]->encode_sql_value(range->start));
+		       start(table)->sql_name(table->table),
+		       start(table)->encode_sql_value(range->stop),
+		       stop(table)->sql_name(table->table),
+		       stop(table)->encode_sql_value(range->start));
+    }
+    string _sprintf(int type) {
+	return sprintf("Overlaps(%O)", field);
+    }
+}
+
+class Contains {
+    inherit RangeLookup;
+
+    string encode_sql(object table) {
+	object range;
+	range = parser(table)->decode(value);
+
+	werror("Range: %O %O", object_program(range), range);
+
+	return sprintf("(%s >= %s AND %s <= %s)",
+		       start(table)->sql_name(table->table),
+		       start(table)->encode_sql_value(range->start),
+		       stop(table)->sql_name(table->table),
+		       stop(table)->encode_sql_value(range->stop));
     }
     string _sprintf(int type) {
 	return sprintf("Overlaps(%O)", field);
@@ -91,7 +132,7 @@ class Lt(string field, Serialization.Atom value) {
 class Le(string field, Serialization.Atom value) {
     string encode_sql(object table) {
 	object type = table->schema[field];
-	return sprintf("%s <= %s", table->get_sql_name(field), type->encode_sql_value(type->parser->decode(value)));
+	return sprintf("%s <= %s", table->get_sql_name(field), type->encode_sql_value(type->parser()->decode(value)));
     }
     string _sprintf(int type) {
 	return sprintf("Le(%O)", field);
