@@ -1,78 +1,28 @@
 constant MODULE_STEALTH = 0;
 
-constant module_type = MODULE_TAG;
-constant module_name = "Webhaven: SyncDB";
+constant module_type = MODULE_TAG | MODULE_PROVIDER;
+constant module_name = "SyncDB: Server module";
 
-inherit Meteor.ChanelConnecteur;
-
-#include <module.h>
-inherit "module";
-
-object table; // tæble
-object schema; // schemæ
-
-string registered_channel;
-
-void create() {
-    defvar("channel", Variable.String("control", 0, "Channel to use.",
-				      "Name of the channel to request from"
-				      "the controller for browser interaction."));
-
-    schema = SyncDB.Schema(
-	SyncDB.Types.Integer("id", SyncDB.Flags.Key(),
-				    SyncDB.Flags.Automatic(),
-				    SyncDB.Flags.Join(([ "two" : "id" ]))),
-	SyncDB.Types.String("name"),
-	SyncDB.Types.String("email"),
-	//"date" : SyncDB.Types.Vector(SyncDB.Types.Date(Calendar.Second), ({ "startdate", "stopdate" })),
-	/*
-	SyncDB.Types.Vector("date", ({ 
-	    SyncDB.Types.Date("startdate", Calendar.Second),
-	    SyncDB.Types.Date("stopdate", Calendar.Second)
-	})),
-	*/
-	SyncDB.Types.Range("date", 
-	    SyncDB.Types.Date("startdate", Calendar.Second),
-	    SyncDB.Types.Date("stopdate", Calendar.Second),
-	    SyncDB.Flags.Index()
-	),
-	// two
-	SyncDB.Types.String("firstname", SyncDB.Flags.Foreign("two", "firstname")),
-	SyncDB.Types.String("lastname", SyncDB.Flags.Foreign("two", "lastname")),
-    );
-    table = SyncDB.Meteor.Table("one", schema, 
-	    SyncDB.MySQL.Table("one", Sql.Sql("mysql://root:Y2sgCUAtjc@localhost/interSync"), schema, "one"));
+string query_provides() {
+    return "syncdb";
 }
 
-void start(int i, mixed conf) {
-    ::start(i, conf);
-    if (registered_channel) {
-	unregister_channel(registered_channel);
-	registered_channel = 0;
-    }
-    register_channel(query("channel"), accept);
-    registered_channel = query("channel");
-}
+mapping(string:object) tables = ([]);
+mapping(string:string) channels = ([]);
 
-void accept(object channel, string name) {
-    channel->set_cb(table->incoming);
-}
-
-void stop() {
-    if (registered_channel) {
-	unregister_channel(registered_channel);
-	registered_channel = 0;
-    }
-
-    ::stop();
+void register_table(string name, object table, string channel) {
+    tables[name] = table;
+    channels[name] = channel;
 }
 
 string simpletag_schema(string tagname, mapping args, string content,
 			RequestID id) {
-    return Standards.JSON.encode(schema);
+    if (args->name || !tables[args->name]) error("No such table: %O", args->name);
+    return Standards.JSON.encode(tables[args->name]->schema);
 }
 
 string simpletag_channel(string tagname, mapping args, string content,
 			RequestID id) {
-    return Standards.JSON.encode(query("channel"));
+    if (args->name || !channels[args->name]) error("No such table: %O", args->name);
+    return Standards.JSON.encode(channels[args->name]);
 }
