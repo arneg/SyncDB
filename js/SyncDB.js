@@ -900,6 +900,76 @@ SyncDB.MappingIndex = SyncDB.LocalField.extend({
 	return UTIL.values(this.value.m);
     }
 });
+SyncDB.SuperIndex = SyncDB.LocalField.extend({
+    constructor : function(name, type) {
+	this.type = type;
+	this.subs = Array.prototype.slice.call(arguments, 2);
+	var p = {}, m = {};
+	for (var i = 0; i < this.subs.length; ++i) {
+	    for (var idx in this.subs[i]) {
+		if (UTIL.has_prefix(idx, "is_")) {
+		    if (!this[idx]) {
+			this[idx] = true;
+			this["s_" + idx.substr(3)] = this.subs[i];
+		    }
+		} else if (UTIL.has_prefix(idx, "lookup_")) { // this part useful?
+		    if (!this[idx])
+			this[idx] = this.subs[i][idx];
+		}
+	    }
+	    this.subs[i].get_parser(p);
+	    this.subs[i].get_data(m);
+	}
+
+	this.base(name, new serialization.Struct(p), m);
+    },
+    sync : function() {
+	var m = {};
+	for (var i = 0; i < this.subs.length; i++) {
+	    this.subs[i].get_data(m);
+	}
+	this.value = m;
+	this.base();
+    },
+    set : function(index, value) {
+	var errs = [];
+	for (var i = 0; i < this.subs.length; ++i)
+	    try {
+		this.subs[i].set(index, value);
+	    } catch (e) {
+		errs.push(e);
+	    }
+	if (errs.length) throw(errs); // TODO:: really?
+    },
+    remove : function(index, id) {
+	var errs = [];
+	for (var i = 0; i < this.subs.length; ++i)
+	    try {
+		this.subs[i].remove(index, value);
+	    } catch (e) {
+		errs.push(e);
+	    }
+	if (errs.length) throw(errs); // TODO:: really?
+    },
+    toString : function() {
+	return UTIL.sprintf("SuperIndex(%s, %s, %s)", this.name, this.type,
+			    this.subs.join(", "));
+    }
+});
+SyncDB.SubIndexBase = UTIL.Base.extend({
+    get_value : function() {
+	return this.value;
+    },
+    _get_parser : function() {
+	return this.parser;
+    },
+    get_data : function(m) {
+	if (!m[this.storage_name()]) m[this.storage_name()] = this.get_value();
+    },
+    get_parser : function(p) {
+	if (!p[this.storage_name()]) p[this.storage_name()] = this._get_parser();
+    }
+});
 SyncDB.MultiIndex = SyncDB.LocalField.extend({
     constructor : function(ls, name, type, id) {
 	this.type = type;
