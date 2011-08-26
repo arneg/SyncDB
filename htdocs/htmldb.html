@@ -14,10 +14,10 @@
     var d1 = new Date();
     var d2 = new Date();
     d1.setTime(32434234234);
-    var schema = <schema/>;
+    var schema = <schema name="htmldb"/>;
     var con = new meteor.Connection("/SyncDB/" + <meteorurl/>, {});
     var mplex = new meteor.Multiplexer(con);
-    var chan = mplex.get_channel(<channel/>);
+    var chan = mplex.get_channel(<channel name="htmldb"/>);
     var db = new SyncDB.CachedTable("test", schema
 	   /**/,	new SyncDB.MeteorTable("test", schema, chan) /**/
     );
