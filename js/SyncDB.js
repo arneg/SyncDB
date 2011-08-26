@@ -619,6 +619,7 @@ SyncDB.CritBitIndex = SyncDB.LocalField.extend({
 	return [ this.value.m.index(index) ];
     },
     has : function(index) {
+	if (index instanceof SyncDB.Range) return false;
 	return this.value.m.index(index) !== null;
     },
     regen_filter : function() {
