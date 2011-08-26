@@ -72,9 +72,10 @@ SyncDB.Filter.Base = UTIL.Base.extend({
     _types : {
 	field : new serialization.String()
     },
-    constructor : function(field) {
+    constructor : function(field, parser) {
 	this.field = field;
 	this.args = Array.prototype.slice.apply(arguments);
+	this.parser = parser;
     },
     index_insert : function() {
 	return [];
@@ -132,37 +133,35 @@ SyncDB.Filter.False = SyncDB.Filter.Base.extend({
 SyncDB.Filter.Equal = SyncDB.Filter.Base.extend({
     _types : {
 	field : new serialization.String(),
-	value : new serialization.Any()
+	value_atom : new serialization.Any()
     },
-    constructor : function(field, value) {
-	this.field = field;
+    value_atom : function() {
+	return this.parser.encode(this.value);
+    },
+    constructor : function(field, parser, value) {
+	this.base(field, parser);
 	this.value = value;
     },
     index_lookup : function(table) {
 	if (table.I[this.field]) {
-	    var type = table.schema.m[this.field];
-	    var v = type.parser().decode(this.value);
-	    return table.I[this.field].get(v);
+	    return table.I[this.field].get(this.value);
 	} else UTIL.error("no index for %s", this.field);
     },
     filter : function(schema, rows) {
 	var type = schema.m[this.field];
-	var v = type.parser().decode(this.value);
 	var ret = [];
 	for (var i = 0; i < rows.length; i++)
-	    if (rows[i][this.field] == v) ret.push(rows[i]);
+	    if (rows[i][this.field] == this.value) ret.push(rows[i]);
 	return ret;
     },
     index_insert : function(table, rows) {
 	var index;
 	if (index = table.I[this.field]) {
-	    var type = table.schema.m[this.field];
 	    for (var i = 0; i < rows.length; i++) {
 		index.set(rows[i][this.field], rows[i][table.schema.key]);
 	    }
 	    if (index.set_filter) {
-		var v = type.parser().decode(this.value);
-		index.set_filter(v);
+		index.set_filter(this.value);
 	    }
 	    return rows;
 	} else return [];
@@ -178,47 +177,50 @@ SyncDB.Filter.True = SyncDB.Filter.Base.extend({
 });
 SyncDB.Filter.Overlaps = SyncDB.Filter.Equal.extend({
     index_lookup : function(table) {
-	var type = table.schema.m[this.field];
 	var index = table.I[this.field];
 	if (!index || !index.overlaps)
 	    throw(new SyncDB.Error.NotFound());
-	return index.overlaps(type.parser().decode(this.value));
+	return index.overlaps(this.value);
+    }
+});
+SyncDB.Filter.Contains = SyncDB.Filter.Equal.extend({
+    index_lookup : function(table) {
+	var index = table.I[this.field];
+	if (!index || !index.lookup_contains)
+	    throw(new SyncDB.Error.NotFound());
+	return index.lookup_contains(this.value);
     }
 });
 SyncDB.Filter.Gt = SyncDB.Filter.Equal.extend({
     index_lookup : function(table) {
-	var type = table.schema.m[this.field];
 	var index = table.I[this.field];
 	if (!index || !index.lookup_gt)
 	    throw new SyncDB.Error.NotFound();
-	return index.lookup_gt(type.parser().decode(this.value));
+	return index.lookup_gt(this.value);
     }
 });
 SyncDB.Filter.Ge = SyncDB.Filter.Equal.extend({
     index_lookup : function(table) {
-	var type = table.schema.m[this.field];
 	var index = table.I[this.field];
 	if (!index || !index.lookup_ge)
 	    throw new SyncDB.Error.NotFound();
-	return index.lookup_ge(type.parser().decode(this.value));
+	return index.lookup_ge(this.value);
     }
 });
 SyncDB.Filter.Lt = SyncDB.Filter.Equal.extend({
     index_lookup : function(table) {
-	var type = table.schema.m[this.field];
 	var index = table.I[this.field];
 	if (!index || !index.lookup_lt)
 	    throw new SyncDB.Error.NotFound();
-	return index.lookup_lt(type.parser().decode(this.value));
+	return index.lookup_lt(this.value);
     }
 });
 SyncDB.Filter.Le = SyncDB.Filter.Equal.extend({
     index_lookup : function(table) {
-	var type = table.schema.m[this.field];
 	var index = table.I[this.field];
 	if (!index || !index.lookup_le)
 	    throw new SyncDB.Error.NotFound();
-	return index.lookup_le(type.parser().decode(this.value));
+	return index.lookup_le(this.value);
     }
 });
 /** @namespace */
@@ -230,6 +232,7 @@ SyncDB.Serialization.Filter = serialization.generate_structs({
     _true : SyncDB.Filter.True,
     _false : SyncDB.Filter.False,
     _overlaps : SyncDB.Filter.Overlaps,
+    _contains : SyncDB.Filter.Contains,
     _le : SyncDB.Filter.Le,
     _ge : SyncDB.Filter.Ge,
     _lt : SyncDB.Filter.Lt,
@@ -651,6 +654,15 @@ SyncDB.CritBitIndex = SyncDB.LocalField.extend({
     values : function() {
 	return this.value.m.values();
     },
+    lookup_contains : function(index) {
+	if (!this.value)
+	    SyncDB.error("You are too early!!");
+	if (!this.has(index)) throw(new SyncDB.Error.NotFound());
+	var a = [];
+	this.value.m.foreach(function(key, val) { a.push(val); },
+			     index.a, index.b);
+	return a;
+    },
     lookup_lt : function(val) {
 	var r = [];
 	var node = this.value.m.lt(val);
@@ -658,7 +670,6 @@ SyncDB.CritBitIndex = SyncDB.LocalField.extend({
 	    r.push(node.value);
 	    node = node.backward();
 	}
-	if (!r.length) throw(new SyncDB.Error.NotFound());
 	return r;
     },
     lookup_le : function(val) {
@@ -668,7 +679,6 @@ SyncDB.CritBitIndex = SyncDB.LocalField.extend({
 	    r.push(node.value);
 	    node = node.backward();
 	}
-	if (!r.length) throw(new SyncDB.Error.NotFound());
 	return r;
     },
     lookup_gt : function(val) {
@@ -678,7 +688,6 @@ SyncDB.CritBitIndex = SyncDB.LocalField.extend({
 	    r.push(node.value);
 	    node = node.forward();
 	}
-	if (!r.length) throw(new SyncDB.Error.NotFound());
 	return r;
     },
     lookup_ge : function(val) {
@@ -688,7 +697,6 @@ SyncDB.CritBitIndex = SyncDB.LocalField.extend({
 	    r.push(node.value);
 	    node = node.forward();
 	}
-	if (!r.length) throw(new SyncDB.Error.NotFound());
 	return r;
     }
 });
@@ -1616,11 +1624,11 @@ SyncDB.Types = {
 	    return new serialization.Bloom(this.hash());
 	},
 	Equal : function(value) {
-	    return new SyncDB.Filter.Equal(this.name, this.parser().encode(value));
+	    return new SyncDB.Filter.Equal(this.name, value);
 	},
 	Bloom : function(filter) {
 	    return new SyncDB.Filter.Bloom(this.name,
-					   this.filter_parser().encode(filter));
+					   this.filter_parser(), filter);
 	}
     })
 };
@@ -1663,16 +1671,19 @@ SyncDB.Types.Integer = SyncDB.Types.Filterable.extend({
 	    return this.base.apply(this, Array.prototype.slice.call(arguments));
     },
     Lt : function(val) {
-	return new SyncDB.Filter.Lt(this.name, this.parser().encode(val));
+	return new SyncDB.Filter.Lt(this.name, this.parser(), val);
     },
     Le : function(val) {
-	return new SyncDB.Filter.Le(this.name, this.parser().encode(val));
+	return new SyncDB.Filter.Le(this.name, this.parser(), val);
     },
     Gt : function(val) {
-	return new SyncDB.Filter.Gt(this.name, this.parser().encode(val));
+	return new SyncDB.Filter.Gt(this.name, this.parser(), val);
     },
     Ge : function(val) {
-	return new SyncDB.Filter.Ge(this.name, this.parser().encode(val));
+	return new SyncDB.Filter.Ge(this.name, this.parser(), val);
+    },
+    Contains : function(range) {
+	return new SyncDB.Filter.Contains(this.name, new serialization.Range(this.parser()), range);
     }
 });
 SyncDB.Types.String = SyncDB.Types.Filterable.extend({
@@ -1735,11 +1746,11 @@ SyncDB.Types.Range = SyncDB.Types.Vector.extend({
 	return new serialization.RangeSet(this.parser())
     },
     filter : function() {
-	return new CritBit.RangeSet()
+	return new CritBit.RangeSet();
     },
     //RangeSet : // TODO
     Overlaps : function(range) {
-	return new SyncDB.Filter.Overlaps(this.name, this.parser().encode(range));
+	return new SyncDB.Filter.Overlaps(this.name, this.parser(), range);
     }
 });
 SyncDB.Date = function() {
