@@ -11,6 +11,8 @@ inherit "module";
 object table; // tæble
 object schema; // schemæ
 
+string registered_channel;
+
 void create() {
     defvar("channel", Variable.String("control", 0, "Channel to use.",
 				      "Name of the channel to request from"
@@ -44,11 +46,25 @@ void create() {
 
 void start(int i, mixed conf) {
     ::start(i, conf);
+    if (registered_channel) {
+	unregister_channel(registered_channel);
+	registered_channel = 0;
+    }
     register_channel(query("channel"), accept);
+    registered_channel = query("channel");
 }
 
 void accept(object channel, string name) {
     channel->set_cb(table->incoming);
+}
+
+void stop() {
+    if (registered_channel) {
+	unregister_channel(registered_channel);
+	registered_channel = 0;
+    }
+
+    ::stop();
 }
 
 string simpletag_schema(string tagname, mapping args, string content,
