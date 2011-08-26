@@ -1110,6 +1110,11 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 		m[field] = schema.m[field].filter_parser();
 	    }
 	}
+	/*
+	// maybe this?	
+	regtype(this.out, "_syncreq", SyncDB.Meteor.SyncReq,
+		{ id : s, version : new serialization.Array(int), filter : new serialization.Struct(m) });
+	 */
 	var Or = new serialization.Or;
 	Or.types = UTIL.values(m);
 	regtype(this.out, "_syncreq", SyncDB.Meteor.SyncReq,
