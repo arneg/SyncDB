@@ -1295,18 +1295,6 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	}
     },
     low_select : function(filter, callback) {
-	var f = this.M(function(value, callback) {
-	    var key = this.schema.key;
-	    var k = this.schema.id.get_key(this.name, key, value);
-	    //UTIL.log("trying to fetch %o from local storage %o.\n", key, [ this.name, name, value] );
-	    SyncDB.LS.get(k, this.M(function(error, value) {
-		//UTIL.log("LS returned %s -> %s", k, value);
-		if (!error) {
-		    if (UTIL.stringp(value)) callback(false, this.parser.decode(serialization.parse_atom(value)));
-		    else callback(new SyncDB.Error.NotFound());
-		} else callback(error);
-	    }));
-	});
 	// probe the index and check sync.
 	//
 	// TODO: allow for partial results here. e.g. come up
@@ -1323,31 +1311,24 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	}
 	//UTIL.log("ids: %o\n", ids);
 	if (ids.length) {
-	    if (ids.length == 1) {
-		return f(ids[0], function(error, rows) {
-		    callback(error, !error ? [ rows ] : rows);
-		});
-	    }
-	    var failed = false;
-	    var c = 0;
-	    var aggregate = function(error, row) {
-		if (failed) return;
-		if (error) {
-		    failed = true;
-		    callback(error, row);
-		    return;
-		}
-		ids[c++] = row;
-		if (c == ids.length) callback(false, ids);
-	    };
-	    // here comes your event aggregator!
-	    for (var i = 0; i < ids.length; i++) {
-		f(ids[i], aggregate);
-	    }
-	    return;
-	}
+	    var id = this.schema.id;
+	    var key = this.schema.key;
 
-	return callback(false, []);
+	    for (var i = 0; i < ids.length; i++) {
+		ids[i] = id.get_key(this.name, key, ids[i]);
+	    }
+
+	    SyncDB.LS.get(ids, this.M(function(error, value) {
+		//UTIL.log("LS returned %s -> %s", k, value);
+		if (!error) {
+		    for (var i = 0; i < value.length; i++)
+			if (UTIL.stringp(value[i]))
+			    value[i] = this.parser.decode(serialization.parse_atom(value[i]));
+			else callback(new SyncDB.Error.NotFound());
+		    callback(false, value);
+		} else callback(error);
+	    }));
+	} else return callback(false, []);
     },
     prune : function() { // delete everything
     },
