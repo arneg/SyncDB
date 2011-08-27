@@ -248,6 +248,14 @@ SyncDB.KeyValueMapping = UTIL.Base.extend({
 	cb(false, value);
 	//UTIL.call_later(cb, null, false, value);
     },
+    cas : function(key, value, old, cb) {
+	if (this.m[key] == old) {
+	    this.m[key] = value;
+	    cb(false, value);
+	} else {
+	    cb(true);
+	}
+    },
     get : function(key, cb) {
 	if (UTIL.arrayp(key)) {
 	    for (var i = 0; i < key.length; i++) key[i] = this.m[key[i]];
@@ -283,6 +291,14 @@ if (UTIL.App.has_local_storage) {
 	    } catch (err) {
 		cb(err);
 		//UTIL.call_later(cb, null, err);
+	    }
+	},
+	cas : function(key, value, old, cb) {
+	    if (localStorage[prefix+key] == old) {
+		localStorage[prefix+key] = value;
+		cb(false, value);
+	    } else {
+		cb(true);
 	    }
 	},
 	is_permanent : true,
@@ -378,6 +394,33 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 			cb(err);
 			this.replay();
 		    }));
+		}));
+	    }
+	},
+	cas : function(key, val, old, cb) {
+	    if (this.q) {
+		this.q.push(function() { this.cas(key, val, old, cb); });
+	    } else {
+		cb = UTIL.safe(cb);
+		this.q = [];
+		var good = this.M(function(tx, data) {
+			if (data.rowsAffected != 1) cb(true);
+			else UTIL.call_later(cb, window, false, val);
+			this.replay();
+		    });
+		var bad = this.M(function (tx, err) {
+			cb(err);
+			this.replay();
+		    });
+		this.db.transaction(this.M(function (tx) {
+		    if (UTIL.stringp(old))
+			tx.executeSql("UPDATE sLsA SET value=? WHERE key=? AND"+
+				      " value=?;",
+				      [ this.encode(val), key, this.encode(old) ], good, bad);
+		    else
+			tx.executeSql("INSERT INTO sLsA (key, value)"+
+				      " VALUES(?, ?);",
+				      [ key, this.encode(val) ], good, bad);
 		}));
 	    }
 	},
