@@ -294,8 +294,8 @@ if (UTIL.App.has_local_storage) {
 	    }
 	},
 	cas : function(key, value, old, cb) {
-	    if (localStorage[prefix+key] == old) {
-		localStorage[prefix+key] = value;
+	    if (localStorage[this.prefix+key] == old) {
+		localStorage[this.prefix+key] = value;
 		cb(false, value);
 	    } else {
 		cb(true);
