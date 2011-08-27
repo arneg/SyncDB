@@ -1644,6 +1644,9 @@ SyncDB.Types = {
 	Equal : function(value) {
 	    return new SyncDB.Filter.Equal(this.name, this.parser(), value);
 	},
+	True : function() {
+	    return new SyncDB.Filter.True(this.name);
+	},
 	Bloom : function(filter) {
 	    return new SyncDB.Filter.Bloom(this.name,
 					   this.filter_parser(), filter);
