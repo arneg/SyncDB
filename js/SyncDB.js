@@ -912,6 +912,8 @@ SyncDB.TableConfig = SyncDB.LocalField.extend({
 //	events. They need to be handed down the chain.
 SyncDB.Table = UTIL.Base.extend({
     constructor : function(name, schema, db) {
+	this.changes = [];
+	if (db) db.onchange(this.M(this.sync));
 	this.name = name;
 	this.schema = schema;
 	this.parser = schema.parser();
@@ -953,9 +955,15 @@ SyncDB.Table = UTIL.Base.extend({
     ready : function(f) {
 	this.ready_ea.ready(f);
     },
+    onchange : function(cb) {
+	this.changes.push(cb);
+    },
     get_version : function() {},
     // I am not sure what this thing was supposed to do.
-    sync : function(version) {},
+    sync : function(version, rows) {
+	for (var i = 0; i < this.changes.length; i++)
+	    UTIL.call_later(this.changes[i], this, version, rows);
+    },
     index : function() {
 	return null;
     },
@@ -982,18 +990,8 @@ SyncDB.Table = UTIL.Base.extend({
 	};
     },
     insert : function(row, callback) {
-	var f = this.M(function (error, n) {
-	    // TODO: if this was lost, we loose sync.
-	    if (!error) try { 
-		    this.low_insert(n, callback);
-		} catch (e) {
-		    callback(e, n);
-		}
-	    else callback(error, row);
-	});
-
 	if (this.db) {
-	    this.db.insert(row, f);
+	    this.db.insert(row, callback);
 	} else {
 	    this.auto_set(row, function(n) {
 		f(false, n);
@@ -1036,11 +1034,7 @@ SyncDB.Table = UTIL.Base.extend({
     },
     update : function(id, row, callback, orow) {
 	if (this.db) {
-	    this.db.update(id, row, this.M(function(error, row_) {
-		if (error) {
-		    callback(error, row_);
-		} else this.low_update(id, row_, callback, orow);
-	    }));
+	    this.db.update(id, row, callback, orow);
 	} else return this.low_update(id, row, callback, orow);
     },
     version : function() {
@@ -1144,8 +1138,7 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 		}
 
 		if (o instanceof SyncDB.Meteor.Sync) { // we dont care for id. just clean it up, man!
-		    if (this.sync_callback)
-			this.sync_callback(o.version, o.rows);
+		    this.sync(o.version, o.rows);
 		    if (!o.id) continue;
 		}
 
@@ -1208,10 +1201,6 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	    return id;
 	});
     },
-    sync : function(version) {
-	UTIL.trace("SyncDB.MeteorTable#sync has been called for unknown reasons.");
-	// this.send(new SyncDB.Meteor.SyncReq("foo", version));
-    },
     low_insert : function(row, callback) {
 	var id = UTIL.get_unique_key(5, this.requests);
 	this.requests[id] = callback;
@@ -1220,7 +1209,7 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
     },
     request_sync : function(version, filters, cb) {
 	var id = UTIL.get_unique_key(5, this.requests);
-	this.sync_callback = cb;
+	this.onchange(cb);
 	this.send(new SyncDB.Meteor.SyncReq(id, version, filters));
     }
 });
@@ -1395,6 +1384,7 @@ SyncDB.SyncedTableBase = SyncDB.LocalTable.extend({
     constructor : function() {
 	this.base.apply(this, Array.prototype.slice.apply(arguments));
 	this.callbacks = [];
+	this.syncing = {};
     },
     synced : function(cb) {
 	if (this.callbacks)
@@ -1406,6 +1396,7 @@ SyncDB.SyncedTableBase = SyncDB.LocalTable.extend({
 	// TODO: this should be triggered on completion of all updates, otherwise
 	// something might fail and we still believe that we are up to date
 	var v = this.config.version();
+	var vhash = version.join(",");
 	if (v.length) {
 	    var is_new = false;
 	    for (var i = 0; i < v.length; ++i) {
@@ -1416,9 +1407,14 @@ SyncDB.SyncedTableBase = SyncDB.LocalTable.extend({
 	    }
 	    if (!is_new) return;
 	}
+	if (this.syncing[vhash]) return;
+
+	this.syncing[vhash] = 1;
 	var sync_ea = new UTIL.EventAggregator();
 	sync_ea.ready(this.M(function() {
 	    this.config.version(version);
+	    delete this.syncing[vhash];
+	    SyncDB.Table.prototype.sync.call(this, version, rows);
 	}));
 
 	if (this.callbacks) {
@@ -1441,9 +1437,6 @@ SyncDB.SyncedTableBase = SyncDB.LocalTable.extend({
 	    } else {
 		this.low_insert(row, cb);
 	    }
-	}
-	if (this.sync_callback) {
-	    this.sync_callback(version, rows);
 	}
 	sync_ea.start();
     }
