@@ -993,9 +993,9 @@ SyncDB.Table = UTIL.Base.extend({
 	if (this.db) {
 	    this.db.insert(row, callback);
 	} else {
-	    this.auto_set(row, function(n) {
-		f(false, n);
-	    });
+	    this.auto_set(row, this.M(function(n) {
+		this.low_insert(n, callback);
+	    }));
 	}
     },
     auto_set : function(row, cb) {
