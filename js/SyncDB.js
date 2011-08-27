@@ -366,12 +366,13 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 		    } else query += "key=?;";
 
 		    tx.executeSql(query, arr ? key : [key], this.M(function(tx, data) {
+			var ret = arr ? new Array(key.length) : null;
 			var m = {};
 			for (i = 0; i < data.rows.length; i++) m[data.rows.item(i).key] = this.decode(data.rows.item(i).value);
 			if (arr) {
-			    for (i = 0; i < key.length; i++) key[i] = m[key[i]];
-			} else key = m[key];
-			cb(false, key);
+			    for (i = 0; i < key.length; i++) ret[i] = m[key[i]];
+			} else ret = m[key];
+			cb(false, ret);
 			this.replay();
 		    }), this.M(function(tx, err) {
 			cb(err);
