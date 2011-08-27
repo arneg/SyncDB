@@ -1342,8 +1342,13 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	this.select_by(id, this.M(function(error, row_) {
 	    if (error) {
 		callback(error);
+		UTIL.log("%d: %o", id, error);
 		UTIL.error("Some unexpected error occured. Sorry.");
 	    }
+	    if (!row_ || row_.length != 1) {
+		UTIL.error("the id should be unique!");
+	    }
+	    row_ = row_[0];
 
 	    // TODO: check if row.version != orow.version && orow.version == row_.version.
 	    // or rather do this more low level
