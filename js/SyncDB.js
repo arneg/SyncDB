@@ -584,7 +584,10 @@ SyncDB.RangeIndex = SyncDB.LocalField.extend({
 	return this.overlaps(index);
     },
     remove : function(index) {
-	UTIL.log("remove not yet supported here!");
+	if (this.value.m.remove(index)) {
+	    this.value.filter = new CritBit.RangeSet(this.value.m);
+	    this.sync();
+	}
     }
 });
 // TODO: this should really be a subindex that doesnt do lookup_get, only
