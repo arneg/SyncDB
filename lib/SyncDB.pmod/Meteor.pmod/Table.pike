@@ -4,8 +4,6 @@ inherit SyncDB.Table;
 object in, out;
 object type_cache = Serialization.default_type_cache;
 
-mapping blacklist = ([ ]);
-
 void create(string name, SyncDB.Schema schema, SyncDB.Table db) {
     ::create(dbname, schema, db);
     object s = Serialization.Types.String();
@@ -90,7 +88,7 @@ void generate_reply(int err, array(mapping)|mapping row, object session, object 
 
 	// TODO: either reply directly. anyway, we have to put the inserted row into the users
 	// filter
-	generate_sync(0, row->version, ({ row }));
+	generate_sync(0, row->version, ({ row }), session);
 	sync_unique(session, row);
 	// to all others
 	reply = .Sync(message->id, (array)row->version, ({ row }));
@@ -110,9 +108,7 @@ mapping(object:int) syncers = set_weak_flag(([]), Pike.WEAK_INDICES);
 mapping(string:mapping(object:object)) filters = ([]);
 
 // get triggered by e.g. MysqlTable
-void generate_sync(int err, SyncDB.Version version, array(mapping) rows) {
-    if (m_delete(blacklist, version)) return;
-
+void generate_sync(int err, SyncDB.Version version, array(mapping) rows, object|void culprit) {
     mapping updates = ([]);
 
     if (sizeof(filters)) {
@@ -147,7 +143,7 @@ void generate_sync(int err, SyncDB.Version version, array(mapping) rows) {
 
     string s = out->encode(.Sync("", (array)version, rows))->render();
     // send to synced sessions
-    indices(syncers)->send(s);
+    indices(culprit ? (syncers - ([ culprit : 1 ])) : syncers)->send(s);
 }
 
 void filters_insert(object session, string name, mixed key) {
@@ -156,6 +152,7 @@ void filters_insert(object session, string name, mixed key) {
 }
 
 void sync_unique(object session, mapping row) {
+    if (has_index(syncers, session)) return;
     for (filters; string name; mapping m) {
 	if (!schema[name]->is_unique) continue;
 	filters_insert(session, name, row[name]);
