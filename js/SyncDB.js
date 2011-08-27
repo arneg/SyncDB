@@ -272,9 +272,12 @@ SyncDB.KeyValueMapping = UTIL.Base.extend({
 });
 if (UTIL.App.has_local_storage) {
     SyncDB.KeyValueStorage = UTIL.Base.extend({
+	constructor : function(prefix) {
+	    this.prefix = prefix || "";
+	},
 	set : function(key, value, cb) {
 	    try {
-		localStorage[key] = value;
+		localStorage[this.prefix+key] = value;
 		//cb(false, value);
 		UTIL.call_later(cb, null, false, value);
 	    } catch (err) {
@@ -287,9 +290,9 @@ if (UTIL.App.has_local_storage) {
 	    try {
 		if (UTIL.arrayp(key)) {
 		    for (var i = 0; i < key.length; i++)
-			key[i] = localStorage[key[i]];
+			key[i] = localStorage[this.prefix+key[i]];
 		} else 
-		    key = localStorage[key];
+		    key = localStorage[this.prefix+key];
 		//cb(false, value);
 		UTIL.call_later(cb, null, false, key);
 	    } catch(err) {
@@ -300,8 +303,8 @@ if (UTIL.App.has_local_storage) {
 	},
 	remove : function(key, cb) {
 	    try {
-		var value = localStorage[key];
-		delete localStorage[key];
+		var value = localStorage[this.prefix+key];
+		delete localStorage[this.prefix+key];
 		//cb(false, value);
 		UTIL.call_later(cb, null, false, value);
 	    } catch (err) {
@@ -310,7 +313,7 @@ if (UTIL.App.has_local_storage) {
 	    }
 	},
 	clear : function(cb) {
-	    // TODO: remove only sync_db entries. ;_)
+	    // TODO: remove only prefix LS entries
 	    localStorage.clear();
 	    cb(false);
 	    //UTIL.call_later(cb, null, false);
@@ -322,8 +325,8 @@ if (UTIL.App.has_local_storage) {
 }
 if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
     SyncDB.KeyValueDatabase = UTIL.Base.extend({
-	constructor : function(cb) {
-		this.db = openDatabase("SyncDB", "1.0", "SyncDB", 5*1024*1024);
+	constructor : function(prefix, cb) {
+		this.db = openDatabase("SyncDB:"+prefix, "1.0", "SyncDB", 5*1024*1024);
 		this.init(cb);
 	},
 	init : function(cb) {
@@ -450,23 +453,21 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 	    return "SyncDB.KeyValueDatabase";
 	}
     });
-    try {
-	SyncDB.LS = new SyncDB.KeyValueDatabase(function (err) {
-	    //UTIL.log("%o", err);
-	    if (err) {
-		SyncDB.LS = new (SyncDB.KeyValueStorage || SyncDB.KeyValueMapping)();
-	    }
-	    var q = this.q;
-	    this.q = undefined;
-	    for (var i = 0; i < q.length; i++) {
-	       q[i].apply(SyncDB.LS);
-	    }
-	});
-    } catch (err) { }
 }
-if (!SyncDB.LS) SyncDB.LS = new(SyncDB.KeyValueStorage || SyncDB.KeyValueMapping)();
+SyncDB.LS = function(prefix) {
+    if (SyncDB.KeyValueDatabase)
+	return new SyncDB.KeyValueDatabase(prefix, function (err) {
+	    if (err) {
+		UTIL.error("%o", err);
+		// rewrite this here with functions from a fallback!
+		//SyncDB.LS = new (SyncDB.KeyValueStorage || SyncDB.KeyValueMapping)();
+	    } else this.replay();
+	});
+    return new(SyncDB.KeyValueStorage || SyncDB.KeyValueMapping)(prefix);
+};
 SyncDB.LocalField = UTIL.Base.extend({
-    constructor : function(name, parser, def) {
+    constructor : function(ls, name, parser, def) {
+	this.ls = ls;
 	this.name = name;
 	this.parser = parser;
 	this.value = undefined;
@@ -488,7 +489,7 @@ SyncDB.LocalField = UTIL.Base.extend({
 		return;
 	    }
 	    this.get_queue = [ cb ];
-	    SyncDB.LS.get(this.name, this.M(function(err, value) {
+	    this.ls.get(this.name, this.M(function(err, value) {
 		var ret;
 		if (err) {
 		    ret = undefined;
@@ -530,18 +531,18 @@ SyncDB.LocalField = UTIL.Base.extend({
 	UTIL.call_later(function() {
 		this.will_set = false;
 		if (this.value == undefined) {
-		    SyncDB.LS.remove(this.name, function () {});
+		    this.ls.remove(this.name, function () {});
 		} else {
-		    SyncDB.LS.set(this.name, this.parser.encode(this.value).render(), function () {});
+		    this.ls.set(this.name, this.parser.encode(this.value).render(), function () {});
 		}
 	    }, this);
     }
 });
 SyncDB.RangeIndex = SyncDB.LocalField.extend({
-    constructor : function(name, tkey, tid) {
+    constructor : function(ls, name, tkey, tid) {
 	this.tkey = tkey;
 	this.tid= tid;
-	this.base(name, new serialization.Struct("_range_index", {
+	this.base(ls, name, new serialization.Struct("_range_index", {
 	    m : new serialization.MultiRangeSet(tkey.parser(tid.parser())),
 	    filter : tkey.filter_parser()
 	}), {
@@ -589,10 +590,10 @@ SyncDB.RangeIndex = SyncDB.LocalField.extend({
 // TODO: this should really be a subindex that doesnt do lookup_get, only
 // range lookups and has a RangeSet for the cached entries.
 SyncDB.CritBitIndex = SyncDB.LocalField.extend({
-    constructor : function(name, tkey, tid) {
+    constructor : function(ls, name, tkey, tid) {
 	this.tkey = tkey;
 	this.type = tid;
-	this.base(name, new serialization.Struct("_index", {
+	this.base(ls, name, new serialization.Struct("_index", {
 		filter : tkey.filter_parser(),
 		m : new serialization.CritBit(tkey.parser(), tid.parser()), 
 		removed : new serialization.Integer()
@@ -702,10 +703,10 @@ SyncDB.CritBitIndex = SyncDB.LocalField.extend({
     }
 });
 SyncDB.MappingIndex = SyncDB.LocalField.extend({
-    constructor : function(name, tkey, tid) {
+    constructor : function(ls, name, tkey, tid) {
 	this.tkey = tkey;
 	this.type = tid;
-	this.base(name, new serialization.Struct("_index", {
+	this.base(ls, name, new serialization.Struct("_index", {
 		filter : tkey.filter_parser(),
 		m : new serialization.Object(tid.parser()), 
 		removed : new serialization.Integer()
@@ -767,11 +768,11 @@ SyncDB.MappingIndex = SyncDB.LocalField.extend({
     }
 });
 SyncDB.MultiIndex = SyncDB.LocalField.extend({
-    constructor : function(name, type, id) {
+    constructor : function(ls, name, type, id) {
 	this.type = type;
 	this.id = id;
 	//UTIL.log("%o %o %o", name, type, id);
-	this.base(name, new serialization.Object(new serialization.SimpleSet()), {});
+	this.base(ls, name, new serialization.Object(new serialization.SimpleSet()), {});
     },
     set : function(index, id) {
 	if (!this.value)
@@ -855,10 +856,10 @@ SyncDB.Schema = UTIL.Base.extend({
     }
 });
 SyncDB.TableConfig = SyncDB.LocalField.extend({
-    constructor : function(name) {
+    constructor : function(ls, name) {
 	// create self updating field with given serialization for
 	// the schema and version, etc.
-	this.base(name, new serialization.Struct(null, {
+	this.base(ls, name, new serialization.Struct(null, {
 			    version : new serialization.Array(new serialization.Integer()),
 			    schema : new SyncDB.Serialization.Schema()
 			}),
@@ -1221,9 +1222,10 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
     }
 });
 SyncDB.LocalTable = SyncDB.Table.extend({
-    constructor : function(name, schema, db) {
+    constructor : function(name, schema, ls, db) {
 	var done = 3;
-	this.config = new SyncDB.TableConfig("_syncdb_"+name);
+	this.ls = ls;
+	this.config = new SyncDB.TableConfig(ls, "_syncdb_"+name);
 	this.base(name, schema, db);
 	this.config.get(this.ready_ea.get_cb());
 	this.ready(this.M(function() {
@@ -1241,7 +1243,8 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	    if (type.is_indexed || type.is_key) {
 		var field = type.name;
 		//UTIL.log("generating index for %s", field);
-		this.I[field] = this.index("_syncdb_"+this.name+"_I"+field, type, schema.m[schema.key]);
+		this.I[field] = this.index("_syncdb_"+this.name+"_I"+field,
+					   type, schema.m[schema.key]);
 		SyncDB.LocalField.prototype.get.call(this.I[field], this.ready_ea.get_cb());
 		//UTIL.log("INDEX: %o", this.I[field]);
 	    }
@@ -1263,10 +1266,10 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	if (!c) cb(false);
     },
     is_permanent : function() {
-	return SyncDB.LS.is_permanent;
+	return this.is_permanent;
     },
     index : function(name, field_type, key_name) {
-	return field_type.get_index(name, field_type, key_name);
+	return field_type.get_index(this.ls, name, field_type, key_name);
     },
     remove : function(name, type) {
 	var f = this.M(function(value, callback) {
@@ -1279,7 +1282,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 		    type.index_remove(this.I[i], row[i], row[key]);
 		}
 
-		SyncDB.LS.remove(k, this.M(function(error, value) { // TODO: make useful with different storage errors etc.
+		this.ls.remove(k, this.M(function(error, value) { // TODO: make useful with different storage errors etc.
 		    if (!error) {
 			if (UTIL.stringp(value)) callback(false, row);
 			else callback(new SyncDB.Error.NotFound());
@@ -1318,7 +1321,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 		ids[i] = id.get_key(this.name, key, ids[i]);
 	    }
 
-	    SyncDB.LS.get(ids, this.M(function(error, value) {
+	    this.ls.get(ids, this.M(function(error, value) {
 		//UTIL.log("LS returned %s -> %s", k, value);
 		if (!error) {
 		    for (var i = 0; i < value.length; i++)
@@ -1344,7 +1347,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 
 	    // TODO: check if row.version != orow.version && orow.version == row_.version.
 	    // or rather do this more low level
-	    SyncDB.LS.set(type.get_key(this.name, key, row[key]), this.parser.encode(row).render(),
+	    this.ls.set(type.get_key(this.name, key, row[key]), this.parser.encode(row).render(),
 			  this.M(function(error) {
 			    if (error) {
 				callback(new SyncDB.Error.Set(this, row));
@@ -1368,7 +1371,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
     low_insert : function(row, callback) {
 	var key = this.schema.key;
 
-	SyncDB.LS.set(this.schema.id.get_key(this.name, key, row[key]), this.parser.encode(row).render(),
+	this.ls.set(this.schema.id.get_key(this.name, key, row[key]), this.parser.encode(row).render(),
 		      this.M(function (error) {
 			//UTIL.log("stored in %o.", this.schema.id.get_key(this.name, key, row[key]));
 			if (error) return callback(error, row);
@@ -1609,15 +1612,15 @@ SyncDB.Types = {
 	get_key : function() {
 	    return Array.prototype.slice.apply(arguments).join("_");
 	},
-	get_index : function(name, field_type, key_name) {
+	get_index : function(ls, name, field_type, key_name) {
 	    /*
 	    UTIL.log("will trace 'get_index3'");
 	    UTIL.error("get_index3(%o, %o)", name, key_name);
 	    */
 	    if (this.is_unique || this.is_key)
-		return new SyncDB.MappingIndex(name, this, key_name);
+		return new SyncDB.MappingIndex(ls, name, this, key_name);
 	    else //if (this.is_indexed)
-		return new SyncDB.MultiIndex(name, this, key_name);
+		return new SyncDB.MultiIndex(ls, name, this, key_name);
 	},
 	index_lookup : function(index, key) {
 	    if (UTIL.objectp(key) && key.index_lookup) {
@@ -1676,13 +1679,15 @@ SyncDB.Types.Integer = SyncDB.Types.Filterable.extend({
     hash : function() {
 	return new UTIL.Int.Hash();
     },
-    get_index : function(name, field_type, key_name) {
+    /*
+    get_index : function(ls, name, field_type, key_name) {
 	if (this.is_unique || this.is_key)
-	    return new SyncDB.CritBitIndex(name, this, key_name);
+	    return new SyncDB.CritBitIndex(ls, name, this, key_name);
 	else //if (this.is_indexed)
-	    //return new SyncDB.MultiIndex(name, this, key_name);
+	    //return new SyncDB.MultiIndex(ls, name, this, key_name);
 	    return this.base.apply(this, Array.prototype.slice.call(arguments));
     },
+    */
     Lt : function(val) {
 	return new SyncDB.Filter.Lt(this.name, this.parser(), val);
     },
@@ -1749,11 +1754,11 @@ SyncDB.Types.Range = SyncDB.Types.Vector.extend({
     parser : function(type) {
 	return new serialization.Range(this.types[0].parser(), type);
     },
-    get_index : function(name, field_type, key_name) {
+    get_index : function(ls, name, field_type, key_name) {
 	if (this.is_unique || this.is_key)
 	    UTIL.error("Ranges cannot be unique (yet).");
 	else //if (this.is_indexed)
-	    return new SyncDB.RangeIndex(name, this, key_name);
+	    return new SyncDB.RangeIndex(ls, name, this, key_name);
     },
     filter_parser : function() {
 	return new serialization.RangeSet(this.parser())
@@ -1799,8 +1804,8 @@ SyncDB.Types.Array = SyncDB.Types.Base.extend({
 	return new serialization.Array(this.type.parser());
     },
     toString : function() { return "Array"; },
-    get_index : function(name, field_type, key_name) {
-	return this.type.get_index(name, field_type, key_name);
+    get_index : function(ls, name, field_type, key_name) {
+	return this.type.get_index(ls, name, field_type, key_name);
     },
     index_insert : function(index, key, id) {
 	for (var i = 0; i < key.length; i++)
@@ -1853,7 +1858,7 @@ SyncDB.DraftTable = SyncDB.LocalTable.extend({
 	// we also need to support deletes?
 	// insert/update
 	this.base(name, schema);
-	this.draft_index = new SyncDB.MappingIndex("_syncdb_DI_" + this.name, schema.m[schema.key], schema.m[schema.key]);
+	this.draft_index = new SyncDB.MappingIndex(this.ls, "_syncdb_DI_" + this.name, schema.m[schema.key], schema.m[schema.key]);
     },
     insert : function(row, cb) {
 	row[this.schema.key] = 0;
