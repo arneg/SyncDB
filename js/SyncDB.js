@@ -1424,15 +1424,15 @@ SyncDB.SyncedTableBase = SyncDB.LocalTable.extend({
 	for (var i = 0; i < rows.length; i++) {
 	    var row = rows[i];
 	    if (!row[this.schema.key]) UTIL.error("error in row %o.", row);
-	    this.low_select(this.schema.id.Equal(row[this.schema.key]), this.M(function(cb, err, oldrow) {
-		// check if version is better than before!
+	    // do this check in index locally
+	    //
+	    var cb = sync_ea.get_cb();
 
-		if (err) {
-		    this.low_insert(row, cb);
-		} else {
-		    this.low_update(row[this.schema.key], row, cb);
-		}
-	    }, sync_ea.get_cb()));
+	    if (this.I[this.schema.key].has(row[this.schema.key])) {
+		this.low_update(row[this.schema.key], row, cb);
+	    } else {
+		this.low_insert(row, cb);
+	    }
 	}
 	if (this.sync_callback) {
 	    this.sync_callback(version, rows);
