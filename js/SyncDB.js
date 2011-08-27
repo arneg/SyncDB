@@ -1352,7 +1352,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 				for (var i in this.I) if (this.I.hasOwnProperty(i)) {
 				    // TODO: != is not very optimal. we should at least
 				    // check.. erm.. use something like type.eq to check that
-				    if (row_[i] != row[i]) {
+				    if (!type.eq(row_[i], row[i])) {
 					type.index_remove(this.I[i], row_[i], row_[key]);
 					type.index_insert(this.I[i], row[i], row[key]);
 				    }
@@ -1577,6 +1577,9 @@ SyncDB.Serialization.Flag = serialization.generate_structs({
 SyncDB.Types = {
     // certain types are not really indexable, so this might be split
     Base : UTIL.Base.extend({
+	eq : function (a, b) {
+	    return a == b; 
+	},
 	_types : {
 	    name : new serialization.Method(),
 	    flags : new serialization.Array(SyncDB.Serialization.Flag),
@@ -1732,6 +1735,9 @@ SyncDB.Types.Vector = SyncDB.Types.Base.extend({
 	types : function(p) {
 	    return new serialization.Array(p);
 	}
+    },
+    eq : function(a, b) {
+	return false;
     },
     toString : function() { return "Vector"; },
     constructor : function(name, types) {
