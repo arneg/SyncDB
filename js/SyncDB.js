@@ -1642,7 +1642,7 @@ SyncDB.Types = {
 	    return new serialization.Bloom(this.hash());
 	},
 	Equal : function(value) {
-	    return new SyncDB.Filter.Equal(this.name, value);
+	    return new SyncDB.Filter.Equal(this.name, this.parser(), value);
 	},
 	Bloom : function(filter) {
 	    return new SyncDB.Filter.Bloom(this.name,
