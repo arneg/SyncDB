@@ -577,6 +577,8 @@ SyncDB.LocalField = UTIL.Base.extend({
 		if (this.value == undefined) {
 		    this.ls.remove(this.name, function () {});
 		} else {
+		    // TODO: use cas here to catch errors in case someone
+		    // uses the syncdb twice at one time!
 		    this.ls.set(this.name, this.parser.encode(this.value).render(), function () {});
 		}
 	    }, this);
@@ -1388,8 +1390,9 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 
 	    // TODO: check if row.version != orow.version && orow.version == row_.version.
 	    // or rather do this more low level
-	    this.ls.set(type.get_key(this.name, key, row[key]), this.parser.encode(row).render(),
-			  this.M(function(error) {
+	    this.ls.cas(type.get_key(this.name, key, row[key]),
+			this.parser.render(row), this.parser.render(row_),
+			this.M(function(error) {
 			    if (error) {
 				callback(new SyncDB.Error.Set(this, row));
 			    } else {
@@ -1412,8 +1415,9 @@ SyncDB.LocalTable = SyncDB.Table.extend({
     low_insert : function(row, callback) {
 	var key = this.schema.key;
 
-	this.ls.set(this.schema.id.get_key(this.name, key, row[key]), this.parser.encode(row).render(),
-		      this.M(function (error) {
+	this.ls.cas(this.schema.id.get_key(this.name, key, row[key]),
+		    this.parser.encode(row).render(), undefined,
+		    this.M(function (error) {
 			//UTIL.log("stored in %o.", this.schema.id.get_key(this.name, key, row[key]));
 			if (error) return callback(error, row);
 			for (var i in this.I) {
