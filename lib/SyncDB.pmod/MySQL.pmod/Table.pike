@@ -367,7 +367,7 @@ void create(string dbname, Sql.Sql con, SyncDB.Schema schema, string table) {
     }
 
     select_sql = sprintf("SELECT %s FROM %s", t*",", table);
-    update_sql = sprintf("UPDATE %s,%s SET ", indices(tables)*",", table);
+    update_sql = sprintf("UPDATE %s SET ", (indices(tables)+({ table }))*",");
 
     t = ({});
     install_triggers(table);
