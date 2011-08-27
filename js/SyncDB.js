@@ -583,7 +583,7 @@ SyncDB.RangeIndex = SyncDB.LocalField.extend({
 	return this.overlaps(index);
     },
     remove : function(index) {
-	UTIL.error("remove not yet supported here!");
+	UTIL.log("remove not yet supported here!");
     }
 });
 // TODO: this should really be a subindex that doesnt do lookup_get, only
@@ -1394,6 +1394,17 @@ SyncDB.SyncedTableBase = SyncDB.LocalTable.extend({
     sync : function(version, rows) {
 	// TODO: this should be triggered on completion of all updates, otherwise
 	// something might fail and we still believe that we are up to date
+	var v = this.config.version();
+	if (v.length) {
+	    var is_new = false;
+	    for (var i = 0; i < v.length; ++i) {
+		if (v[i] < version[i]) {
+		    is_new = true;
+		    break;
+		}
+	    }
+	    if (!is_new) return;
+	}
 	var sync_ea = new UTIL.EventAggregator();
 	sync_ea.ready(this.M(function() {
 	    this.config.version(version);
