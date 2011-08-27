@@ -88,8 +88,12 @@ void generate_reply(int err, array(mapping)|mapping row, object session, object 
 	if (!mappingp(row))
 	    error("Bad return type from db: %O\nexpected mapping.\n", row); 
 
-	generate_sync(0, version||row->version, ({ row }));
+	// TODO: either reply directly. anyway, we have to put the inserted row into the users
+	// filter
+	generate_sync(0, row->version, ({ row }));
+	sync_unique(session, row);
 	// to all others
+	reply = .Sync(message->id, (array)row->version, ({ row }));
 	break;
     case .SyncReq:
 	reply = .Sync(message->id, (array)version, row);
@@ -102,6 +106,7 @@ void generate_reply(int err, array(mapping)|mapping row, object session, object 
     session->send(out->encode(reply)->render());
 }
 
+mapping(object:int) syncers = set_weak_flag(([]), Pike.WEAK_INDICES);
 mapping(string:mapping(object:object)) filters = ([]);
 
 // get triggered by e.g. MysqlTable
@@ -123,7 +128,7 @@ void generate_sync(int err, SyncDB.Version version, array(mapping) rows) {
 			if (filter->prepare) {
 			    h = filter->prepare(o);
 			    if (!h(filter)) continue;
-			} else if (!filter->has(o)) continue;
+			} else if (!(filter->has || filter->`[])(o)) continue;
 		    }
 
 		    if (has_index(updates, session)) updates[session] += ({ row });
@@ -138,6 +143,22 @@ void generate_sync(int err, SyncDB.Version version, array(mapping) rows) {
 		o->send(s);
 	    };
 	}
+    }
+
+    string s = out->encode(.Sync("", (array)version, rows))->render();
+    // send to synced sessions
+    indices(syncers)->send(s);
+}
+
+void filters_insert(object session, string name, mixed key) {
+    if (!filters[name] || !filters[name][session]) return;
+    filters[name][session][key] = 1;
+}
+
+void sync_unique(object session, mapping row) {
+    for (filters; string name; mapping m) {
+	if (!schema[name]->is_unique) continue;
+	filters_insert(session, name, row[name]);
     }
 }
 
@@ -161,9 +182,11 @@ void incoming(object session, Serialization.Atom a) {
 	werror("TABLE: syncreq(%O, %O, %O) (%O)\n", message->version, generate_reply, session, message);
 	SyncDB.Version v = SyncDB.Version(message->version);
 
-	foreach (message->filter; string name; object f) {
+	if (sizeof(message->filter)) foreach (message->filter; string name; object f) {
 	    if (!filters[name]) filters[name] = set_weak_flag(([ ]), Pike.WEAK_INDICES);
 	    filters[name][session] = f;
+	} else {
+	    syncers[session] = 1;
 	}
 	// check version and trigger update based on filter
 	db->syncreq(v, message->filter, generate_reply, session, message);
