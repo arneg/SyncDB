@@ -1402,35 +1402,47 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 SyncDB.SyncedTableBase = SyncDB.LocalTable.extend({
     constructor : function() {
 	this.base.apply(this, Array.prototype.slice.apply(arguments));
-	this.sync_ea = new UTIL.EventAggregator();
+	this.callbacks = [];
     },
-    synced : function(f) {
-	this.sync_ea.ready(f);
+    synced : function(cb) {
+	if (this.callbacks)
+	    this.callbacks.push(cb);
+	else
+	    UTIL.call_later(cb);
     },
     sync : function(version, rows) {
 	// TODO: this should be triggered on completion of all updates, otherwise
 	// something might fail and we still believe that we are up to date
-	this.synced(this.M(function() {
+	var sync_ea = new UTIL.EventAggregator();
+	sync_ea.ready(this.M(function() {
 	    this.config.version(version);
 	}));
 
+	if (this.callbacks) {
+	    sync_ea.ready(this.M(function() {
+		var q = this.callbacks;
+		delete this.callbacks;
+		for (var i = 0; i < q.length; i++) UTIL.call_later(q[i]);
+	    }));
+	}
+
 	for (var i = 0; i < rows.length; i++) {
 	    var row = rows[i];
-	    if (!row[schema.key]) UTIL.error("error in row %o.", row);
-	    this.low_select(schema.id.Equal(row[schema.key]), this.M(function(cb, err, oldrow) {
+	    if (!row[this.schema.key]) UTIL.error("error in row %o.", row);
+	    this.low_select(this.schema.id.Equal(row[this.schema.key]), this.M(function(cb, err, oldrow) {
 		// check if version is better than before!
 
 		if (err) {
 		    this.low_insert(row, cb);
 		} else {
-		    this.low_update(row[schema.key], row, cb);
+		    this.low_update(row[this.schema.key], row, cb);
 		}
-	    }, this.sync_ea.get_cb()));
+	    }, sync_ea.get_cb()));
 	}
 	if (this.sync_callback) {
 	    this.sync_callback(version, rows);
 	}
-	this.sync_ea.start();
+	sync_ea.start();
     }
 });
 SyncDB.SyncedTable = SyncDB.SyncedTableBase.extend({
