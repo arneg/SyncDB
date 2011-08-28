@@ -14,7 +14,7 @@ mapping encode_sql(string table, mapping row, void|mapping new) {
     if (has_index(row, name)) {
 	mixed a = row[name];
 	if (!arrayp(a) || sizeof(a) != sizeof(fields))
-	    error("Type mismatch.\n");
+	    error("Type mismatch. %O\n", a);
 	foreach (fields; int i; object type) {
 	    type->encode_sql(table, ([ type->name : a[i] ]), new);
 	}
@@ -26,14 +26,14 @@ mixed decode_sql(string table, mapping row, void|mapping new) {
     array ret = allocate(sizeof(fields));
     foreach (fields; int i; object type) {
 	if (zero_type(ret[i] = type->decode_sql(table, row)))
-	    return UNDEFINED;
+	    return new ? new : UNDEFINED;
     }
     if (new) new[name] = ret;
     return ret;
 }
 
 object get_parser() {
-    return Serialization.Types.Tuple(@fields->get_parser());
+    return Serialization.Types.Tuple("_vector", 0, @fields->get_parser());
 }
 
 array(string) sql_names(string table) {

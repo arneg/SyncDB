@@ -1,5 +1,3 @@
-object Version = Serialization.Factory.generate_struct(SyncDB.Version(), "_version");
-
 object Flag, Type, Schema, Filter;
 
 // this ignore boundaries
@@ -114,6 +112,7 @@ void create(mapping|void overwrites) {
 	"_date" : SyncDB.Types.Date("", Calendar.Second),
 	"_vector" : SyncDB.Types.Vector("", ({})),
 	"_range" : SyncDB.Types.Range("", Flag, Flag),
+	"_version" : SyncDB.Types.Version("", ({ "foo" })),
     ]), lambda(object o, string s) {
 	if (s == "flags") return Serialization.Types.OneTypedList(Flag);
 	if (s == "fields") return black_magic;

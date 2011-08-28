@@ -1,11 +1,16 @@
-class Sync(void|string id, void|array(int) version, void|array(mapping) rows) {
+class Sync(void|string id, void|array(mapping) rows) {
     string _sprintf(int type) {
-	return sprintf("%O(%O, %O)", this_program, id, error);
+	return sprintf("%O(%O, %d rows)", this_program, id, sizeof(rows));
     }
 }
-class SyncReq(void|string id, void|array(int) version, mapping|void filter) {
+class SyncReq(void|string id, SyncDB.Version version, mapping|void filter) {
     string _sprintf(int type) {
-	return sprintf("%O(%O, %O)", this_program, id, error);
+	return sprintf("%O(%O, %O)", this_program, id, filter);
+    }
+}
+class Update(void|string id, SyncDB.Version version, mapping row, mixed key) {
+    string _sprintf(int type) {
+	return sprintf("%O(%O, %O)", this_program, id, row);
     }
 }
 class Error(void|string id, void|string error) { 
@@ -29,6 +34,5 @@ class Reply(string id, array(mapping) rows) {
     }
 }
 class Insert { inherit Base; }
-class Update { inherit Base; }
 
 

@@ -324,7 +324,6 @@ void create(string dbname, Sql.Sql con, SyncDB.Schema schema, string table) {
     //    generate transaction. otherwise if its just one table, we can do with
     //    selects
     array t = ({
-	table + ".version"
     });
 
 #define CASE(x) if (Program.inherits(object_program(type), (x)))
@@ -346,7 +345,6 @@ void create(string dbname, Sql.Sql con, SyncDB.Schema schema, string table) {
 		    error("Unsupported link flag.\n");
 		}
 		tables[name] = p(name, field, fid);
-		t += ({ name  + ".version" });
 		if (table_o->sql_schema[field]->flags->auto_increment && tables[name]->is_auto_increment) {
 		    error("Link fields cannot be both automatic in %s and %s.\n", table, name);
 		}
@@ -383,14 +381,15 @@ void create(string dbname, Sql.Sql con, SyncDB.Schema schema, string table) {
 
     update_sql += "%s";
     select_sql += " WHERE 1=1 AND %s";
-    version = SyncDB.Version(sizeof(tables) + 1);
 
-    query("LOCK TABLES %s WRITE;", table_names() * " WRITE, ");
-    foreach (table_names(); int i; string name) {
-	array r = query("SELECT MAX(version) AS v FROM %s WHERE 1;", name);
-	version[i] = sizeof(r) ? (int)r[0]->v : 0;
+    // Initialize version
+    t = table_names();
+
+    foreach (t; int i; string name) {
+	t[i] = sprintf("MAX(%s.version) AS '%<s.version'", name);
     }
-    query("UNLOCK TABLES;");
+    array r = query("SELECT "+t*", "+" FROM %s WHERE 1;", table_names()*",");
+    version = schema["version"]->decode_sql(table, r[0]);
 }
 
 
@@ -416,7 +415,7 @@ void select(object filter, function(int(0..1), array(mapping)|mixed:void) cb,
     }
 }
 
-void update(mapping keys, function(int(0..1),mapping|mixed:void) cb2, mixed ... extra) {
+void update(mapping keys, SyncDB.Version version, function(int(0..1),mapping|mixed:void) cb2, mixed ... extra) {
     int(0..1) noerr;
     mixed err;
     mixed k;
@@ -425,41 +424,53 @@ void update(mapping keys, function(int(0..1),mapping|mixed:void) cb2, mixed ... 
     mixed cb(int(0..1) error, mixed bla) {
 	return cb2(error, bla, @extra);
     };
+    mapping t = schema->id->encode_sql(table, keys);
+    SyncDB.Version oversion, nversion;
 
-    string where = mapping_implode(schema->id->encode_sql(table, keys), "=", " AND ");
-
-    if (!where) {
+    if (!sizeof(t)) {
 	cb(1, "Need unique indexable field (or key) to update.\n");
 	return;
     }
 
+    string where = mapping_implode(t, "=", " AND ");
+
+    t = schema["version"]->encode_sql(table, ([ "version" : version  ]), t);
+
+    string uwhere = mapping_implode(t, "=", " AND ");
+
+
     err = catch {
 	query("LOCK TABLES %s WRITE;", table_names() * " WRITE,");
 	rows = query(sprintf(select_sql, where))[0];
+	oversion = schema["version"]->decode_sql(table, rows);
     };
-
-    if (keys->version) {
-	if (!equal(m_delete(keys, "version"), rows->version)) {
-	    query("UNLOCK TABLES;");
-	    cb(1, "Version collision.\n");
-	    return;
-	}
-    }
 
     sql = filter(table_objects()->update(keys, rows), `!=, 0)*",";
 
-    sql = sprintf(update_sql, sql, where);
+    sql = sprintf(update_sql, sql, uwhere);
 
     err = catch {
 	query(sql);
+	if (this_program::sql->master_sql->info) {
+	    string info = this_program::sql->master_sql->info();
+	    if (!info || -1 != search(info, "Changed: 0")) {
+		error("Collision!");
+	    }
+	}
 	rows = query(sprintf(select_sql, where));
+	if (sizeof(rows) != 1) error("foo");
+	nversion = schema["version"]->decode_sql(table, rows);
 	noerr = 1;
     };
 
     query("UNLOCK TABLES;");
 
     if (noerr) {
-	cb(0, sizeof(rows) && sanitize_result(rows[0]));
+	if (nversion > oversion) {
+	    version = nversion;
+	    cb(0, sizeof(rows) && sanitize_result(rows[0]));
+	} else 
+	    cb(1, "Collision!");
     } else {
 	cb(1, err);
     }
@@ -520,6 +531,8 @@ void insert(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... e
 	string where = mapping_implode(schema->id->encode_sql(table, row), "=",
 				       " AND ");
 	rows = query(sprintf(select_sql, where));
+	if (sizeof(rows) != 1) error("foo");
+	version = schema["version"]->decode_sql(table, rows);
 	query("UNLOCK TABLES;");
 	noerr = 1;
     };
@@ -589,23 +602,9 @@ void syncreq(SyncDB.Version version, mapping filter, function cb, mixed ... args
 
 array(mapping)|mapping sanitize_result(array(mapping)|mapping rows) {
     if (mappingp(rows)) {
-	mapping new = ([ "version" : SyncDB.Version(sizeof(tables)+1) ]);
-	foreach (table_names(); int i; string table) {
-	    int v = (int)m_delete(rows, table+".version"); 
-	    version[i] = max(v, version[i]);
-	    new->version[i] = v; 
-	}
-#if 1
+	mapping new = ([ ]);
+
 	schema->fields->decode_sql(table, rows, new);
-#else
-	foreach (rows; string field; mixed val) {
-	    if (has_value(field, '.')) continue;
-	    if (schema[field])
-		new[field] = schema[field]->decode_sql(table, rows);
-	    else if (field != "version")
-		werror("Field %O unknown to schema: %O\n", field, schema);
-	}
-#endif
 
 	return new;
     } else if (arrayp(rows)) {

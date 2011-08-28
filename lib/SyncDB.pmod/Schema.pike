@@ -10,6 +10,9 @@ void create(object ... m) {
     this_program::m = mkmapping(m->name, m);
 #if 1
     foreach (fields;; SyncDB.Types.Base type) {
+	if (type->name == "version") {
+	    error("field called 'version' is reserved.");
+	}
 	if (type->is_index) index += ({ type->name });
 	if (type->is_key) {
 	    if (key) error("...");
@@ -22,10 +25,17 @@ void create(object ... m) {
 	}
     }
 #endif
+    add_type(SyncDB.Types.Version("version", tables()));
 }
 
 mixed `[](mixed in) {
     return m[in];
+}
+
+void add_type(object type) {
+    if (has_index(m, type->name)) fields = filter(fields, `!=, m[type->name]);
+    fields += ({ type });
+    m[type->name] = type;
 }
 
 object parser(function|void filter) {
@@ -42,13 +52,13 @@ object parser(function|void filter) {
 
 object parser_in() {
     return parser(lambda(string field, SyncDB.Types.Base type) {
-	return !type->is_automatic; 
+	return type->is_writable && !type->is_automatic; 
     });
 }
 
 object parser_out() {
     return parser(lambda(string field, SyncDB.Types.Base type) {
-	  return !type->is_hidden; 
+	  return type->is_readable && !type->is_hidden; 
     });
 }
 
@@ -58,4 +68,13 @@ string encode_json() {
 
 Iterator _get_iterator() {
     return get_iterator(fields);
+}
+
+array(string) tables() {
+    mapping t = ([ ]);
+    foreach (m; string name; object type) {
+	if (!type->is_link) continue;
+	t += type->f_link->tables;
+    }
+    return indices(t);
 }

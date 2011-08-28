@@ -30,7 +30,14 @@ SyncDB = {
 	}),
 	NotFound : Base.extend({
 	    toString : function () { return "NotFound"; },
-	})
+	}),
+	Collision : Base.extend({
+	    constructor : function(table, row, orow) {
+		this.table = table;
+		this.row = row;
+		this.old_row = orow;
+	    }
+	}),
     },
     prune : function() {
 	for (var i = 0; i < localStorage.length; i ++) {
@@ -41,6 +48,16 @@ SyncDB = {
 	}
 
 	return true;
+    },
+    logcb : function(cb, level) {
+	return function(error, row) {
+	    if (error) {
+		UTIL.log("FAIL: %o %o\n", error, row);
+		UTIL.trace();
+	    } else if (level)
+		UTIL.log("SUCC: %o\n", row);
+	    cb.call(this, error, row);
+	};
     },
     setcb : function(error, row) {
 	if (!error) {
@@ -57,7 +74,61 @@ SyncDB = {
 	    UTIL.log("FAIL: could not fetch %o\n", error);
 	    UTIL.trace();
 	}
-    }
+    },
+    Version : Base.extend({
+	constructor : function(a) {
+	    if (UTIL.arrayp(a))
+		this.a = a;
+	    else if (UTIL.intp(a)) {
+		this.a = new Array(a);
+		for (var i = 0; i < a; i++) this.a[i] = 0;
+	    } else 
+		this.a = Array.prototype.slice.call(arguments);
+	},
+	toString : function() {
+	    return "SyncDB.Version("+this.a.join(".")+")";
+	},
+	toArray : function() {
+	    return this.a;
+	},
+	lt : function(o) {
+	    var b = false;
+	    o = o.a;
+	    if (o.length != this.a.length) return false;
+
+	    for (var i = 0; i < this.a.length; i++) {
+		if (o[i] < this.a[i]) return false;
+		if (o[i] > this.a[i]) b = true;
+	    }
+
+	    return b;
+	},
+	gt : function(o) {
+	    var b = false;
+	    if (o.a.length != this.a.length) return false;
+
+	    for (var i = 0; i < this.a.length; i++) {
+		if (o.a[i] > this.a[i]) return false;
+		if (o.a[i] < this.a[i]) b = true;
+	    }
+
+	    return b;
+	},
+	eq : function(o) {
+	    if (o.a.length != this.a.length) return false;
+	    for (var i = 0; i < this.a.length; i++) 
+		if (o.a[i] != this.a[i]) return false;
+
+	    return true;
+	},
+	max : function(o) {
+	    o = o.a;
+	    if (o.length != this.a.length) UTIL.error("bad argument %o to max", o);
+	    var ret = new Array(o.length);
+	    for (var i = 0; i < this.a.length; i++) ret[i] = Math.max(o[i], this.a[i]);
+	    return new SyncDB.Version(ret);
+	}
+    })
 };
 /*
  * what do we need for index lookup in a filter:
@@ -349,7 +420,7 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 		try {
 		    this.db.transaction(this.M(function (tx) {
 			try {
-			    tx.executeSql("CREATE TABLE IF NOT EXISTS sLsA (key VARCHAR(255) PRIMARY KEY, value BLOB);", [],
+			    tx.executeSql("CREATE TABLE IF NOT EXISTS sLsA (key VARCHAR(255) PRIMARY KEY, value BLOB, hash BLOB);", [],
 					  this.M(function(tx, data) {
 					    this.M(cb)(false);
 					  }),
@@ -397,14 +468,21 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 		}));
 	    }
 	},
-	cas : function(key, val, old, cb) {
+	cas : function(key, val, old, cb, foo) {
 	    if (this.q) {
-		this.q.push(function() { this.cas(key, val, old, cb); });
+		if (!foo) {
+		    UTIL.log("queueing cas(%o, %o, %o)", key, val, old);
+		}
+		
+		this.q.push(function() { this.cas(key, val, old, cb, true); });
 	    } else {
+		UTIL.log("cas(%o, %o, %o)", key, val, old);
 		cb = UTIL.safe(cb);
 		this.q = [];
 		var good = this.M(function(tx, data) {
-			if (data.rowsAffected != 1) cb(true);
+			if (data.rowsAffected != 1) {
+			    cb(true, "cas failed!");
+			}
 			else UTIL.call_later(cb, window, false, val);
 			this.replay();
 		    });
@@ -412,17 +490,22 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 			cb(err);
 			this.replay();
 		    });
+		var nhash = this.hash(val);
 		this.db.transaction(this.M(function (tx) {
-		    if (UTIL.stringp(old))
-			tx.executeSql("UPDATE sLsA SET value=? WHERE key=? AND"+
-				      " value=?;",
-				      [ this.encode(val), key, this.encode(old) ], good, bad);
-		    else
-			tx.executeSql("INSERT INTO sLsA (key, value)"+
-				      " VALUES(?, ?);",
-				      [ key, this.encode(val) ], good, bad);
+		    if (UTIL.stringp(old)) {
+			var ohash = this.hash(old);
+			tx.executeSql("UPDATE sLsA SET value=?, hash=? WHERE key=? AND"+
+				      " hash=?;",
+				      [ this.encode(val), nhash, key, ohash ], good, bad);
+		    } else
+			tx.executeSql("INSERT INTO sLsA (key, value, hash)"+
+				      " VALUES(?, ?, ?);",
+				      [ key, this.encode(val), nhash ], good, bad);
 		}));
 	    }
+	},
+	hash : function(s) {
+	    return ((new UTIL.SHA256.Hash()).update(s).hex_digest());
 	},
 	set : function(key, val, cb) {
 	    if (this.q) {
@@ -430,11 +513,12 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 	    } else {
 		cb = UTIL.safe(cb);
 		this.q = [];
+		var hash = this.hash(val);
 		this.db.transaction(this.M(function (tx) {
-		    tx.executeSql("INSERT OR REPLACE INTO sLsA (key, value) VALUES(?, ?);", [ key, this.encode(val) ],
+		    tx.executeSql("INSERT OR REPLACE INTO sLsA (key, value, hash) VALUES(?, ?, ?);", [ key, this.encode(val), hash ],
 				  this.M(function(tx, data) {
 				    if (data.rowsAffected != 1) cb(true);
-				    else cb(false, val);
+				    else UTIL.call_later(cb, window, false, val);
 				    this.replay();
 				  }),
 				  this.M(function (tx, err) {
@@ -881,9 +965,13 @@ SyncDB.Schema = UTIL.Base.extend({
     parser : function(filter) {
 	var n = {};
 	for (var name in this.m) if (this.m.hasOwnProperty(name)) {
-	    if (!filter || filter(name, this.m[name]))
-		n[name] = new serialization.Or(new serialization.False(),
-					       this.m[name].parser());
+	    if (!filter || filter(name, this.m[name])) {
+		n[name] = this.m[name].parser();
+		if (!this.m[name].is_mandatory)
+		    n[name] = new serialization.Or(n[name],
+						   new serialization.False()
+						   );
+	    }
 	}
 	return new serialization.Struct("_schema", n);
     },
@@ -922,10 +1010,10 @@ SyncDB.TableConfig = SyncDB.LocalField.extend({
     },
     version : function() { // table version. to sync missing upstream revisions
 	if (arguments.length) {
-	    this.value.version = arguments[0];
+	    this.value.version = arguments[0].a;
 	    this.sync();
 	}
-	return this.value.version;
+	return new SyncDB.Version(this.value.version);
     },
     schema : function() {
 	if (arguments.length) {
@@ -964,10 +1052,10 @@ SyncDB.Table = UTIL.Base.extend({
 	this.schema = schema;
 	this.parser = schema.parser();
 	this.parser_in = schema.parser(function(name, type) {
-	    return !type.is_hidden;
+	    return type.is_readable && !type.is_hidden;
 	});
 	this.parser_out = schema.parser(function(name, type) {
-	    return !type.is_hidden && !type.is_automatic;
+	    return type.is_writable && !type.is_automatic;
 	});
 	this.db = db;
 	this.ready_ea = new UTIL.EventAggregator();
@@ -1006,9 +1094,9 @@ SyncDB.Table = UTIL.Base.extend({
     },
     get_version : function() {},
     // I am not sure what this thing was supposed to do.
-    sync : function(version, rows) {
+    sync : function(rows) {
 	for (var i = 0; i < this.changes.length; i++)
-	    UTIL.call_later(this.changes[i], this, version, rows);
+	    UTIL.call_later(this.changes[i], this, rows);
     },
     index : function() {
 	return null;
@@ -1079,9 +1167,11 @@ SyncDB.Table = UTIL.Base.extend({
 	}));
     },
     update : function(id, row, callback, orow) {
+	if (!orow) UTIL.error("you need to specify the row your update is based on!");
 	if (this.db) {
-	    this.db.update(id, row, callback, orow);
-	} else return this.low_update(id, row, callback, orow);
+	    return this.db.update(id, row, callback, orow);
+	} 
+	return this.low_update(id, row, callback, orow);
     },
     version : function() {
 	return this.config.version();
@@ -1115,9 +1205,16 @@ SyncDB.Meteor = {
 	    this.id = id;
 	    this.rows = rows;
 	}
+    }),
+    Update  : Base.extend({
+	constructor : function(id, row, version, key) {
+	    this.id = id;
+	    this.row = row;
+	    this.version = version;
+	    this.key = key;
+	}
     })
 };
-SyncDB.Meteor.Update = SyncDB.Meteor.Base.extend({});
 SyncDB.Meteor.Insert = SyncDB.Meteor.Base.extend({});
 SyncDB.Meteor.Sync = SyncDB.Meteor.Base.extend({});
 SyncDB.Meteor.SyncReq = SyncDB.Meteor.Base.extend({
@@ -1134,7 +1231,7 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	this.channel = channel;
 	this.atom_parser = new serialization.AtomParser();
 	this.base(name, schema, db);
-	var int = new serialization.Integer();
+	var version_type = schema.m.version.parser();
 	var s = new serialization.String();
 	var regtype = function(poly, atype, ptype, m) {
 	    poly.register_type(atype, ptype,
@@ -1146,7 +1243,7 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	regtype(this.incoming, "_reply", SyncDB.Meteor.Reply,
 		{ id : s, rows : new serialization.Array(this.parser_in) });
 	regtype(this.incoming, "_sync", SyncDB.Meteor.Sync,
-		{ id : s, version : new serialization.Array(int), rows : new serialization.Array(this.parser_in) });
+		{ id : s, rows : new serialization.Array(this.parser_in) });
 	this.out = new serialization.Polymorphic();
 	var m = {};
 	for (var field in schema.m) if (schema.m.hasOwnProperty(field)) {
@@ -1162,7 +1259,7 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	var Or = new serialization.Or;
 	Or.types = UTIL.values(m);
 	regtype(this.out, "_syncreq", SyncDB.Meteor.SyncReq,
-		{ id : s, version : new serialization.Array(int), filter : new serialization.Object(Or) });
+		{ id : s, version : version_type, filter : new serialization.Object(Or) });
 	regtype(this.out, "_select", SyncDB.Meteor.Select,
 		{ id : s, filter : SyncDB.Serialization.Filter });
 	regtype(this.out, "_insert", SyncDB.Meteor.Insert,
@@ -1170,7 +1267,8 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	// TODO: is an update allowed to change hidden fields?
 	// insert is, so in principle this should be allowed
 	regtype(this.out, "_update", SyncDB.Meteor.Update,
-		{ id : s, row : this.parser_in });
+		{ id : s, row : this.parser_out, version : version_type,
+		  key : schema.id.parser() });
 
 	channel.set_cb(this.M(function(data) {
 	    var a = this.atom_parser.parse(data);
@@ -1184,7 +1282,7 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 		}
 
 		if (o instanceof SyncDB.Meteor.Sync) { // we dont care for id. just clean it up, man!
-		    this.sync(o.version, o.rows);
+		    this.sync(o.rows);
 		    if (!o.id) continue;
 		}
 
@@ -1231,10 +1329,11 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	f(row);
     },
     low_update : function(key, row, callback, orow) {
+	if (!orow || !orow.version) UTIL.error("need to specify old row for update.");
 	var id = UTIL.get_unique_key(5, this.requests);
 	row[this.schema.key] = key;
 	this.requests[id] = callback;
-	this.send(new SyncDB.Meteor.Update(id, row));
+	this.send(new SyncDB.Meteor.Update(id, row, orow.version, key));
 	return id;
     },
     remove : function(name, type) {
@@ -1253,9 +1352,8 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 	this.send(new SyncDB.Meteor.Insert(id, row));
 	return id;
     },
-    request_sync : function(version, filters, cb) {
+    request_sync : function(version, filters) {
 	var id = UTIL.get_unique_key(5, this.requests);
-	this.onchange(cb);
 	this.send(new SyncDB.Meteor.SyncReq(id, version, filters));
     }
 });
@@ -1265,14 +1363,22 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	this.ls = ls;
 	this.config = new SyncDB.TableConfig(ls, "_syncdb_"+name);
 	this.base(name, schema, db);
-	this.config.get(this.ready_ea.get_cb());
-	this.ready(this.M(function() {
+	var eag = new UTIL.EventAggregator();
+	var hashcheck = this.ready_ea.get_cb()
+	this.config.get(eag.get_cb());
+	eag.ready(this.M(function() {
 	    if (this.config.schema().hashCode() != schema.hashCode()) {
 
-		this.prune();
+		this.ls.clear(this.M(function() {
+		    this.config.schema(schema);
+		    this.config.version(new SyncDB.Version(schema.m.version.n));
+		    hashcheck();
+		}));
+		return;
 	    }
 
 	    this.config.schema(schema);
+	    hashcheck();
 	    //this.sync(this.config.version());
 	}));
 	this.I = {};
@@ -1283,10 +1389,11 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 		//UTIL.log("generating index for %s", field);
 		this.I[field] = this.index("_syncdb_"+this.name+"_I"+field,
 					   type, schema.m[schema.key]);
-		SyncDB.LocalField.prototype.get.call(this.I[field], this.ready_ea.get_cb());
+		SyncDB.LocalField.prototype.get.call(this.I[field], eag.get_cb());
 		//UTIL.log("INDEX: %o", this.I[field]);
 	    }
 	}
+	eag.start();
     },
     version : function() {
 	return this.config.version();
@@ -1350,7 +1457,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	    //UTIL.call_later(callback, null, error);
 	    return;
 	}
-	//UTIL.log("ids: %o\n", ids);
+	//UTIL.log("ids: %o\n", ids.join(","));
 	if (ids.length) {
 	    var id = this.schema.id;
 	    var key = this.schema.key;
@@ -1365,7 +1472,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 		    for (var i = 0; i < value.length; i++)
 			if (UTIL.stringp(value[i]))
 			    value[i] = this.parser.decode(serialization.parse_atom(value[i]));
-			else callback(new SyncDB.Error.NotFound());
+			else return callback(new SyncDB.Error.NotFound());
 		    callback(false, value);
 		} else callback(error);
 	    }));
@@ -1376,8 +1483,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
     low_update : function(id, row, callback, orow) {
 	var type = this.config.schema().id;
 	var key = type.name;
-
-	this.select_by(id, this.M(function(error, row_) {
+	var f = this.M(function(error, row_) {
 	    if (error) {
 		callback(error);
 		UTIL.log("%d: %o", id, error);
@@ -1388,18 +1494,24 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	    }
 	    row_ = row_[0];
 
+	    if (row.version && row.version.lt(row_.version)) {
+		callback(true, new SyncDB.Error.Collision(this, row, row_));
+		return;
+	    }
+
 	    // TODO: check if row.version != orow.version && orow.version == row_.version.
 	    // or rather do this more low level
 	    this.ls.cas(type.get_key(this.name, key, row[key]),
 			this.parser.render(row), this.parser.render(row_),
 			this.M(function(error) {
 			    if (error) {
-				callback(new SyncDB.Error.Set(this, row));
+				callback(new SyncDB.Error.Collision(this, row, row_));
 			    } else {
 				for (var i in this.I) if (this.I.hasOwnProperty(i)) {
 				    // TODO: != is not very optimal. we should at least
 				    // check.. erm.. use something like type.eq to check that
 				    if (!type.eq(row_[i], row[i])) {
+					UTIL.log("changing %s from %o to %o", i, row_[i], row[i]);
 					type.index_remove(this.I[i], row_[i], row_[key]);
 					type.index_insert(this.I[i], row[i], row[key]);
 				    }
@@ -1410,7 +1522,11 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	    
 	    //for (var i in this.I) if (!row.hasOwnProperty(i)) error?
 
-	}));
+	});
+
+	if (orow)
+	    return f(false, [ orow ]);
+	else this.select_by(id, f);
     },
     low_insert : function(row, callback) {
 	var key = this.schema.key;
@@ -1440,37 +1556,22 @@ SyncDB.SyncedTableBase = SyncDB.LocalTable.extend({
 	else
 	    UTIL.call_later(cb);
     },
-    sync : function(version, rows) {
+    sync : function(rows) {
 	// TODO: this should be triggered on completion of all updates, otherwise
 	// something might fail and we still believe that we are up to date
-	var v = this.config.version();
-	var vhash = version.join(",");
-	if (v.length) {
-	    var is_new = false;
-	    for (var i = 0; i < v.length; ++i) {
-		if (v[i] < version[i]) {
-		    is_new = true;
-		    break;
-		}
-	    }
-	    if (!is_new) return;
-	}
-	if (this.syncing[vhash]) return;
 
-	this.syncing[vhash] = 1;
+	var version = this.version();
 	var sync_ea = new UTIL.EventAggregator();
 	sync_ea.ready(this.M(function() {
 	    this.config.version(version);
-	    delete this.syncing[vhash];
-	    SyncDB.Table.prototype.sync.call(this, version, rows);
+	    SyncDB.Table.prototype.sync.call(this, rows);
 	}));
 
 	if (this.callbacks) {
-	    sync_ea.ready(this.M(function() {
-		var q = this.callbacks;
-		delete this.callbacks;
+	    sync_ea.ready(this.M(function(q) {
 		for (var i = 0; i < q.length; i++) UTIL.call_later(q[i]);
-	    }));
+	    }, this.callbacks));
+	    delete this.callbacks;
 	}
 
 	for (var i = 0; i < rows.length; i++) {
@@ -1478,7 +1579,8 @@ SyncDB.SyncedTableBase = SyncDB.LocalTable.extend({
 	    if (!row[this.schema.key]) UTIL.error("error in row %o.", row);
 	    // do this check in index locally
 	    //
-	    var cb = sync_ea.get_cb();
+	    var cb = SyncDB.logcb(sync_ea.get_cb());
+	    version = version.max(row.version);
 
 	    if (this.I[this.schema.key].has(row[this.schema.key])) {
 		this.low_update(row[this.schema.key], row, cb);
@@ -1494,7 +1596,7 @@ SyncDB.SyncedTable = SyncDB.SyncedTableBase.extend({
 	this.base.apply(this, Array.prototype.slice.apply(arguments));
 	if (this.db) {
 	    this.ready(this.M(function() {
-		this.db.request_sync(this.version(), {}, UTIL.make_method(this, this.sync));
+		this.db.request_sync(this.version(), {});
 	    }));
 	}
     }
@@ -1509,7 +1611,7 @@ SyncDB.CachedTable = SyncDB.SyncedTableBase.extend({
 		for (var field in this.I) if (this.I.hasOwnProperty(field)) {
 		    m[field] = this.I[field].get_filter();
 		}
-		this.db.request_sync(this.version(), m, UTIL.make_method(this, this.sync));
+		this.db.request_sync(this.version(), m);
 	    }));
 	}
     },
@@ -1539,8 +1641,6 @@ SyncDB.CachedTable = SyncDB.SyncedTableBase.extend({
 /** @namespace */
 SyncDB.Flags = {
     Base : UTIL.Base.extend({
-	is_readable : 1,
-	is_writable : 1,
 	toString : function() {
 	    return "Base";
 	}
@@ -1648,6 +1748,8 @@ SyncDB.Types = {
 		    }
 		}
 	    }
+	    this.is_writable = 1;
+	    this.is_readable = 1;
 	    // FORWARD loop for priorities
 	    for (var i = 0; i < this.flags.length; i++) {
 		//UTIL.log("scanning %o\n", this.flags[i]);
@@ -1785,6 +1887,12 @@ SyncDB.Types.Vector = SyncDB.Types.Base.extend({
 	}
     },
     eq : function(a, b) {
+	if (UTIL.arrayp(a) && UTIL.arrayp(b)) {
+	    if (a.length != b.length) return false;
+	    for (var i = 0; i < a.length; i++)
+		if (!this.types[i].eq(a[i], b[i])) return false;
+	    return true;
+	}
 	return false;
     },
     toString : function() { return "Vector"; },
@@ -1792,10 +1900,10 @@ SyncDB.Types.Vector = SyncDB.Types.Base.extend({
 	this.types = types;
 	this.base.apply(this, [ name ].concat(Array.prototype.slice.call(arguments, 2)));
     },
-    parser : function() {
+    parser : function(type, constructor) {
 	var l = new Array(this.types.length+2);
-	l[0] = "_vector";
-	l[1] = false;
+	l[0] = type||"_vector";
+	l[1] = constructor||false;
 	for (var i = 0; i < l.length-2; i++)
 	    l[i+2] = this.types[i].parser();
 	return UTIL.create(serialization.Tuple, l);
@@ -1826,6 +1934,40 @@ SyncDB.Types.Range = SyncDB.Types.Vector.extend({
 	return new SyncDB.Filter.Overlaps(this.name, this.parser(), range);
     }
 });
+SyncDB.Types.Version = SyncDB.Types.Vector.extend({
+    toString : function() { return "Version"; },
+    _types : {
+	name : new serialization.Method(),
+	flags : new serialization.Array(SyncDB.Serialization.Flag),
+	types : function(p) {
+	    return new serialization.Array(p);
+	},
+	n : new serialization.Integer()
+    },
+    constructor : function(name, n) {
+	var t = new Array(n);
+
+	this.n = n;
+	for (var i = 0; i < n; i++) t[i] = new SyncDB.Types.Integer("_version_"+i);
+	this.base.apply(this, [ name, t ].concat(Array.prototype.slice.call(arguments, 2)));
+    },
+    parser : function(type, constructor) {
+	return this.base(type||"_version").extend({
+	    encode : function(o) {
+		return this.base(o.a);
+	    },
+	    decode : function(atom) {
+		return new SyncDB.Version(this.base(atom));
+	    },
+	    can_encode : function(o) {
+		return o instanceof SyncDB.Version;
+	    }
+	});
+    },
+    eq : function(a, b) {
+	return a.eq(b);
+    }
+});
 SyncDB.Date = function() {
     Date.apply(this, Array.prototype.slice.call(arguments));
     this.sizeof = function() {
@@ -1845,6 +1987,9 @@ SyncDB.Types.Date = SyncDB.Types.Base.extend({
     toString : function() { return "Date"; },
     parser : function() {
 	return new serialization.Date();
+    },
+    eq : function(a, b) {
+	return a.getTime() == b.getTime();
     }
 });
 SyncDB.Types.Array = SyncDB.Types.Base.extend({
@@ -1893,7 +2038,8 @@ SyncDB.Serialization.Type = serialization.generate_structs({
     _range : SyncDB.Types.Range,
     _vector : SyncDB.Types.Vector,
     _date : SyncDB.Types.Date,
-    _image : SyncDB.Types.Image
+    _image : SyncDB.Types.Image,
+    _version : SyncDB.Types.Version
 });
 SyncDB.Serialization.Schema = serialization.Array.extend({
     constructor : function() {
