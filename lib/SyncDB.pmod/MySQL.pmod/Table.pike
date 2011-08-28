@@ -459,7 +459,7 @@ void update(mapping keys, SyncDB.Version version, function(int(0..1),mapping|mix
 	}
 	rows = query(sprintf(select_sql, where));
 	if (sizeof(rows) != 1) error("foo");
-	nversion = schema["version"]->decode_sql(table, rows);
+	nversion = schema["version"]->decode_sql(table, rows[0]);
 	noerr = 1;
     };
 
