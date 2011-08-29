@@ -1270,6 +1270,8 @@ SyncDB.Table = UTIL.Base.extend({
 	};
     },
     insert : function(row, callback) {
+	if (!(row instanceof this.schema.Row()))
+	    row = this.schema.Insert(row);
 	if (this.db) {
 	    this.db.insert(row, callback);
 	} else {
@@ -1314,6 +1316,8 @@ SyncDB.Table = UTIL.Base.extend({
     },
     update : function(row, callback, orow) {
 	if (!orow) UTIL.error("you need to specify the row your update is based on!");
+	if (!(row instanceof this.schema.Row()))
+	    row = orow.Update(row);
 	if (this.db) {
 	    return this.db.update(row, callback, orow);
 	} 
@@ -1467,6 +1471,7 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
     },
     low_update : function(row, callback, orow) {
 	if (!orow || !orow.version) UTIL.error("need to specify old row for update.");
+	if (!row.hasOwnProperty(this.schema.key)) UTIL.error("update needs it.");
 	var id = UTIL.get_unique_key(5, this.requests);
 	this.requests[id] = callback;
 	this.send(new SyncDB.Meteor.Update(id, row, orow.version, row[this.schema.key]));
