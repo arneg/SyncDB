@@ -1,4 +1,4 @@
-object Flag, Type, Schema, Filter;
+object Flag, Type, Schema, Filter, Null;
 
 // this ignore boundaries
 class Range {
@@ -122,5 +122,6 @@ void create(mapping|void overwrites) {
     });
     black_magic->etype = Type;
 
+    Null = Serialization.Types.Singleton("_null", SyncDB.Null);
     Schema = pSchema();
 }

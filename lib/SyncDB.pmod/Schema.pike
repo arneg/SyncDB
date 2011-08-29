@@ -47,7 +47,11 @@ object parser(function|void filter) {
 	}
     }
 
-    return Serialization.Types.Struct("_schema", n);
+    return Serialization.Types.Struct("_row", n)
+	|  Serialization.Types.Struct("_delete", ([
+		"version" : n["version"],
+		key : n[key]
+	      ]), SyncDB.DeletedRow);
 }
 
 object parser_in() {

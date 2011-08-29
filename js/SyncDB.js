@@ -127,8 +127,43 @@ SyncDB = {
 	    var ret = new Array(o.length);
 	    for (var i = 0; i < this.a.length; i++) ret[i] = Math.max(o[i], this.a[i]);
 	    return new SyncDB.Version(ret);
-	}
-    })
+	},
+    }),
+    Delete : Base.extend({
+	constructor : function(schema, row) {
+	    this.schema = schema;
+	    if (row) {
+		this[schema.key] = row[schema.key];
+		this.version = row.version;
+	    }
+	},
+    }),
+    Row : Base.extend({
+	constructor : function(schema) {
+	    this.schema = schema;
+	},
+	Delete : function() {
+	    return new (this.schema.Delete())(this);
+	},
+	Update : function(m) {
+	    var r = new (this.schema.Row())();
+
+	    for (var name in this.schema.m) 
+		if (this.schema.m.hasOwnProperty(name)) {
+		    var type = this.schema.m[name];
+		    if (m.hasOwnProperty(name)) {
+			if (!type.is_writable) UTIL.error("Trying to set readonly field %o", name);
+			r[name] = m[name];
+		    }
+		}
+
+	    r[schema.key] = this[schema.key];
+	    r.version = this.version;
+	    return r;
+	},
+    }),
+    Undefined : undefined,
+    Null : {}
 };
 /*
  * what do we need for index lookup in a filter:
@@ -295,7 +330,10 @@ SyncDB.Filter.Le = SyncDB.Filter.Equal.extend({
     }
 });
 /** @namespace */
-SyncDB.Serialization = {};
+SyncDB.Serialization = {
+    Null : new serialization.Singleton("_null", SyncDB.Null),
+    Undefined : new serialization.Singleton("_undefined", SyncDB.Undefined),
+};
 SyncDB.Serialization.Filter = serialization.generate_structs({
     _or : SyncDB.Filter.Or,
     _and : SyncDB.Filter.And,
@@ -1032,18 +1070,56 @@ SyncDB.Schema = UTIL.Base.extend({
     schema_parser : function() {
 	return new SyncDB.Serialization.Schema();
     },
+    Insert : function(m) {
+	var r = new (this.Row())();
+	for (var name in this.m) if (this.m.hasOwnProperty(name)) {
+	    var type = this.m[name];
+	    if (r.hasOwnProperty(name)) {
+		if (!type.is_writable)
+		    UTIL.error("Trying to insert writable field %o.", type);
+		r[name] = m[name];
+	    } else if (type.is_mandatory) {
+		UTIL.error("Missing mandatory field %o.", type);
+	    }
+	}
+	return r;
+    },
+    Delete : function() {
+	if (this._Delete) return this._Delete;
+	var schema = this;
+	return this._Delete = SyncDB.Delete.extend({
+	    constructor : function(row) {
+		this.base(schema, row);
+	    }
+	});
+    },
+    Row : function() {
+	if (this._Row) return this._Row;
+	var schema = this;
+	return this._Row = SyncDB.Row.extend({
+	    constructor : function() {
+		this.base(schema);
+	    }
+	});
+    },
     parser : function(filter) {
 	var n = {};
 	for (var name in this.m) if (this.m.hasOwnProperty(name)) {
 	    if (!filter || filter(name, this.m[name])) {
-		n[name] = this.m[name].parser();
+		var t = [ this.m[name].parser(),
+			  SyncDB.Serialization.Null ];
 		if (!this.m[name].is_mandatory)
-		    n[name] = new serialization.Or(n[name],
-						   new serialization.False()
-						   );
+		    t.push(serialization.Undefined);
+		n[name] = new serialization.Or(t);
 	    }
 	}
-	return new serialization.Struct("_schema", n);
+	var m = {};
+	m.version = n.version;
+	m[this.key] = n[this.key];
+	return new serialization.Or(
+		    new serialization.Struct("_row", n, this.Row()),
+		    new serialization.Struct("_delete", m, this.Delete())
+		    );
     },
     get_auto_set : function(db, cb) {
 	var as = {};
@@ -1371,15 +1447,6 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 		} else if (!(o instanceof SyncDB.Meteor.Sync)) UTIL.log("could not find reply handler for %o(%o):%o\n", a[i].type, a[i], o);
 	    }
 	}));
-    },
-    get_empty : function(cb) {
-	var n = {};
-	for (var field in this.schema.m) {
-	    if (!cb || cb(this.schema.m[field])) {
-		n[field] = false;
-	    }
-	}
-	return n;
     },
     // TODO: this is used to hook up local implicit drafts that might have results pending.
     register_request : function(id, callback) {

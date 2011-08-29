@@ -45,8 +45,11 @@ string encode_sql_value(mixed v) {
 mixed decode_sql(string table, mapping row, mapping|void new) {
     string n = sql_name(table);
     mixed v;
-    if (has_index(row, n) && (v = row[n])) {
-	v = decode_sql_value(v);
+    if (has_index(row, n)) {
+	v = row[n];
+	if (stringp(v)) {
+	    v = decode_sql_value(v);
+	} else v = SyncDB.Null;
 	if (new) new[name] = v;
 	return v;
     }
@@ -55,8 +58,11 @@ mixed decode_sql(string table, mapping row, mapping|void new) {
 
 mapping encode_sql(string table, mapping row, mapping|void new) {
     if (!new) new = ([]);
-    if (has_index(row, name))
-	new[sql_name(table)] = encode_sql_value(row[name]);
+    if (has_index(row, name)) {
+	new[sql_name(table)] = (row[name] == SyncDB.Null)
+				? "NULL"
+				: encode_sql_value(row[name]);
+    }
     return new;
 }
 
@@ -84,9 +90,14 @@ object get_parser();
 object _parser;
 object parser() {
     if (!_parser) {
-	_parser = get_parser();
+	_parser = get_parser() |
+#ifdef TEST_RESOLVER
+		SyncDB.Serialization.Null;
+#else
+		master()->resolv("SyncDB.Serialization.Null");
+#endif
 	if (!this->is_mandatory) {
-	    _parser = Serialization.Types.Or(_parser, Serialization.Types.False());
+	    _parser |= Serialization.Types.Undefined;
 	}
     }
     return _parser;

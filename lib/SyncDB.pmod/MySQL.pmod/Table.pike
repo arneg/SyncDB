@@ -606,7 +606,7 @@ array(mapping)|mapping sanitize_result(array(mapping)|mapping rows) {
 
 	schema->fields->decode_sql(table, rows, new);
 
-	return new;
+	return rows->deleted ? SyncDB.DeletedRow(new) : new;;
     } else if (arrayp(rows)) {
 	return map(rows, sanitize_result);
     }
