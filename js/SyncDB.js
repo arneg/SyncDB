@@ -1644,12 +1644,11 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 				callback(new SyncDB.Error.Collision(this, row, row_));
 			    } else {
 				for (var i in this.I) if (this.I.hasOwnProperty(i)) {
-				    // TODO: != is not very optimal. we should at least
-				    // check.. erm.. use something like type.eq to check that
-				    if (!type.eq(row_[i], row[i])) {
+				    var t = this.schema.m[i];
+				    if (!t.eq(row_[i], row[i])) {
 					UTIL.log("changing %s from %o to %o", i, row_[i], row[i]);
-					type.index_remove(this.I[i], row_[i], row_[key]);
-					type.index_insert(this.I[i], row[i], row[key]);
+					t.index_remove(this.I[i], row_[i], row_[key]);
+					t.index_insert(this.I[i], row[i], row[key]);
 				    }
 				}
 				callback(false, row);
@@ -2068,6 +2067,12 @@ SyncDB.Types.Range = SyncDB.Types.Vector.extend({
     //RangeSet : // TODO
     Overlaps : function(range) {
 	return new SyncDB.Filter.Overlaps(this.name, this.parser(), range);
+    },
+    eq : function(a, b) {
+	if (a instanceof CritBit.Range && b instanceof CritBit.Range) {
+	    return (this.types[0].eq(a.a, b.a) && this.types[1].eq(a.b, b.b));
+	}
+	return false;
     }
 });
 SyncDB.Types.Version = SyncDB.Types.Vector.extend({
