@@ -1074,7 +1074,7 @@ SyncDB.Schema = UTIL.Base.extend({
 	var r = new (this.Row())();
 	for (var name in this.m) if (this.m.hasOwnProperty(name)) {
 	    var type = this.m[name];
-	    if (r.hasOwnProperty(name)) {
+	    if (m.hasOwnProperty(name)) {
 		if (!type.is_writable)
 		    UTIL.error("Trying to insert writable field %o.", type);
 		r[name] = m[name];
@@ -1312,12 +1312,12 @@ SyncDB.Table = UTIL.Base.extend({
 	    f(error, rows);
 	}));
     },
-    update : function(id, row, callback, orow) {
+    update : function(row, callback, orow) {
 	if (!orow) UTIL.error("you need to specify the row your update is based on!");
 	if (this.db) {
-	    return this.db.update(id, row, callback, orow);
+	    return this.db.update(row, callback, orow);
 	} 
-	return this.low_update(id, row, callback, orow);
+	return this.low_update(row, callback, orow);
     },
     version : function() {
 	return this.config.version();
@@ -1465,12 +1465,11 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
     auto_set : function(row, f) {
 	f(row);
     },
-    low_update : function(key, row, callback, orow) {
+    low_update : function(row, callback, orow) {
 	if (!orow || !orow.version) UTIL.error("need to specify old row for update.");
 	var id = UTIL.get_unique_key(5, this.requests);
-	row[this.schema.key] = key;
 	this.requests[id] = callback;
-	this.send(new SyncDB.Meteor.Update(id, row, orow.version, key));
+	this.send(new SyncDB.Meteor.Update(id, row, orow.version, row[this.schema.key]));
 	return id;
     },
     remove : function(name, type) {
@@ -1617,13 +1616,13 @@ SyncDB.LocalTable = SyncDB.Table.extend({
     },
     prune : function() { // delete everything
     },
-    low_update : function(id, row, callback, orow) {
+    low_update : function(row, callback, orow) {
 	var type = this.config.schema().id;
 	var key = type.name;
 	var f = this.M(function(error, row_) {
 	    if (error) {
 		callback(error);
-		UTIL.log("%d: %o", id, error);
+		UTIL.log("%d: %o", row[key], error);
 		UTIL.error("Some unexpected error occured. Sorry.");
 	    }
 	    if (!row_ || row_.length != 1) {
@@ -1663,7 +1662,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 
 	if (orow)
 	    return f(false, [ orow ]);
-	else this.select_by(id, f);
+	else this.select_by(row[key], f);
     },
     low_insert : function(row, callback) {
 	var key = this.schema.key;
@@ -1720,7 +1719,7 @@ SyncDB.SyncedTableBase = SyncDB.LocalTable.extend({
 	    version = version.max(row.version);
 
 	    if (this.I[this.schema.key].has(row[this.schema.key])) {
-		this.low_update(row[this.schema.key], row, cb);
+		this.low_update(row, cb);
 	    } else {
 		this.low_insert(row, cb);
 	    }

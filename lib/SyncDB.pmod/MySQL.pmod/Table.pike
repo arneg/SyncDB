@@ -532,7 +532,7 @@ void insert(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... e
 				       " AND ");
 	rows = query(sprintf(select_sql, where));
 	if (sizeof(rows) != 1) error("foo");
-	version = schema["version"]->decode_sql(table, rows);
+	version = schema["version"]->decode_sql(table, rows[0]);
 	query("UNLOCK TABLES;");
 	noerr = 1;
     };
