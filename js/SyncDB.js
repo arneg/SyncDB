@@ -157,7 +157,7 @@ SyncDB = {
 		    }
 		}
 
-	    r[schema.key] = this[schema.key];
+	    r[this.schema.key] = this[this.schema.key];
 	    r.version = this.version;
 	    return r;
 	},
