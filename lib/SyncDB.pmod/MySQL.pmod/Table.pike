@@ -509,7 +509,7 @@ void insert(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... e
 
 	foreach (table_objects(); ; Table t) {
 	    mapping new = t->insert(row);
-	    if (!new) continue;
+	    if (!new && !t->is_auto_increment) continue;
 	    string into = indices(new)*",";
 	    string values = values(new)*",";
 	    query("INSERT INTO %s (%s) VALUES (%s);", t->name, into, values);
