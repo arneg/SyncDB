@@ -2125,7 +2125,7 @@ SyncDB.Date = function() {
 	return new CritBit.Size(0, 32 - CritBit.clz(a ^ b));
     };
     this.get_bit = function(size) {
-	return CritBit.get_bit(Math.floow(this.getTime()/1000), size);
+	return CritBit.get_bit(Math.floor(this.getTime()/1000), size);
     };
 };
 SyncDB.Date.prototype = Date.prototype;
