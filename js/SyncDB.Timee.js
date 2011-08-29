@@ -2,12 +2,9 @@ SyncDB.Timee = {
     class_counter : 0,
     Sheet : Base.extend({
 	constructor : function() {
-	    /*
-	    document.body.insertBefore(document.createElement("style"),
-				       document.body.firstChild);
-	   */
+	    document.body.appendChild(document.createElement("style"));
 	    this.rules = {};
-	    this.s = document.styleSheets[0];
+	    this.s = document.styleSheets[document.styleSheets.length-1];
 	    UTIL.log("%o", this.s);
 	    if (!this.s.addRule) {
 		this.s.addRule = UTIL.make_method(this.s,
@@ -39,6 +36,12 @@ SyncDB.Timee.EventManager = Base.extend({
 	this.c = "_syncdb_rand"+this.n;
 	this.rule = SyncDB.Timee.S().Rule("."+this.c);
 	this.events = {};
+    },
+    fade : function() {
+	this.rule.style["z-index"] = "-1";
+    },
+    unfade : function() {
+	this.rule.style.removeProperty("z-index");
     },
     hide : function() {
 	this.rule.style.display = "none";
