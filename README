@@ -1,0 +1,6 @@
+
+
+===== KNOWN BUGS =======================
+- LS(prefix)
+  * doesnt detect several windows working on the same LS. It should internally
+    lock using CAS or poll the fields if its already set.
