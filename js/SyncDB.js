@@ -354,34 +354,30 @@ SyncDB.KeyValueMapping = UTIL.Base.extend({
     is_permanent : false,
     set : function(key, value, cb) {
 	this.m[key] = value;
-	cb(false, value);
-	//UTIL.call_later(cb, null, false, value);
+	UTIL.call_later(cb, null, false, value);
     },
     cas : function(key, value, old, cb) {
 	if (this.m[key] == old) {
 	    this.m[key] = value;
-	    cb(false, value);
+	    UTIL.call_later(cb, null, false, value);
 	} else {
-	    cb(true);
+	    UTIL.call_later(cb, null, true, "Collision");
 	}
     },
     get : function(key, cb) {
 	if (UTIL.arrayp(key)) {
 	    for (var i = 0; i < key.length; i++) key[i] = this.m[key[i]];
 	} else key = this.m[key];
-	//cb(false, key);
 	UTIL.call_later(cb, null, false, key);
     },
     remove : function(key, cb) {
 	var v = this.m[key];
 	delete this.m[key];
-	cb(false, v);
-	//UTIL.call_later(cb, null, false, v);
+	UTIL.call_later(cb, null, false, v);
     },
     clear : function(cb) {
 	this.m = {};
-	cb(false);
-	//UTIL.call_later(cb, null, false);
+	UTIL.call_later(cb, null, false);
     },
     toString : function() {
 	return "SyncDB.KeyValueMapping";
@@ -395,11 +391,9 @@ if (UTIL.App.has_local_storage) {
 	set : function(key, value, cb) {
 	    try {
 		localStorage[this.prefix+key] = value;
-		//cb(false, value);
 		UTIL.call_later(cb, null, false, value);
 	    } catch (err) {
-		cb(err);
-		//UTIL.call_later(cb, null, err);
+		UTIL.call_later(cb, null, err);
 	    }
 	},
 	cas : function(key, value, old, cb) {
@@ -407,7 +401,7 @@ if (UTIL.App.has_local_storage) {
 		localStorage[this.prefix+key] = value;
 		cb(false, value);
 	    } else {
-		cb(true);
+		cb(true, "Collision!");
 	    }
 	},
 	is_permanent : true,
@@ -418,11 +412,9 @@ if (UTIL.App.has_local_storage) {
 			key[i] = localStorage[this.prefix+key[i]];
 		} else 
 		    key = localStorage[this.prefix+key];
-		//cb(false, value);
 		UTIL.call_later(cb, null, false, key);
 	    } catch(err) {
-		cb(err);
-		//UTIL.call_later(cb, null, err);
+		UTIL.call_later(cb, null, err);
 	    }
 
 	},
@@ -430,18 +422,15 @@ if (UTIL.App.has_local_storage) {
 	    try {
 		var value = localStorage[this.prefix+key];
 		delete localStorage[this.prefix+key];
-		//cb(false, value);
 		UTIL.call_later(cb, null, false, value);
 	    } catch (err) {
-		cb(err);
-		//UTIL.call_later(cb, null, err);
+		UTIL.call_later(cb, null, err);
 	    }
 	},
 	clear : function(cb) {
 	    // TODO: remove only prefix LS entries
 	    localStorage.clear();
-	    cb(false);
-	    //UTIL.call_later(cb, null, false);
+	    UTIL.call_later(cb, null, false);
 	},
 	toString : function() {
 	    return "SyncDB.KeyValueStorage";
@@ -451,146 +440,135 @@ if (UTIL.App.has_local_storage) {
 if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
     SyncDB.KeyValueDatabase = UTIL.Base.extend({
 	constructor : function(prefix, cb) {
-		this.db = openDatabase("SyncDB:"+prefix, "1.0", "SyncDB", 5*1024*1024);
-		this.init(cb);
+	    this.db = openDatabase("SyncDB:"+prefix, "1.0", "SyncDB", 5*1024*1024);
+	    this.init(cb);
 	},
 	init : function(cb) {
-		try {
-		    this.db.transaction(this.M(function (tx) {
-			try {
-			    tx.executeSql("CREATE TABLE IF NOT EXISTS sLsA (key VARCHAR(255) PRIMARY KEY, value BLOB, hash BLOB);", [],
-					  this.M(function(tx, data) {
-					    this.M(cb)(false);
-					  }),
-					  this.M(function(tx, err) {
-					    this.M(cb)(err);
-					  }));
-			} catch(err) {
-			    this.M(cb)(err);
-			}
-		    }));
-		} catch (err) {
-		    this.M(cb)(err);
-		}
+	    try {
+		this.db.transaction(this.M(function (tx) {
+		    try {
+			tx.executeSql("CREATE TABLE IF NOT EXISTS sLsA (key VARCHAR(255) PRIMARY KEY, value BLOB, hash BLOB);", [],
+				      this.M(function(tx, data) {
+					this.M(cb)(false);
+					this.run(true);
+				      }),
+				      this.M(function(tx, err) {
+					this.M(cb)(err);
+				      }));
+		    } catch(err) {
+			this.M(cb)(err);
+		    }
+		}));
+		this.running = true;
+	    } catch (err) {
+		this.M(cb)(err);
+	    }
 	},
 	is_permanent : true,
 	q : [],
-	get : function(key, cb) {
-	    if (this.q) {
-		this.q.push(function() { this.get(key, cb); });
-	    } else {
-		cb = UTIL.safe(cb);
-		this.q = [];
-		this.db.transaction(this.M(function (tx) {
-		    var i, arr = UTIL.arrayp(key);
-		    var query = "SELECT * FROM sLsA WHERE ";
-		    if (arr) {
-			var t = new Array(key.length);
-			for (i = 0; i < t.length; i++) t[i] = "key=?";
-			query += t.join(" OR ") + ";";
-		    } else query += "key=?;";
-
-		    tx.executeSql(query, arr ? key : [key], this.M(function(tx, data) {
-			var ret = arr ? new Array(key.length) : null;
-			var m = {};
-			for (i = 0; i < data.rows.length; i++) m[data.rows.item(i).key] = this.decode(data.rows.item(i).value);
-			if (arr) {
-			    for (i = 0; i < key.length; i++) ret[i] = m[key[i]];
-			} else ret = m[key];
-			cb(false, ret);
-			this.replay();
-		    }), this.M(function(tx, err) {
-			cb(err);
-			this.replay();
-		    }));
-		}));
+	_wrap : function(cb1, cb2) {
+	    return function(tx, data) {
+		cb1(tx, data);
+		cb2(tx, data);
+	    };
+	},
+	push : function(a, b, c, d) {
+	    this.q.push([a, b, c, d]);
+	    this.run();
+	},
+	run : function(force) {
+	    if (!force && this.running) return;
+	    if (this.q.length) {
+		this.running = true;
+		this.db.transaction(this.M(this._transaction), this.M(function(err) { UTIL.log("err: %o", err); }), this.M(this.run, true));
+	    } else this.running = false;
+	},
+	_transaction : function(tx) {
+	    var ea = new UTIL.EventAggregator();
+	    var q = this.q;
+	    this.q = [];
+	    for (var i = 0; i < q.length; i++) {
+		var cb = ea.get_cb();
+		tx.executeSql(q[i][0], q[i][1],
+			      this._wrap(q[i][2], cb,
+			      this._wrap(q[i][3], cb)));
 	    }
+	    ea.start();
+	},
+	get : function(key, cb) {
+	    cb = UTIL.safe(cb);
+	    var i, arr = UTIL.arrayp(key);
+	    var query = "SELECT * FROM sLsA WHERE ";
+	    if (arr) {
+		var t = new Array(key.length);
+		for (i = 0; i < t.length; i++) t[i] = "key=?";
+		query += t.join(" OR ") + ";";
+	    } else query += "key=?;";
+
+	    this.push(query, arr ? key : [key], 
+			this.M(function(tx, data) {
+		    var ret = arr ? new Array(key.length) : null;
+		    var m = {};
+		    for (i = 0; i < data.rows.length; i++) m[data.rows.item(i).key] = this.decode(data.rows.item(i).value);
+		    if (arr) {
+			for (i = 0; i < key.length; i++) ret[i] = m[key[i]];
+		    } else ret = m[key];
+		    cb(false, ret);
+		}), this.M(function(tx, err) {
+		    cb(err);
+		}));
 	},
 	cas : function(key, val, old, cb, foo) {
-	    if (this.q) {
-		if (!foo) {
-		    UTIL.log("queueing cas(%o, %o, %o)", key, val, old);
-		}
-		
-		this.q.push(function() { this.cas(key, val, old, cb, true); });
-	    } else {
-		UTIL.log("cas(%o, %o, %o)", key, val, old);
-		cb = UTIL.safe(cb);
-		this.q = [];
-		var good = this.M(function(tx, data) {
-			if (data.rowsAffected != 1) {
-			    cb(true, "cas failed!");
-			}
-			else UTIL.call_later(cb, window, false, val);
-			this.replay();
-		    });
-		var bad = this.M(function (tx, err) {
-			cb(err);
-			this.replay();
-		    });
-		var nhash = this.hash(val);
-		this.db.transaction(this.M(function (tx) {
-		    if (UTIL.stringp(old)) {
-			var ohash = this.hash(old);
-			tx.executeSql("UPDATE sLsA SET value=?, hash=? WHERE key=? AND"+
-				      " hash=?;",
-				      [ this.encode(val), nhash, key, ohash ], good, bad);
-		    } else
-			tx.executeSql("INSERT INTO sLsA (key, value, hash)"+
-				      " VALUES(?, ?, ?);",
-				      [ key, this.encode(val), nhash ], good, bad);
-		}));
-	    }
+	    cb = UTIL.safe(cb);
+	    var good = this.M(function(tx, data) {
+		    if (data.rowsAffected != 1) {
+			cb(true, "cas failed!");
+		    } else cb(false, val);
+		});
+	    var bad = this.M(function (tx, err) {
+		    cb(err);
+		});
+	    var nhash = this.hash(val);
+	    if (UTIL.stringp(old)) {
+		var ohash = this.hash(old);
+		this.push("UPDATE sLsA SET value=?, hash=? WHERE key=? AND"+
+			      " hash=?;",
+			      [ this.encode(val), nhash, key, ohash ], good, bad);
+	    } else
+		this.push("INSERT INTO sLsA (key, value, hash)"+
+			      " VALUES(?, ?, ?);",
+			      [ key, this.encode(val), nhash ], good, bad);
 	},
 	hash : function(s) {
 	    return ((new UTIL.SHA256.Hash()).update(s).hex_digest());
 	},
 	set : function(key, val, cb) {
-	    if (this.q) {
-		this.q.push(function() { this.set(key, val, cb); });
-	    } else {
-		cb = UTIL.safe(cb);
-		this.q = [];
-		var hash = this.hash(val);
-		this.db.transaction(this.M(function (tx) {
-		    tx.executeSql("INSERT OR REPLACE INTO sLsA (key, value, hash) VALUES(?, ?, ?);", [ key, this.encode(val), hash ],
-				  this.M(function(tx, data) {
-				    if (data.rowsAffected != 1) cb(true);
-				    else UTIL.call_later(cb, window, false, val);
-				    this.replay();
-				  }),
-				  this.M(function (tx, err) {
-				    cb(err);
-				    this.replay();
-				  }));
-		}));
-	    }
+	    cb = UTIL.safe(cb);
+	    var hash = this.hash(val);
+	    this.push("INSERT OR REPLACE INTO sLsA (key, value, hash) VALUES(?, ?, ?);", [ key, this.encode(val), hash ],
+			  this.M(function(tx, data) {
+			    if (data.rowsAffected != 1) cb(true, "Collision");
+			    else cb(false, val);
+			  }),
+			  this.M(function (tx, err) {
+			    cb(err);
+			  }));
 	},
 	remove : function(key, cb) {
-	    if (this.q) {
-		this.q.push(function() { this.remove(key, cb); });
-	    } else {
 		cb = UTIL.safe(cb);
-		this.q = [];
-		this.db.transaction(this.M(function (tx) {
-		    tx.executeSql("SELECT * FROM sLsA WHERE key=?;", [key],
-			this.M(function(tx, data) {
-			    tx.executeSql("DELETE FROM sLsA WHERE key=?;", [key],
-					  this.M(function (tx) {
-					      cb(false, this.decode(data.rows.item(0).value));
-					      this.replay();
-					  }),
-					  this.M(function (tx, err) {
-					      cb(err);
-					      this.replay();
-					  }));
-					  }),
-			this.M(function (tx, err) {
-			    cb(err);
-			    this.replay();
-			}));
-		}));
-	    }
+		this.push("SELECT * FROM sLsA WHERE key=?;", [key],
+		    this.M(function(tx, data) {
+			this.push("DELETE FROM sLsA WHERE key=?;", [key],
+				      this.M(function (tx) {
+					  cb(false, this.decode(data.rows.item(0).value));
+				      }),
+				      this.M(function (tx, err) {
+					  cb(err);
+				      }));
+				      }),
+		    this.M(function (tx, err) {
+			cb(err);
+		    }));
 	},
 	encode : function(s) {
 	    return UTF8.encode(s.replace(/\0/g, "\u0100"));
@@ -598,22 +576,13 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 	decode : function(s) {
 	    return UTF8.decode(s).replace(/\u0100/g, "\0");
 	},
-	replay : function() {
-	    var q = this.q;
-	    this.q = undefined;
-	    for (var i = 0; i < q.length; i++) {
-		q[i].apply(this);
-	    }
-	},
 	clear : function(cb) {
 	    cb = UTIL.safe(cb);
-	    this.db.transaction(this.M(function (tx) {
-		tx.executeSql("DROP TABLE sLsA;", [], this.M(function() {
-			      this.init(cb);
-			  }), function(err) {
-			      cb(err);
-			  });
-	    }));
+	    this.push("DROP TABLE sLsA;", [], this.M(function() {
+			  this.init(cb);
+		      }), function(err) {
+			  cb(err);
+		      });
 	},
 	toString : function() {
 	    return "SyncDB.KeyValueDatabase";
@@ -624,10 +593,10 @@ SyncDB.LS = function(prefix) {
     if (SyncDB.KeyValueDatabase)
 	return new SyncDB.KeyValueDatabase(prefix, function (err) {
 	    if (err) {
-		UTIL.error("%o", err);
+		UTIL.error("failed to initialize local database. fallback deactivated right now! (%o)", err);
 		// rewrite this here with functions from a fallback!
 		//SyncDB.LS = new (SyncDB.KeyValueStorage || SyncDB.KeyValueMapping)();
-	    } else this.replay();
+	    }
 	});
     return new(SyncDB.KeyValueStorage || SyncDB.KeyValueMapping)(prefix);
 };
