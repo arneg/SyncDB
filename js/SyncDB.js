@@ -442,12 +442,14 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 	constructor : function(prefix, cb) {
 	    this.db = openDatabase("SyncDB:"+prefix, "1.0", "SyncDB", 5*1024*1024);
 	    this.init(cb);
+	    this.q = [];
+	    this.Q = [ this.q ];
 	},
 	init : function(cb) {
 	    try {
 		this.db.transaction(this.M(function (tx) {
 		    try {
-			tx.executeSql("CREATE TABLE IF NOT EXISTS sLsA (key VARCHAR(255) PRIMARY KEY, value BLOB, hash BLOB);", [],
+			tx.executeSql("CREATE TABLE IF NOT EXISTS sLsA (key VARCHAR(255) PRIMARY KEY, value BLOB);", [],
 				      this.M(function(tx, data) {
 					this.M(cb)(false);
 					this.run(true);
@@ -465,34 +467,55 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 	    }
 	},
 	is_permanent : true,
-	q : [],
 	_wrap : function(cb1, cb2) {
 	    return function(tx, data) {
 		cb1(tx, data);
 		cb2(tx, data);
 	    };
 	},
+	push_unsafe : function(a, b, c, d) {
+	    if (this.q) {
+		this.Q.push(this.q);
+		this.q = null;
+	    }
+	    this.Q.push([[ a,b,c,d ]]);
+	    if (!this.running) this.run();
+	},
 	push : function(a, b, c, d) {
-	    this.q.push([a, b, c, d]);
-	    this.run();
+	    if (this.q && this.q.length < 1000) 
+		this.q.push([a, b, c, d]);
+	    else {
+		this.q = [[ a, b, c, d ]];
+		this.Q.push(this.q);
+	    }
+	    if (!this.running) this.run();
 	},
 	run : function(force) {
+	    var err;
 	    if (!force && this.running) return;
-	    if (this.q.length) {
+	    if (this.Q.length && this.Q[0].length) {
 		this.running = true;
-		this.db.transaction(this.M(this._transaction), this.M(function(err) { UTIL.log("err: %o", err); }), this.M(this.run, true));
-	    } else this.running = false;
+		err = this.M(function(err) { UTIL.error("err: %o", err); });
+		this.db.transaction(this.M(this._transaction), err, this.M(this.run, true));
+	    } else {
+		this.running = false;
+	    }
 	},
 	_transaction : function(tx) {
 	    var ea = new UTIL.EventAggregator();
-	    var q = this.q;
-	    this.q = [];
+	    var q = this.Q.shift();
+	    if (this.q === q) {
+		this.q = null;
+	    }
+	    var t = new Date();
+	    console.log("executing: %d statements", q.length);
 	    for (var i = 0; i < q.length; i++) {
 		var cb = ea.get_cb();
 		tx.executeSql(q[i][0], q[i][1],
 			      this._wrap(q[i][2], cb,
 			      this._wrap(q[i][3], cb)));
 	    }
+	    ea.ready(function() { console.log("done in %o ms", new Date() - t); });
 	    ea.start();
 	},
 	get : function(key, cb) {
@@ -514,45 +537,42 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 			for (i = 0; i < key.length; i++) ret[i] = m[key[i]];
 		    } else ret = m[key];
 		    cb(false, ret);
-		}), this.M(function(tx, err) {
+		}), function(tx, err) {
 		    cb(err);
-		}));
+		});
 	},
 	cas : function(key, val, old, cb, foo) {
 	    cb = UTIL.safe(cb);
-	    var good = this.M(function(tx, data) {
+	    var good = function(tx, data) {
 		    if (data.rowsAffected != 1) {
 			cb(true, "cas failed!");
 		    } else cb(false, val);
-		});
-	    var bad = this.M(function (tx, err) {
+		};
+	    var bad = function (tx, err) {
 		    cb(err);
-		});
-	    var nhash = this.hash(val);
+		};
 	    if (UTIL.stringp(old)) {
-		var ohash = this.hash(old);
-		this.push("UPDATE sLsA SET value=?, hash=? WHERE key=? AND"+
-			      " hash=?;",
-			      [ this.encode(val), nhash, key, ohash ], good, bad);
+		this.push_unsafe("UPDATE sLsA SET value=? WHERE key=? AND"+
+			      " value=?;",
+			      [ this.encode(val), key, this.encode(old) ], good, bad);
 	    } else
-		this.push("INSERT INTO sLsA (key, value, hash)"+
-			      " VALUES(?, ?, ?);",
-			      [ key, this.encode(val), nhash ], good, bad);
+		this.push_unsafe("INSERT INTO sLsA (key, value)"+
+			      " VALUES(?, ?);",
+			      [ key, this.encode(val) ], good, bad);
 	},
 	hash : function(s) {
 	    return ((new UTIL.SHA256.Hash()).update(s).hex_digest());
 	},
 	set : function(key, val, cb) {
 	    cb = UTIL.safe(cb);
-	    var hash = this.hash(val);
-	    this.push("INSERT OR REPLACE INTO sLsA (key, value, hash) VALUES(?, ?, ?);", [ key, this.encode(val), hash ],
-			  this.M(function(tx, data) {
+	    this.push("INSERT OR REPLACE INTO sLsA (key, value) VALUES(?, ?);", [ key, this.encode(val) ],
+			  function(tx, data) {
 			    if (data.rowsAffected != 1) cb(true, "Collision");
 			    else cb(false, val);
-			  }),
-			  this.M(function (tx, err) {
+			  },
+			  function (tx, err) {
 			    cb(err);
-			  }));
+			  });
 	},
 	remove : function(key, cb) {
 		cb = UTIL.safe(cb);
@@ -562,13 +582,13 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 				      this.M(function (tx) {
 					  cb(false, this.decode(data.rows.item(0).value));
 				      }),
-				      this.M(function (tx, err) {
+				      function (tx, err) {
 					  cb(err);
-				      }));
+				      });
 				      }),
-		    this.M(function (tx, err) {
+		    function (tx, err) {
 			cb(err);
-		    }));
+		    });
 	},
 	encode : function(s) {
 	    return UTF8.encode(s.replace(/\0/g, "\u0100"));
