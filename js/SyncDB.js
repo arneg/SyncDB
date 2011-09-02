@@ -1610,7 +1610,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
     },
     prune : function() { // delete everything
     },
-    low_update : function(row, callback, orow) {
+    low_update : function(row, callback, orow, force) {
 	var type = this.config.schema().id;
 	var key = type.name;
 	var f = this.M(function(error, row_) {
@@ -1631,23 +1631,27 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 
 	    // TODO: check if row.version != orow.version && orow.version == row_.version.
 	    // or rather do this more low level
-	    this.ls.cas(type.get_key(this.name, key, row[key]),
-			this.parser.render(row), this.parser.render(row_),
-			this.M(function(error) {
-			    if (error) {
-				callback(new SyncDB.Error.Collision(this, row, row_));
-			    } else {
-				for (var i in this.I) if (this.I.hasOwnProperty(i)) {
-				    var t = this.schema.m[i];
-				    if (!t.eq(row_[i], row[i])) {
-					UTIL.log("changing %s from %o to %o", i, row_[i], row[i]);
-					t.index_remove(this.I[i], row_[i], row_[key]);
-					t.index_insert(this.I[i], row[i], row[key]);
-				    }
-				}
-				callback(false, row);
-			    }
-			  }));
+	    var cb = this.M(function(error) {
+		if (error) {
+		    callback(new SyncDB.Error.Collision(this, row, row_));
+		} else {
+		    for (var i in this.I) if (this.I.hasOwnProperty(i)) {
+			var t = this.schema.m[i];
+			if (!t.eq(row_[i], row[i])) {
+			    UTIL.log("changing %s from %o to %o", i, row_[i], row[i]);
+			    t.index_remove(this.I[i], row_[i], row_[key]);
+			    t.index_insert(this.I[i], row[i], row[key]);
+			}
+		    }
+		    callback(false, row);
+		}
+	    });
+
+	    if (force)
+		this.ls.set(type.get_key(this.name, key, row[key]), this.parser.render(row), cb);
+	    else
+		this.ls.cas(type.get_key(this.name, key, row[key]),
+			this.parser.render(row), this.parser.render(row_), cb);
 	    
 	    //for (var i in this.I) if (!row.hasOwnProperty(i)) error?
 
@@ -1657,20 +1661,23 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	    return f(false, [ orow ]);
 	else this.select_by(row[key], f);
     },
-    low_insert : function(row, callback) {
+    low_insert : function(row, callback, force) {
 	var key = this.schema.key;
 
-	this.ls.cas(this.schema.id.get_key(this.name, key, row[key]),
-		    this.parser.encode(row).render(), undefined,
-		    this.M(function (error) {
-			//UTIL.log("stored in %o.", this.schema.id.get_key(this.name, key, row[key]));
-			if (error) return callback(error, row);
-			for (var i in this.I) {
-			    if (this.schema.m[i].is_unique || this.I[i].has(row[i]))
-				this.schema.m[i].index_insert(this.I[i], row[i], row[key]);
-			}
-			callback(false, row);
-		      }));
+	var cb = this.M(function (error) {
+	    //UTIL.log("stored in %o.", this.schema.id.get_key(this.name, key, row[key]));
+	    if (error) return callback(error, row);
+	    for (var i in this.I) {
+		if (this.schema.m[i].is_unique || (this instanceof SyncDB.SyncedTable) || this.I[i].has(row[i]))
+		    this.schema.m[i].index_insert(this.I[i], row[i], row[key]);
+	    }
+	    callback(false, row);
+	});
+
+	if (force) this.ls.set(this.schema.id.get_key(this.name, key, row[key]),
+		    this.parser.encode(row).render(), cb);
+	else this.ls.cas(this.schema.id.get_key(this.name, key, row[key]),
+		    this.parser.encode(row).render(), undefined, cb);
     }
 });
 SyncDB.SyncedTableBase = SyncDB.LocalTable.extend({
@@ -1712,9 +1719,9 @@ SyncDB.SyncedTableBase = SyncDB.LocalTable.extend({
 	    version = version.max(row.version);
 
 	    if (this.I[this.schema.key].has(row[this.schema.key])) {
-		this.low_update(row, cb);
+		this.low_update(row, cb, undefined, true);
 	    } else {
-		this.low_insert(row, cb);
+		this.low_insert(row, cb, true);
 	    }
 	}
 	sync_ea.start();
