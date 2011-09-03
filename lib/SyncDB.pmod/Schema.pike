@@ -80,5 +80,5 @@ array(string) tables() {
 	if (!type->is_link) continue;
 	t += type->f_link->tables;
     }
-    return indices(t);
+    return sort(indices(t));
 }
