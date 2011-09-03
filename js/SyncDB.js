@@ -1824,13 +1824,13 @@ SyncDB.Flags.WriteOnly = SyncDB.Flags.Base.extend({
     toString : function() {
 	return "WriteOnly";
     },
-    is_writable : 0
+    is_readable : 1
 });
 SyncDB.Flags.ReadOnly = SyncDB.Flags.Base.extend({
     toString : function() {
 	return "ReadOnly";
     },
-    is_readable : 0
+    is_writable : 0
 });
 SyncDB.Flags.Hashed = SyncDB.Flags.Base.extend({
     toString : function() {
@@ -1897,8 +1897,6 @@ SyncDB.Types = {
 		    }
 		}
 	    }
-	    this.is_writable = 1;
-	    this.is_readable = 1;
 	    // FORWARD loop for priorities
 	    for (var i = 0; i < this.flags.length; i++) {
 		//UTIL.log("scanning %o\n", this.flags[i]);
@@ -1911,6 +1909,8 @@ SyncDB.Types = {
 		    }
 		}
 	    }
+	    if (!this.hasOwnProperty("is_writable")) this.is_writable = true;
+	    if (!this.hasOwnProperty("is_readable")) this.is_readable = true;
 	},
 	get_key : function() {
 	    return Array.prototype.slice.apply(arguments).join("_");
