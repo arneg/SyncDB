@@ -542,9 +542,9 @@ void insert(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... e
 	rows = query(sprintf(select_sql, where));
 	if (sizeof(rows) != 1) error("foo");
 	version = schema["version"]->decode_sql(table, rows[0]);
-	query("UNLOCK TABLES;");
 	noerr = 1;
     };
+    query("UNLOCK TABLES;");
 
     if (noerr) {
 	cb(0, sizeof(rows) ? sanitize_result(rows[0]) : 0);
