@@ -18,14 +18,23 @@ void register_table(string name, object table, string channel) {
     channels[name] = channel;
 }
 
+void unregister_table(string name) {
+    m_delete(tables, name);
+    m_delete(channels, name);
+}
+
 string simpletag_schema(string tagname, mapping args, string content,
 			RequestID id) {
-    if (!args->name || !tables[args->name]) error("No such table: %O in %O", args->name, tables);
+    if (!args->name)
+	return Standards.JSON.encode(mkmapping(indices(tables), values(tables)->schema));
+    if (!tables[args->name]) error("No such table: %O in %O", args->name, tables);
     return Standards.JSON.encode(tables[args->name]->schema);
 }
 
 string simpletag_channel(string tagname, mapping args, string content,
 			RequestID id) {
-    if (!args->name || !channels[args->name]) error("No such table: %O in %O", args->name, channels);
+    if (!args->name)
+	return Standards.JSON.encode(channels);
+    if(!channels[args->name]) error("No such table: %O in %O", args->name, channels);
     return Standards.JSON.encode(channels[args->name]);
 }
