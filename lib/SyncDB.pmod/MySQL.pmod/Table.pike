@@ -349,8 +349,8 @@ void create(string dbname, Sql.Sql con, SyncDB.Schema schema, string table) {
 		    error("Unsupported link flag.\n");
 		}
 		tables[name] = p(name, field, fid);
-		if (table_o->sql_schema[field]->flags->auto_increment && tables[name]->is_auto_increment) {
-		    error("Link fields cannot be both automatic in %s and %s.\n", table, name);
+		if (table_o->sql_schema[field]->flags->auto_increment && tables[name]->is_auto_increment && schema[fid]->is_writable) {
+		    error("Link fields cannot be both automatic in %s and %s (%O, %O).\n", table, name, fid, schema[fid]->flags);
 		}
 	    }
 	}
