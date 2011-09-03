@@ -1035,6 +1035,14 @@ SyncDB.MultiIndex = SyncDB.LocalField.extend({
     },
     toString : function() {
 	return "MultiIndex("+this.name+","+this.type+")";
+    },
+    values : function() {
+	var ret = [];
+	var m = this.value;
+	for (var key in m) if (m.hasOwnProperty(key)) {
+	    ret = ret.concat(UTIL.keys(m[key]));
+	}
+	return ret;
     }
 });
 SyncDB.Schema = UTIL.Base.extend({
@@ -1684,7 +1692,7 @@ SyncDB.SyncedTableBase = SyncDB.LocalTable.extend({
     constructor : function() {
 	this.base.apply(this, Array.prototype.slice.apply(arguments));
 	this.callbacks = [];
-	this.syncing = {};
+	this._syncing = new UTIL.Event();
     },
     synced : function(cb) {
 	if (this.callbacks)
@@ -1692,12 +1700,17 @@ SyncDB.SyncedTableBase = SyncDB.LocalTable.extend({
 	else
 	    UTIL.call_later(cb);
     },
+    syncing : function(cb) {
+	this._syncing.bind(cb);
+    },
     sync : function(rows) {
 	// TODO: this should be triggered on completion of all updates, otherwise
 	// something might fail and we still believe that we are up to date
 
 	var version = this.version();
 	var sync_ea = new UTIL.EventAggregator();
+	sync_ea.progress(UTIL.make_method(this._syncing,
+					  this._syncing.trigger));
 	sync_ea.ready(this.M(function() {
 	    this.config.version(version);
 	    SyncDB.Table.prototype.sync.call(this, rows);
@@ -1712,10 +1725,10 @@ SyncDB.SyncedTableBase = SyncDB.LocalTable.extend({
 
 	for (var i = 0; i < rows.length; i++) {
 	    var row = rows[i];
-	    if (!row[this.schema.key]) UTIL.error("error in row %o.", row);
+	    if (!row.hasOwnProperty(this.schema.key)) UTIL.error("error in row %o.", row);
 	    // do this check in index locally
 	    //
-	    var cb = SyncDB.logcb(sync_ea.get_cb());
+	    var cb = sync_ea.get_cb();
 	    version = version.max(row.version);
 
 	    if (this.I[this.schema.key].has(row[this.schema.key])) {
