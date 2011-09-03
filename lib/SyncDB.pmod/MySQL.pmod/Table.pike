@@ -211,9 +211,13 @@ class Link {
 class Reference {
     inherit Link;
 
-    string writable(mapping row, function fun) {
-	if (sizeof(row & indices(fields))) {
-	    error("Trying to change referenced an hence readonly fields.\n");
+    array(string) writable() {
+	return ({});
+    }
+
+    string insert(mapping row, function fun) {
+	if (sizeof(row & fields->name)) {
+	    error("Trying to change referenced an hence readonly fields: %O.\n", row & fields->name);
 	}
     }
 }
@@ -509,7 +513,12 @@ void insert(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... e
 
 	foreach (table_objects(); ; Table t) {
 	    mapping new = t->insert(row);
-	    if (!new && !t->is_auto_increment) continue;
+	    if (!new) {
+		if (t->is_auto_increment && sizeof(t->writable())) {
+		    new = ([]);
+		}
+		continue;
+	    }
 	    string into = indices(new)*",";
 	    string values = values(new)*",";
 	    query("INSERT INTO %s (%s) VALUES (%s);", t->name, into, values);
