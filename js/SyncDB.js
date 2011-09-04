@@ -250,7 +250,7 @@ SyncDB.Filter.Equal = SyncDB.Filter.Base.extend({
     },
     index_lookup : function(table) {
 	if (table.I[this.field]) {
-	    return table.I[this.field].get(this.value);
+	    return table.I[this.field].lookup_equal(this.value);
 	} else UTIL.error("no index for %s", this.field);
     },
     filter : function(schema, rows) {
@@ -264,10 +264,7 @@ SyncDB.Filter.Equal = SyncDB.Filter.Base.extend({
 	var index;
 	if (index = table.I[this.field]) {
 	    for (var i = 0; i < rows.length; i++) {
-		index.set(rows[i][this.field], rows[i][table.schema.key]);
-	    }
-	    if (index.set_filter) {
-		index.set_filter(this.value);
+		index.insert(rows[i][this.field], rows[i][table.schema.key]);
 	    }
 	    return rows;
 	} else return [];
@@ -722,41 +719,101 @@ SyncDB.LocalField = UTIL.Base.extend({
 	    }, this);
     }
 });
-SyncDB.RangeIndex = SyncDB.LocalField.extend({
+SyncDB.Index = SyncDB.LocalField.extend({
     constructor : function(ls, name, tkey, tid) {
 	this.tkey = tkey;
-	this.tid= tid;
-	this.base(ls, name, new serialization.Struct("_range_index", {
-	    m : new serialization.MultiRangeSet(tkey.parser(tid.parser())),
-	    filter : tkey.filter_parser()
-	}), {
-	    m : new CritBit.MultiRangeSet(),
-	    filter : tkey.filter()
-	});
+	this.tid = tid;
+	console.log("SyncDB.Index constructor.");
+	this.base(ls, name, new serialization.Object(tkey.parser()), {});
+	this.get(UTIL.make_method(this, function() { this.init.apply(this, Array.prototype.slice.call(arguments)); }));
     },
-    set : function(index, id) {
+    init : function() {},
+    insert : function(key, id) {
+	this.value[id] = key;
+	this.sync();
+    },
+    remove : function(index, value) {
+	// keep track of deletes, so we know how bad our filter got.
+	// regenerate as needed.
+	delete this.value[id];
+	this.sync();
+    },
+    values : function() {
+	var l = UTIL.keys(this.value);
+	for (var i = 0; i < l.length; i++) l[i] = this.tid.fromString(l[i]);
+	return l;
+    },
+    has : function() {
+	return true;
+    },
+    get_filter : function(filters) {
+	if (!filters) filters = [];
+	return filters;
+    },
+    get_filter_parser : function(parsers) {
+	if (!parsers) parsers = [];
+	return parsers;
+    }
+});
+SyncDB.RangeFilter = {
+    init : function(m) {
+	this._regen_range(m);
+	this.base(m);
+    },
+    _regen_range : function(m) {
+	this.rangefilter = new CritBit.RangeSet();
+	for (var id in m) if (m.hasOwnProperty(id)) {
+	    this.rangefilter.insert(m[id]);
+	}
+    },
+    insert : function(index, id) {
+	if (!this.value)
+	    SyncDB.error("You are too early!!");
+	this.rangefilter.insert(index);
+	this.base(index, id);
+    },
+    get_filter : function(filters) {
+	filters = this.base(filters);
+	filters.push(this.rangefilter);
+	return filters;
+    },
+    has : function(index) {
+	if (index instanceof CritBit.Range)
+	    return this.rangefilter.contains(index);
+	// should not always be true!
+	return this.base(index);
+    },
+    get_filter_parser : function(parser) {
+	parser = this.base(parser);
+	parser.push(new serialization.RangeSet(this.tkey.parser()));
+	return parser;
+    },
+    remove : function(index) {
+	this.base(index);
+	this._regen_range(this.value);
+    }
+};
+SyncDB.RangeIndex = {
+    init : function(m) {
+	this.m = new CritBit.MultiRangeSet();
+	for (var id in m) if (m.hasOwnProperty(id)) {
+	    var index = m[id];
+	    index.value = this.tkey.fromString(id);
+	    this.m.insert(index);
+	}
+	this.base(m);
+    },
+    insert : function(index, id) {
 	if (!this.value)
 	    SyncDB.error("You are too early!!");
 	index.value = id;
-	this.value.m.insert(index);
-	this.value.filter.insert(index);
-	this.sync();
-    },
-    set_filter : function(range) {
-	this.value.filter.insert(range);
-	this.sync();
-    },
-    get_filter : function() {
-	return this.value.filter;
-    },
-    has : function(index) {
-	return this.value.filter.contains(index);
+	this.m.insert(index);
+	this.base(index, id);
     },
     overlaps : function(index) {
 	if (!this.value)
 	    SyncDB.error("You are too early!!");
-	if (!this.has(index)) throw(new SyncDB.Error.NotFound());
-	var a = this.value.m.overlaps(index);
+	var a = this.m.overlaps(index);
 	if (!a.length) return [];
 	var ret = new Array(a.length);
 	for (var i = 0; i < a.length; i ++) {
@@ -764,97 +821,55 @@ SyncDB.RangeIndex = SyncDB.LocalField.extend({
 	}
 	return ret;
     },
-    get : function(index) {
+    lookup_equal : function(index) {
 	return this.overlaps(index);
     },
     remove : function(index) {
-	if (this.value.m.remove(index)) {
-	    this.value.filter = new CritBit.RangeSet(this.value.m);
-	    this.sync();
-	}
+	this.m.remove(index);
+	this.base(index);
     }
-});
+};
 // TODO: this should really be a subindex that doesnt do lookup_get, only
 // range lookups and has a RangeSet for the cached entries.
-SyncDB.CritBitIndex = SyncDB.LocalField.extend({
-    constructor : function(ls, name, tkey, tid) {
-	this.tkey = tkey;
-	this.type = tid;
-	this.base(ls, name, new serialization.Struct("_index", {
-		filter : tkey.filter_parser(),
-		m : new serialization.CritBit(tkey.parser(), tid.parser()), 
-		removed : new serialization.Integer()
-	    }), {
-		m : new CritBit.Tree(),
-		filter : tkey.filter(),
-		removed : 0
-	});
+SyncDB.CritBitIndex = {
+    init : function(m) {
+	this.m = new CritBit.Tree();
+	for (var id in m) if (m.hasOwnProperty(id)) {
+	    this.m.insert(m[id], this.tkey.fromString(id));
+	}
+	this.base(m);
     },
-    set : function(index, id) {
+    insert : function(index, id) {
 	if (!this.value)
 	    SyncDB.error("You are too early!!");
-	this.value.m[index] = id;
-	this.value.m.insert(index, id);
-	if (this.value.filter.set(index))
-	    this.regen_filter();
-	// adding something can be done cheaply, by appending the tuple
-	this.sync();
+	this.m.insert(index, id);
+	this.base(index, id);
     },
-    get : function(index) {
+    index_equal : function(index) {
 	if (!this.value)
 	    SyncDB.error("You are too early!!");
-	if (!this.has(index)) throw(new SyncDB.Error.NotFound());
-	return [ this.value.m.index(index) ];
-    },
-    has : function(index) {
-	if (index instanceof SyncDB.Range) return false;
-	return this.value.m.index(index) !== null;
-    },
-    regen_filter : function() {
-	// decide when to regenerate here. Lets say, we 
-	var p = this.value.filter.prob();
-	if (p > 0.002) {
-	    UTIL.log("probability is bad: %f. regenerating filter.", p);
-	    var n = this.value.m.length();
-	    var filter = new UTIL.Bloom.Filter(n, 0.001, this.tkey.hash());
-	    this.value.m.foreach(function(key, v) {
-		filter.set(key);
-	    });
-	    UTIL.log("new probability is %f. n: %d, m: %d", filter.prob(), filter.n, filter.table_mag);
-	    this.value.filter = filter;
-	    this.sync();
-	} else UTIL.log("probability is still good enough: %f", p);
+	if (!this.m.hasOwnProperty(index)) return [];
+	return [ this.m.index(index) ];
     },
     remove : function(index, value) {
-	// keep track of deletes, so we know how bad our filter got.
-	// regenerate as needed.
-	this.value.m.remove(index);
-	if (this.value.filter.remove(index)) {
-	    this.regen_filter();
-	    this.sync();
-	}
-    },
-    get_filter : function() {
-	return this.value.filter;
-    },
-    toString : function() {
-	return "MappingIndex("+this.name+","+this.type+")";
+	this.m.remove(index);
+	this.base(index);
     },
     values : function() {
-	return this.value.m.values();
+	return this.m.values();
     },
     lookup_contains : function(index) {
 	if (!this.value)
 	    SyncDB.error("You are too early!!");
 	if (!this.has(index)) throw(new SyncDB.Error.NotFound());
 	var a = [];
-	this.value.m.foreach(function(key, val) { a.push(val); },
+	this.m.foreach(function(key, val) { a.push(val); },
 			     index.a, index.b);
 	return a;
     },
     lookup_lt : function(val) {
 	var r = [];
-	var node = this.value.m.lt(val);
+	var node = this.m.lt(val);
 	while (node && node.value < val) {
 	    r.push(node.value);
 	    node = node.backward();
@@ -863,7 +878,7 @@ SyncDB.CritBitIndex = SyncDB.LocalField.extend({
     },
     lookup_le : function(val) {
 	var r = [];
-	var node = this.value.m.le(val);
+	var node = this.m.le(val);
 	while (node && node.value <= val) {
 	    r.push(node.value);
 	    node = node.backward();
@@ -872,7 +887,7 @@ SyncDB.CritBitIndex = SyncDB.LocalField.extend({
     },
     lookup_gt : function(val) {
 	var r = [];
-	var node = this.value.m.gt(val);
+	var node = this.m.gt(val);
 	while (node && node.value > val) {
 	    r.push(node.value);
 	    node = node.forward();
@@ -881,197 +896,133 @@ SyncDB.CritBitIndex = SyncDB.LocalField.extend({
     },
     lookup_ge : function(val) {
 	var r = [];
-	var node = this.value.m.ge(val);
+	var node = this.m.ge(val);
 	while (node && node.value >= val) {
 	    r.push(node.value);
 	    node = node.forward();
 	}
 	return r;
     }
-});
-SyncDB.MappingIndex = SyncDB.LocalField.extend({
-    constructor : function(ls, name, tkey, tid) {
-	this.tkey = tkey;
-	this.type = tid;
-	this.base(ls, name, new serialization.Struct("_index", {
-		filter : tkey.filter_parser(),
-		m : new serialization.Object(tid.parser()), 
-		removed : new serialization.Integer()
-	    }), {
-		m : {},
-		//filter : new UTIL.Bloom.Filter(32, 0.001, tkey.hash()),
-		filter : tkey.filter(),
-		removed : 0
-	});
-    },
-    set : function(index, id) {
-	if (!this.value)
-	    SyncDB.error("You are too early!!");
-	this.value.m[index] = id;
-	if (this.value.filter.set(index))
-	    this.regen_filter();
-	// adding something can be done cheaply, by appending the tuple
-	this.sync();
-    },
-    get : function(index) {
-	if (!this.value)
-	    SyncDB.error("You are too early!!");
-	if (!this.has(index)) throw(new SyncDB.Error.NotFound());
-	return [ this.value.m[index] ];
-    },
-    has : function(index) {
-	return this.value.m.hasOwnProperty(index);
-    },
-    regen_filter : function() {
-	// decide when to regenerate here. Lets say, we 
-	var p = this.value.filter.prob();
-	if (p > 0.002) {
-	    var n = UTIL.keys(this.value.m).length;
-	    var filter = new UTIL.Bloom.Filter(n, 0.001, this.tkey.hash());
-	    for (var key in this.value.m)
-		if (this.value.m.hasOwnProperty(key))
-		    filter.set(key);
-	    this.value.filter = filter;
-	    this.sync();
+};
+SyncDB.MappingIndex = {
+    init : function(o) {
+	this.m = {};
+	for (var id in o) if (o.hasOwnProperty(id)) {
+	    this.m[o[id]] = this.tid.fromString(id);
 	}
+	this.base(o);
+    },
+    lookup_equal : function(index) {
+	if (!this.value) SyncDB.error("You are too early!!");
+	if (!this.m.hasOwnProperty(index)) return [];
+	return [ this.m[index] ];
+    },
+    insert : function(key, id) {
+	this.m[key] = id;
+	this.base(key, id);
     },
     remove : function(index, value) {
 	// keep track of deletes, so we know how bad our filter got.
 	// regenerate as needed.
-	delete this.value.m[index];
-	if (this.value.filter.remove(index)) {
-	    this.regen_filter();
-	    this.sync();
-	}
-    },
-    get_filter : function() {
-	return this.value.filter;
-    },
-    toString : function() {
-	return "MappingIndex("+this.name+","+this.type+")";
+	delete this.m[index];
+	this.base(index, value);
     },
     values : function() {
-	return UTIL.values(this.value.m);
+	// optimized version here!
+	return this.base();
     }
-});
-SyncDB.SuperIndex = SyncDB.LocalField.extend({
-    constructor : function(name, type) {
-	this.type = type;
-	this.subs = Array.prototype.slice.call(arguments, 2);
-	var p = {}, m = {};
-	for (var i = 0; i < this.subs.length; ++i) {
-	    for (var idx in this.subs[i]) {
-		if (UTIL.has_prefix(idx, "is_")) {
-		    if (!this[idx]) {
-			this[idx] = true;
-			this["s_" + idx.substr(3)] = this.subs[i];
-		    }
-		} else if (UTIL.has_prefix(idx, "lookup_")) { // this part useful?
-		    if (!this[idx])
-			this[idx] = this.subs[i][idx];
-		}
-	    }
-	    this.subs[i].get_parser(p);
-	    this.subs[i].get_data(m);
-	}
-
-	this.base(name, new serialization.Struct(p), m);
-    },
-    sync : function() {
-	var m = {};
-	for (var i = 0; i < this.subs.length; i++) {
-	    this.subs[i].get_data(m);
-	}
-	this.value = m;
-	this.base();
-    },
-    set : function(index, value) {
-	var errs = [];
-	for (var i = 0; i < this.subs.length; ++i)
-	    try {
-		this.subs[i].set(index, value);
-	    } catch (e) {
-		errs.push(e);
-	    }
-	if (errs.length) throw(errs); // TODO:: really?
-    },
-    remove : function(index, id) {
-	var errs = [];
-	for (var i = 0; i < this.subs.length; ++i)
-	    try {
-		this.subs[i].remove(index, value);
-	    } catch (e) {
-		errs.push(e);
-	    }
-	if (errs.length) throw(errs); // TODO:: really?
-    },
-    toString : function() {
-	return UTIL.sprintf("SuperIndex(%s, %s, %s)", this.name, this.type,
-			    this.subs.join(", "));
-    }
-});
-SyncDB.SubIndexBase = UTIL.Base.extend({
-    get_value : function() {
-	return this.value;
-    },
-    _get_parser : function() {
-	return this.parser;
-    },
-    get_data : function(m) {
-	if (!m[this.storage_name()]) m[this.storage_name()] = this.get_value();
-    },
-    get_parser : function(p) {
-	if (!p[this.storage_name()]) p[this.storage_name()] = this._get_parser();
-    }
-});
-SyncDB.MultiIndex = SyncDB.LocalField.extend({
-    constructor : function(ls, name, type, id) {
-	this.type = type;
-	this.id = id;
-	//UTIL.log("%o %o %o", name, type, id);
-	this.base(ls, name, new serialization.Object(new serialization.SimpleSet()), {});
-    },
-    set : function(index, id) {
-	if (!this.value)
-	    SyncDB.error("You are too early!!");
-	if (!this.has(index)) {
-	    this.value[index] = { };
-	}
-	this.value[index][id] = 1;
-	// adding something can be done cheaply, by appending the tuple
-	//UTIL.log(">> %o", this.value);
-	this.sync();
-    },
-    get : function(index) {
-	if (!this.value)
-	    SyncDB.error("You are too early!!");
-	if (!this.has(index)) throw(new SyncDB.Error.NotFound());
-	return UTIL.keys(this.value[index]);
-    },
+};
+SyncDB.MappingFilter = {
     has : function(index) {
-	return this.value.hasOwnProperty(index);
+	return this.m.hasOwnProperty(index.toString());
+    }
+};
+SyncDB.BloomFilter = {
+    init : function(m) {
+	this.base(m);
+	this._regen_bloom(m);
+    },
+    insert : function(key, id) {
+	if (this.bloomfilter.set(key))
+	    this.regen_filter();
+	this.base(key, id);
+    },
+    remove : function(index, value) {
+	if (this.bloomfilter.remove(index)) {
+	    this.regen_filter();
+	}
+	this.base(index, value);
+    },
+    _regen_bloom : function(m) {
+	var l = UTIL.keys(m);
+	this.bloomfilter = new UTIL.Bloom.Filter(l.length, 0.001, this.tkey.hash());
+	for (var i = 0; i < l.length; i++) {
+	    this.bloomfilter.set(m[l[i]]);
+	}
+    },
+    regen_filter : function() {
+	// decide when to regenerate here. Lets say, we 
+	var p = this.bloomfilter.prob();
+	if (p > 0.002) {
+	    this._regen_bloom(this.value);
+	}
+    },
+    get_filter : function(filters) {
+	filters = this.base(filters);
+	filters.push(this.bloomfilter);
+	return filters;
+    },
+    get_filter_parser : function(parser) {
+	parser = this.base(parser);
+	parser.push(new serialization.Bloom(this.tkey.hash()));
+	return parser;
+    }
+};
+SyncDB.MultiIndex = {
+    init : function(m) {
+	this.m = {};
+	for (var id in m) if (m.hasOwnProperty(id)) {
+	    if (!this.m.hasOwnProperty(m[id]))
+		this.m[m[id]] = {};
+	    this.m[m[id]][id] = 1;
+	}
+	this.base(m);
+    },
+    insert : function(index, id) {
+	if (!this.value)
+	    SyncDB.error("You are too early!!");
+	if (!this.m.hasOwnProperty(index)) {
+	    this.m[index] = { };
+	}
+	this.m[index][id] = 1;
+	// adding something can be done cheaply, by appending the tuple
+	//UTIL.log(">!> %o", this.value);
+	this.base(index, id);
+    },
+    lookup_equal : function(index) {
+	if (!this.value)
+	    SyncDB.error("You are too early!!");
+	if (!this.m.hasOwnProperty(index)) return [];
+	var l = UTIL.keys(this.m[index]);
+	for (var i = 0; i < l.length; i++) l[i] = this.tkey.fromString(l[i]);
+	return l;
     },
     remove : function(index, value) {
 	if (!this.value)
 	    SyncDB.error("You are too early!!");
-	if (this.has(index)) {
-	    delete this.value[index][value];
-	    if (!this.value[index].length) delete this.value[index];
-	    this.sync();
+	if (this.m.hasOwnProperty(index)) {
+	    delete this.m[index][value];
+	    if (!this.m[index].length) delete this.m[index];
 	}
-    },
-    toString : function() {
-	return "MultiIndex("+this.name+","+this.type+")";
-    },
-    values : function() {
-	var ret = [];
-	var m = this.value;
-	for (var key in m) if (m.hasOwnProperty(key)) {
-	    ret = ret.concat(UTIL.keys(m[key]));
-	}
-	return ret;
+	this.base(index, value);
     }
-});
+};
+SyncDB.TrueFilter = {
+    has : function() { return true; }
+};
+SyncDB.FalseFilter = {
+    has : function() { return false; }
+};
 SyncDB.Schema = UTIL.Base.extend({
     constructor : function() {
 	this.m = {};
@@ -1529,16 +1480,16 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	this.config = new SyncDB.TableConfig(ls, "_syncdb_"+name);
 	this.base(name, schema, db);
 	var eag = new UTIL.EventAggregator();
-	var hashcheck = this.ready_ea.get_cb()
+	var hashcheck = this.ready_ea.get_cb();
 	this.config.get(eag.get_cb());
 	eag.ready(this.M(function() {
 	    if (this.config.schema().hashCode() != schema.hashCode()) {
 
-		this.ls.clear(this.M(function() {
-		    this.config.schema(schema);
-		    this.config.version(new SyncDB.Version(schema.m.version.n));
-		    hashcheck();
-		}));
+		//this.ls.clear(this.M(function() {
+		this.config.schema(schema);
+		this.config.version(new SyncDB.Version(schema.m.version.n));
+		hashcheck();
+		//}));
 		return;
 	    }
 
@@ -1764,7 +1715,7 @@ SyncDB.SyncedTableBase = SyncDB.LocalTable.extend({
 	    var cb = sync_ea.get_cb();
 	    version = version.max(row.version);
 
-	    if (this.I[this.schema.key].has(row[this.schema.key])) {
+	    if (this.I[this.schema.key].lookup_equal(row[this.schema.key]).length) {
 		this.low_update(row, cb, undefined, true);
 	    } else {
 		this.low_insert(row, cb, true);
@@ -1804,6 +1755,11 @@ SyncDB.CachedTable = SyncDB.SyncedTableBase.extend({
 		error = new SyncDB.Error.NoSync();
 	    callback(error, rows);
 	}));
+    },
+    index : function(name, field_type, key_name) {
+	var index = field_type.get_index(this.ls, name, field_type, key_name);
+	return index.extend(field_type.filter ? field_type.filter()
+			    : SyncDB.FalseFilter);
     },
     update_index : function(filter, rows) {
 	//UTIL.log("update_index(%o, %o)", filter, rows);
@@ -1953,18 +1909,18 @@ SyncDB.Types = {
 	    UTIL.log("will trace 'get_index3'");
 	    UTIL.error("get_index3(%o, %o)", name, key_name);
 	    */
-	    if (this.is_unique || this.is_key)
-		return new SyncDB.MappingIndex(ls, name, this, key_name);
-	    else //if (this.is_indexed)
-		return new SyncDB.MultiIndex(ls, name, this, key_name);
+	    return new SyncDB.Index(ls, name, this, key_name);
 	},
 	index_lookup : function(index, key) {
 	    if (UTIL.objectp(key) && key.index_lookup) {
 		return key.index_lookup(index);
 	    } else return index.get(key);
 	},
+	fromString : function(s) {
+	     return s;
+	},
 	index_insert : function(index, key, id) {
-	    return index.set(key, id);
+	    return index.insert(key, id);
 	},
 	index_remove : function(index, key, id) {
 	    return index.remove(key, id);
@@ -1992,13 +1948,7 @@ SyncDB.Types.Filterable = SyncDB.Types.Base.extend({
 	return 0.001;
     },
     filter : function() {
-	if (UTIL.functionp(this.hash)) {
-	    return new UTIL.Bloom.Filter(this.bloom_size(),
-					 this.bloom_probability(),
-					 this.hash());
-	} else {
-	    UTIL.error("RangeFilters not implemented yet.");
-	}
+	return SyncDB.BloomFilter;
     }
 });
 SyncDB.Types.Integer = SyncDB.Types.Filterable.extend({
@@ -2015,15 +1965,22 @@ SyncDB.Types.Integer = SyncDB.Types.Filterable.extend({
     hash : function() {
 	return new UTIL.Int.Hash();
     },
-    /*
     get_index : function(ls, name, field_type, key_name) {
+	return this.base(ls, name, field_type, key_name)
+		    .extend( (this.is_unique || this.is_key)
+			     ? SyncDB.MappingIndex
+			     : SyncDB.MultiIndex);
+    /*
 	if (this.is_unique || this.is_key)
 	    return new SyncDB.CritBitIndex(ls, name, this, key_name);
 	else //if (this.is_indexed)
 	    //return new SyncDB.MultiIndex(ls, name, this, key_name);
 	    return this.base.apply(this, Array.prototype.slice.call(arguments));
-    },
     */
+    },
+    fromString : function (s) {
+	return parseInt(s);
+    },
     Lt : function(val) {
 	return new SyncDB.Filter.Lt(this.name, this.parser(), val);
     },
@@ -2048,6 +2005,12 @@ SyncDB.Types.String = SyncDB.Types.Filterable.extend({
 	return UTIL.get_random_key(10);
     },
     toString : function() { return "String"; },
+    get_index : function(ls, name, field_type, key_name) {
+	return this.base(ls, name, field_type, key_name)
+		    .extend( (this.is_unique || this.is_key)
+			     ? SyncDB.MappingIndex
+			     : SyncDB.MultiIndex);
+    },
     hash : function() {
 	return new UTIL.SHA256.Hash();
     }
@@ -2103,13 +2066,13 @@ SyncDB.Types.Range = SyncDB.Types.Vector.extend({
 	if (this.is_unique || this.is_key)
 	    UTIL.error("Ranges cannot be unique (yet).");
 	else //if (this.is_indexed)
-	    return new SyncDB.RangeIndex(ls, name, this, key_name);
+	    return this.base(ls, name, this, key_name).extend(SyncDB.RangeIndex);
     },
     filter_parser : function() {
 	return new serialization.RangeSet(this.parser())
     },
     filter : function() {
-	return new CritBit.RangeSet();
+	return SyncDB.RangeFilter;
     },
     //RangeSet : // TODO
     Overlaps : function(range) {
@@ -2197,7 +2160,7 @@ SyncDB.Types.Array = SyncDB.Types.Base.extend({
     },
     index_insert : function(index, key, id) {
 	for (var i = 0; i < key.length; i++)
-	    index.set(key[i], id);
+	    index.insert(key[i], id);
     },
     index_lookup : function(index, key) {
 	if (UTIL.arrayp(key)) {
@@ -2247,7 +2210,8 @@ SyncDB.DraftTable = SyncDB.LocalTable.extend({
 	// we also need to support deletes?
 	// insert/update
 	this.base(name, schema);
-	this.draft_index = new SyncDB.MappingIndex(this.ls, "_syncdb_DI_" + this.name, schema.m[schema.key], schema.m[schema.key]);
+	this.draft_index = (new SyncDB.Index(this.ls, "_syncdb_DI_" + this.name, schema.m[schema.key], schema.m[schema.key]))
+			    .extend(SyncDB.MappingIndex);
     },
     insert : function(row, cb) {
 	row[this.schema.key] = 0;
@@ -2257,7 +2221,7 @@ SyncDB.DraftTable = SyncDB.LocalTable.extend({
     create_draft : function(row, cb) {
 	SyncDB.LocalTable.prototype.insert.call(this, row, this.M(function(err, row_) {
 	    if (err) return cb(err, row_);
-	    this.draft_index.set(row_[this.schema.key],
+	    this.draft_index.insert(row_[this.schema.key],
 				 row [this.schema.key]);
 	    cb(err, row_);
 	}));
