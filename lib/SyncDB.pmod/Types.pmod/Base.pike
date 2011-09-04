@@ -15,8 +15,9 @@ constant _types = ([
 
 mixed `->(string index) {
     if (has_prefix(index, "is_")) {
-	array(int(0..1)) is = flags[index] + ({ this[index] });
+	array(int(0..1)) is = filter(flags[index], lambda(mixed m) { return !zero_type(m); });
 	if (sizeof(is)) return max(@is);
+	return this[index];
     } else if (has_prefix(index, "f_")) {
 	array t = filter(flags + ({ this }), lambda(object o) { return o["is_"+index[2..]]; });
 	if (!sizeof(t)) {
