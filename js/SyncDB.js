@@ -1086,7 +1086,7 @@ SyncDB.Schema = UTIL.Base.extend({
 	    var type = this.m[name];
 	    if (m.hasOwnProperty(name)) {
 		if (!type.is_writable)
-		    UTIL.error("Trying to insert writable field %o.", type);
+		    UTIL.error("Trying to insert readonly field %o.", type);
 		r[name] = m[name];
 	    } else if (type.is_mandatory) {
 		UTIL.error("Missing mandatory field %o.", type);
