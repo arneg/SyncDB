@@ -94,13 +94,23 @@ SyncDB.Timee.EventSet = SyncDB.Timee.EventManager.extend({
 	    this.add_event(id, this.factory(row));
 	else this.events[id].update(row);
 	return this.events[id];
+    },
+    redraw : function() {
+	for (var id in this.events) {
+	    if (!this.events.hasOwnProperty(id)) continue;
+	    this.events[id].o.redraw();
+	}
     }
 });
 SyncDB.Timee.Event = Base.extend({
     constructor : function(id, o) {
 	this.o = o;
     },
-    matches : function() {
+    matches : function(filter) {
+	if (UTIL.objectp(filter)) {
+	    if (filter.matches(this)) return true;
+	    return false;
+	}
 	return true;
     },
     update : function() {
