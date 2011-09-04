@@ -628,6 +628,7 @@ SyncDB.LocalField = UTIL.Base.extend({
 	this.value = undefined;
 	this.def = def;
 	this.will_set = false;
+	this.auto_sync = true;
 	// this.get is overloaded and might be synchronous only (e.g. Index)
 	SyncDB.LocalField.prototype.get.call(this, function() {
 	    //UTIL.log("initialized field %s", this.name);
@@ -678,10 +679,22 @@ SyncDB.LocalField = UTIL.Base.extend({
 	this.value = value;
 	this.sync();
     },
+    autosync : function(t) {
+	t = !!t;
+	if (t === this.auto_sync)
+	    return;
+	this.auto_sync = t;
+	if (t) {
+	    this.will_set = false;
+	    this.sync();
+	}
+    },
     sync : function() {
 	// We want to allow for looping over a repeated set call (e.g. MultiIndex)
 	if (this.will_set) return;
 	this.will_set = true;
+
+	if (!this.auto_sync) return;
 
 	UTIL.call_later(function() {
 		this.will_set = false;
@@ -1712,6 +1725,8 @@ SyncDB.SyncedTableBase = SyncDB.LocalTable.extend({
 	sync_ea.progress(UTIL.make_method(this._syncing,
 					  this._syncing.trigger));
 	sync_ea.ready(this.M(function() {
+	    for (var name in this.I) if (this.I.hasOwnProperty(name))
+		this.I[name].autosync(true);
 	    this.config.version(version);
 	    SyncDB.Table.prototype.sync.call(this, rows);
 	}));
@@ -1721,6 +1736,10 @@ SyncDB.SyncedTableBase = SyncDB.LocalTable.extend({
 		for (var i = 0; i < q.length; i++) UTIL.call_later(q[i]);
 	    }, this.callbacks));
 	    delete this.callbacks;
+	}
+
+	for (var name in this.I) if (this.I.hasOwnProperty(name)) {
+	    this.I[name].autosync(false);
 	}
 
 	for (var i = 0; i < rows.length; i++) {
