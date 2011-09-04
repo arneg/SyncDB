@@ -522,13 +522,27 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 	    cb = UTIL.safe(cb);
 	    var i, arr = UTIL.arrayp(key);
 	    var query = "SELECT * FROM sLsA WHERE ";
+	    var args;
 	    if (arr) {
-		var t = new Array(key.length);
-		for (i = 0; i < t.length; i++) t[i] = "key=?";
-		query += t.join(" OR ") + ";";
-	    } else query += "key=?;";
+		query += "key in (";
+		if (key.length < 1000) {
+		    query += UTIL.nchars("?,", key.length - 1)+"?";
+		    args = key;
+		} else {
+		    var t = new Array(key.length);
+		    for (var i = 0; i < key.length; i++) {
+			t[i] = key[i].replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+		    }
+		    query += "'"+t.join("','")+"'";
+		    args = [];
+		}
+		query += ");";
+	    } else {
+		query += "key=?;";
+		args = [ key ];
+	    }
 
-	    this.push(query, arr ? key : [key], 
+	    this.push(query, args,
 			this.M(function(tx, data) {
 		    var ret = arr ? new Array(key.length) : null;
 		    var m = {};
