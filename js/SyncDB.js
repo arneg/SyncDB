@@ -1714,7 +1714,7 @@ SyncDB.SyncedTableBase = SyncDB.LocalTable.extend({
 	    UTIL.call_later(cb);
     },
     syncing : function(cb) {
-	this._syncing.bind(cb);
+	this._syncing.bind(UTIL.make_method(this, cb));
     },
     sync : function(rows) {
 	// TODO: this should be triggered on completion of all updates, otherwise
