@@ -732,7 +732,7 @@ SyncDB.Index = SyncDB.LocalField.extend({
 	this.value[id] = key;
 	this.sync();
     },
-    remove : function(index, value) {
+    remove : function(key, id) {
 	// keep track of deletes, so we know how bad our filter got.
 	// regenerate as needed.
 	delete this.value[id];
@@ -788,8 +788,8 @@ SyncDB.RangeFilter = {
 	parser.push(new serialization.RangeSet(this.tkey.parser()));
 	return parser;
     },
-    remove : function(index) {
-	this.base(index);
+    remove : function(key, id) {
+	this.base(key, id);
 	this._regen_range(this.value);
     }
 };
@@ -824,9 +824,9 @@ SyncDB.RangeIndex = {
     lookup_equal : function(index) {
 	return this.overlaps(index);
     },
-    remove : function(index) {
-	this.m.remove(index);
-	this.base(index);
+    remove : function(key, id) {
+	this.m.remove(key);
+	this.base(key, id);
     }
 };
 // TODO: this should really be a subindex that doesnt do lookup_get, only
@@ -851,9 +851,9 @@ SyncDB.CritBitIndex = {
 	if (!this.m.hasOwnProperty(index)) return [];
 	return [ this.m.index(index) ];
     },
-    remove : function(index, value) {
-	this.m.remove(index);
-	this.base(index);
+    remove : function(key, id) {
+	this.m.remove(key);
+	this.base(key, id);
     },
     values : function() {
 	return this.m.values();
@@ -921,11 +921,11 @@ SyncDB.MappingIndex = {
 	this.m[key] = id;
 	this.base(key, id);
     },
-    remove : function(index, value) {
+    remove : function(key, id) {
 	// keep track of deletes, so we know how bad our filter got.
 	// regenerate as needed.
-	delete this.m[index];
-	this.base(index, value);
+	delete this.m[key];
+	this.base(key, id);
     },
     values : function() {
 	// optimized version here!
@@ -947,11 +947,11 @@ SyncDB.BloomFilter = {
 	    this.regen_filter();
 	this.base(key, id);
     },
-    remove : function(index, value) {
-	if (this.bloomfilter.remove(index)) {
+    remove : function(key, id) {
+	if (this.bloomfilter.remove(key)) {
 	    this.regen_filter();
 	}
-	this.base(index, value);
+	this.base(key, id);
     },
     _regen_bloom : function(m) {
 	var l = UTIL.keys(m);
@@ -1007,14 +1007,14 @@ SyncDB.MultiIndex = {
 	for (var i = 0; i < l.length; i++) l[i] = this.tkey.fromString(l[i]);
 	return l;
     },
-    remove : function(index, value) {
+    remove : function(index, id) {
 	if (!this.value)
 	    SyncDB.error("You are too early!!");
 	if (this.m.hasOwnProperty(index)) {
-	    delete this.m[index][value];
+	    delete this.m[index][id];
 	    if (!this.m[index].length) delete this.m[index];
 	}
-	this.base(index, value);
+	this.base(index, id);
     }
 };
 SyncDB.TrueFilter = {
@@ -2254,7 +2254,7 @@ SyncDB.Connector = SyncDB.LocalField.extend({
 		delete this.value[key];
 		this.sync();
 		if (!error) {
-		    this.drafts.draft_index.remove(key);
+		    this.drafts.draft_index.remove(key, oid);
 		    this.drafts.remove_by(key,
 			this.M(function(err, _row) {
 			    if (err) UTIL.log("Something fishy happeneed in Connector#commit: %o", err);
