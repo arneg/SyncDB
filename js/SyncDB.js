@@ -75,60 +75,6 @@ SyncDB = {
 	    UTIL.trace();
 	}
     },
-    Version : Base.extend({
-	constructor : function(a) {
-	    if (UTIL.arrayp(a))
-		this.a = a;
-	    else if (UTIL.intp(a)) {
-		this.a = new Array(a);
-		for (var i = 0; i < a; i++) this.a[i] = 0;
-	    } else 
-		this.a = Array.prototype.slice.call(arguments);
-	},
-	toString : function() {
-	    return "SyncDB.Version("+this.a.join(".")+")";
-	},
-	toArray : function() {
-	    return this.a;
-	},
-	lt : function(o) {
-	    var b = false;
-	    o = o.a;
-	    if (o.length != this.a.length) return false;
-
-	    for (var i = 0; i < this.a.length; i++) {
-		if (o[i] < this.a[i]) return false;
-		if (o[i] > this.a[i]) b = true;
-	    }
-
-	    return b;
-	},
-	gt : function(o) {
-	    var b = false;
-	    if (o.a.length != this.a.length) return false;
-
-	    for (var i = 0; i < this.a.length; i++) {
-		if (o.a[i] > this.a[i]) return false;
-		if (o.a[i] < this.a[i]) b = true;
-	    }
-
-	    return b;
-	},
-	eq : function(o) {
-	    if (o.a.length != this.a.length) return false;
-	    for (var i = 0; i < this.a.length; i++) 
-		if (o.a[i] != this.a[i]) return false;
-
-	    return true;
-	},
-	max : function(o) {
-	    o = o.a;
-	    if (o.length != this.a.length) UTIL.error("bad argument %o to max", o);
-	    var ret = new Array(o.length);
-	    for (var i = 0; i < this.a.length; i++) ret[i] = Math.max(o[i], this.a[i]);
-	    return new SyncDB.Version(ret);
-	},
-    }),
     Delete : Base.extend({
 	constructor : function(schema, row) {
 	    this.schema = schema;
@@ -138,32 +84,86 @@ SyncDB = {
 	    }
 	},
     }),
-    Row : Base.extend({
-	constructor : function(schema) {
-	    this.schema = schema;
-	},
-	Delete : function() {
-	    return new (this.schema.Delete())(this);
-	},
-	Update : function(m) {
-	    var r = new (this.schema.Row())();
-
-	    for (var name in this.schema.m) 
-		if (this.schema.m.hasOwnProperty(name)) {
-		    var type = this.schema.m[name];
-		    if (m.hasOwnProperty(name)) {
-			if (!type.is_writable) UTIL.error("Trying to set readonly field %o", name);
-			r[name] = m[name];
-		    }
-		}
-
-	    r[this.schema.key] = this[this.schema.key];
-	    r.version = this.version;
-	    return r;
-	},
-    }),
     Undefined : undefined,
-    Null : {}
+    Null : { toString : function() { return "!!!!! SQL NULL !!!!!"; } }
+};
+SyncDB.Version = function(a) {
+    if (UTIL.arrayp(a))
+	this.a = a;
+    else if (UTIL.intp(a)) {
+	this.a = new Array(a);
+	for (var i = 0; i < a; i++) this.a[i] = 0;
+    } else 
+	this.a = Array.prototype.slice.call(arguments);
+};
+SyncDB.Version.prototype = {
+    toString : function() {
+	return "SyncDB.Version("+this.a.join(".")+")";
+    },
+    toArray : function() {
+	return this.a;
+    },
+    lt : function(o) {
+	var b = false;
+	o = o.a;
+	if (o.length != this.a.length) return false;
+
+	for (var i = 0; i < this.a.length; i++) {
+	    if (o[i] < this.a[i]) return false;
+	    if (o[i] > this.a[i]) b = true;
+	}
+
+	return b;
+    },
+    gt : function(o) {
+	var b = false;
+	if (o.a.length != this.a.length) return false;
+
+	for (var i = 0; i < this.a.length; i++) {
+	    if (o.a[i] > this.a[i]) return false;
+	    if (o.a[i] < this.a[i]) b = true;
+	}
+
+	return b;
+    },
+    eq : function(o) {
+	if (o.a.length != this.a.length) return false;
+	for (var i = 0; i < this.a.length; i++) 
+	    if (o.a[i] != this.a[i]) return false;
+
+	return true;
+    },
+    max : function(o) {
+	o = o.a;
+	if (o.length != this.a.length) UTIL.error("bad argument %o to max", o);
+	var ret = new Array(o.length);
+	for (var i = 0; i < this.a.length; i++) ret[i] = Math.max(o[i], this.a[i]);
+	return new SyncDB.Version(ret);
+    },
+};
+SyncDB.Row = function(schema) {
+    this.schema = schema;
+};
+SyncDB.Row.prototype = {
+    Delete : function() {
+	return new (this.schema.Delete())(this);
+    },
+    Update : function(m) {
+	var r = new (this.schema.Row())();
+
+	for (var name in this.schema.m) 
+	    if (this.schema.m.hasOwnProperty(name)) {
+		var type = this.schema.m[name];
+		if (m.hasOwnProperty(name)) {
+		    if (!type.is_writable) UTIL.error("Trying to set readonly field %o", name);
+		    r[name] = m[name];
+		}
+	    }
+
+	r[this.schema.key] = this[this.schema.key];
+	r.version = this.version;
+	return r;
+    }
 };
 /*
  * what do we need for index lookup in a filter:
@@ -629,7 +629,46 @@ SyncDB.LS = function(prefix) {
 		//SyncDB.LS = new (SyncDB.KeyValueStorage || SyncDB.KeyValueMapping)();
 	    }
 	});
-    return new(SyncDB.KeyValueStorage || SyncDB.KeyValueMapping)(prefix);
+    if (SyncDB.KeyValueStorage) {
+	if (UTIL.App.is_firefox && !UTIL.App.has_indexedDB) {
+	    return new (SyncDB.KeyValueMapping.extend({
+		constructor : function(prefix) {
+		    this.prefix = prefix;
+		    this.field = "syncdb_ls_"+prefix;
+		    this.m = JSON.parse(localStorage[this.field] || "{}");
+		    this.sync = UTIL.make_method(this, function() {
+			this.will_sync = false;
+			localStorage[this.field] = JSON.stringify(this.m);
+		    });
+		    this.will_sync = false;
+		},
+		set : function(key, value, cb) {
+		    if (!this.will_sync) {
+			this.will_sync = true;
+			UTIL.call_later(this.sync);
+		    }
+		    this.base(key, value, cb);
+		},
+		cas : function(key, val, oval, cb) {
+		    if (!this.will_sync) {
+			this.will_sync = true;
+			UTIL.call_later(this.sync);
+		    }
+		    this.base(key, val, oval, cb);
+		},
+		clear : function(cb) {
+		    if (!this.will_sync) {
+			this.will_sync = true;
+			UTIL.call_later(this.sync);
+		    }
+		    this.base(cb)
+		},
+		is_permanent : true
+	    }))(prefix);
+	}
+	throw("booooh!");
+	return new SyncDB.KeyValueStorage(prefix);
+    } else return new SyncDB.KeyValueMapping(prefix);
 };
 SyncDB.LocalField = UTIL.Base.extend({
     constructor : function(ls, name, parser, def) {
@@ -1038,6 +1077,7 @@ SyncDB.Schema = UTIL.Base.extend({
 	    }
 	    if (type.get_val) this.autos.push(name);
 	}
+	this.schema_parser = UTIL.cached(this.schema_parser);
     },
     hashCode : function() {
 	return (new UTIL.SHA256.Hash()).update(this.schema_parser().encode(this).render()).hex_digest();
@@ -1071,16 +1111,17 @@ SyncDB.Schema = UTIL.Base.extend({
     Row : function() {
 	if (this._Row) return this._Row;
 	var schema = this;
-	return this._Row = SyncDB.Row.extend({
-	    constructor : function() {
-		this.base(schema);
-	    }
-	});
+	this._Row = function() {
+	    this.schema = schema;
+	};
+	this._Row.prototype = SyncDB.Row.prototype;
+	return this._Row;
     },
     parser : function(filter) {
 	var n = {};
 	for (var name in this.m) if (this.m.hasOwnProperty(name)) {
-	    if (!filter || filter(name, this.m[name])) {
+	    if (name == "version" || name == this.key ||
+		!filter || filter(name, this.m[name])) {
 		var t = [ this.m[name].parser(),
 			  SyncDB.Serialization.Null ];
 		if (!this.m[name].is_mandatory)
@@ -1527,7 +1568,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 	if (!c) cb(false);
     },
     is_permanent : function() {
-	return this.is_permanent;
+	return this.ls.is_permanent;
     },
     index : function(name, field_type, key_name) {
 	return field_type.get_index(this.ls, name, field_type, key_name);
@@ -1900,6 +1941,8 @@ SyncDB.Types = {
 	    }
 	    if (!this.hasOwnProperty("is_writable")) this.is_writable = true;
 	    if (!this.hasOwnProperty("is_readable")) this.is_readable = true;
+	    this.parser = UTIL.cached(this.parser);
+	    this.filter_parser = UTIL.cached(this.filter_parser);
 	},
 	get_key : function() {
 	    return Array.prototype.slice.apply(arguments).join("_");
@@ -1953,7 +1996,7 @@ SyncDB.Types.Filterable = SyncDB.Types.Base.extend({
 });
 SyncDB.Types.Integer = SyncDB.Types.Filterable.extend({
     parser : function() {
-	return new serialization.Integer();
+	return serialization.integer;
     },
     random : function() {
 	return Math.floor(0xffffffff*Math.random());
@@ -1999,7 +2042,7 @@ SyncDB.Types.Integer = SyncDB.Types.Filterable.extend({
 });
 SyncDB.Types.String = SyncDB.Types.Filterable.extend({
     parser : function() {
-	return new serialization.String();
+	return serialization.string;
     },
     random : function() {
 	return UTIL.get_random_key(10);
@@ -2017,7 +2060,7 @@ SyncDB.Types.String = SyncDB.Types.Filterable.extend({
 });
 SyncDB.Types.Image = SyncDB.Types.Base.extend({
     parser : function() {
-	return new serialization.Image();
+	return serialization.image;
     },
     toString : function() { return "Image"; }
 });
@@ -2045,13 +2088,13 @@ SyncDB.Types.Vector = SyncDB.Types.Base.extend({
 	this.types = types;
 	this.base.apply(this, [ name ].concat(Array.prototype.slice.call(arguments, 2)));
     },
-    parser : function(type, constructor) {
+    parser : function(type, constructor, tuple) {
 	var l = new Array(this.types.length+2);
 	l[0] = type||"_vector";
 	l[1] = constructor||false;
 	for (var i = 0; i < l.length-2; i++)
 	    l[i+2] = this.types[i].parser();
-	return UTIL.create(serialization.Tuple, l);
+	return UTIL.create(tuple||serialization.Tuple, l);
     }
 });
 SyncDB.Types.Range = SyncDB.Types.Vector.extend({
@@ -2103,17 +2146,20 @@ SyncDB.Types.Version = SyncDB.Types.Vector.extend({
 	this.base.apply(this, [ name, t ].concat(Array.prototype.slice.call(arguments, 2)));
     },
     parser : function(type, constructor) {
-	return this.base(type||"_version").extend({
-	    encode : function(o) {
-		return this.base(o.a);
+	return this.base(type||"_version", undefined, serialization.Tuple.extend({
+	    generate_encode : function(o, type, data) {
+		return this.base(o.Index("a"), type, data);
 	    },
-	    decode : function(atom) {
-		return new SyncDB.Version(this.base(atom));
+	    generate_decode : function(type, data, ret) {
+		var b = new lambda.Block();
+		b.add(this.base(type, data, ret));
+		b.add(ret.Set(new lambda.Template("new SyncDB.Version(%%)", ret)));
+		return b;
 	    },
-	    can_encode : function(o) {
-		return o instanceof SyncDB.Version;
+	    generate_can_encode : function(o, ret) {
+		return ret.Set(new lambda.Template("%% instanceof SyncDB.Version", o));
 	    }
-	});
+	}));
     },
     eq : function(a, b) {
 	return a.eq(b);
@@ -2137,7 +2183,7 @@ SyncDB.Date.prototype = Date.prototype;
 SyncDB.Types.Date = SyncDB.Types.Base.extend({
     toString : function() { return "Date"; },
     parser : function() {
-	return new serialization.Date();
+	return serialization.date;
     },
     eq : function(a, b) {
 	return a.getTime() == b.getTime();
@@ -2194,14 +2240,23 @@ SyncDB.Serialization.Type = serialization.generate_structs({
 });
 SyncDB.Serialization.Schema = serialization.Array.extend({
     constructor : function() {
-	this.base(SyncDB.Serialization.Type);
 	this.type = "_schema";
+	this.base(SyncDB.Serialization.Type);
     },
-    encode : function(schema) {
-	return this.base(schema.fields);
+    generate_encode : function(o, type, data) {
+	var b = new lambda.Block(data.scope);
+	b.add(o.Set(o.Index("fields")));
+	b.add(this.base(o, type, data));
+	return b;
     },
-    decode : function(atom) {
-	return UTIL.create(SyncDB.Schema, this.base(atom));
+    generate_decode : function(type, data, ret) {
+	var b = new lambda.Block(ret.scope);
+	b.add(this.base(type, data, ret));
+	b.add(ret.Set(new lambda.Template("UTIL.create(SyncDB.Schema, %%)", ret)));
+	return b;
+    },
+    generate_can_encode : function(o, ret) {
+	return ret.Set(new lambda.Template("%% instanceof SyncDB.Schema", o));
     }
 });
 SyncDB.DraftTable = SyncDB.LocalTable.extend({

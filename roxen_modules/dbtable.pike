@@ -15,7 +15,7 @@ string registered_channel;
 
 void create() {
     defvar("channel", Variable.String("control", 0, "Channel to use.",
-				      "Name of the channel to request from"
+				      "Name of the channel to request from "
 				      "the controller for browser interaction."));
     defvar("sql", Variable.String("", VAR_INITIAL, "Sql server to use.",
 				      "Format is mysql://user@server/database"));
@@ -42,8 +42,10 @@ void start(int i, mixed conf) {
 	string name = query("syncdb_name");
 	string sql = query("sql");
 	if (sizeof(sql) && sizeof(name)) {
+	    Sql.Sql sql = Sql.Sql(sql);
+	    sql->set_charset("unicode");
 	    table = SyncDB.Meteor.Table(name, schema, 
-		    SyncDB.MySQL.Table(name, Sql.Sql(sql), schema, query("sql_table")));
+		    SyncDB.MySQL.Table(name, sql, schema, query("sql_table")));
 	}
 
 	conf->get_provider("syncdb")->register_table(name, table, query("channel"));
