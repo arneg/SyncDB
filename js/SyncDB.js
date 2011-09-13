@@ -562,7 +562,7 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 	    var bad = function (tx, err) {
 		    cb(err);
 		};
-	    if (UTIL.stringp(old)) {
+	    if (old) {
 		this.push_unsafe("UPDATE sLsA SET value=? WHERE key=? AND"+
 			      " value=?;",
 			      [ this.encode(val), key, this.encode(old) ], good, bad);
@@ -700,7 +700,7 @@ SyncDB.LocalField = UTIL.Base.extend({
 		if (err) {
 		    ret = undefined;
 		} else {
-		    if (UTIL.stringp(value))
+		    if (value)
 			this.value = this.parser.decode(serialization.parse_atom(value));
 		    else if (this.def) {
 			//UTIL.log("setting default to %o", this.def);
@@ -762,7 +762,7 @@ SyncDB.Index = SyncDB.LocalField.extend({
     constructor : function(ls, name, tkey, tid) {
 	this.tkey = tkey;
 	this.tid = tid;
-	console.log("SyncDB.Index constructor.");
+	//console.log("SyncDB.Index constructor.");
 	this.base(ls, name, new serialization.Object(tkey.parser()), {});
 	this.get(UTIL.make_method(this, function() { this.init.apply(this, Array.prototype.slice.call(arguments)); }));
     },
@@ -1078,6 +1078,18 @@ SyncDB.Schema = UTIL.Base.extend({
 	    if (type.get_val) this.autos.push(name);
 	}
 	this.schema_parser = UTIL.cached(this.schema_parser);
+	this.parser_in = UTIL.cached(this.parser_in);
+	this.parser_out = UTIL.cached(this.parser_out);
+    },
+    parser_in : function() {
+	return this.parser(function(name, type) {
+	    return type.is_readable && !type.is_hidden;
+	});
+    },
+    parser_out : function() {
+	return this.parser(function(name, type) {
+	    return type.is_writable && !type.is_automatic;
+	});
     },
     hashCode : function() {
 	return (new UTIL.SHA256.Hash()).update(this.schema_parser().encode(this).render()).hex_digest();
@@ -1213,12 +1225,8 @@ SyncDB.Table = UTIL.Base.extend({
 	this.name = name;
 	this.schema = schema;
 	this.parser = schema.parser();
-	this.parser_in = schema.parser(function(name, type) {
-	    return type.is_readable && !type.is_hidden;
-	});
-	this.parser_out = schema.parser(function(name, type) {
-	    return type.is_writable && !type.is_automatic;
-	});
+	this.parser_in = schema.parser_in();
+	this.parser_out = schema.parser_out();
 	this.db = db;
 	this.ready_ea = new UTIL.EventAggregator();
 	UTIL.call_later(this.ready_ea.start, this.ready_ea);
@@ -1586,7 +1594,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 
 		this.ls.remove(k, this.M(function(error, value) { // TODO: make useful with different storage errors etc.
 		    if (!error) {
-			if (UTIL.stringp(value)) callback(false, row);
+			if (value) callback(false, row);
 			else callback(new SyncDB.Error.NotFound());
 		    } else callback(error);
 		}));
@@ -1627,7 +1635,7 @@ SyncDB.LocalTable = SyncDB.Table.extend({
 		//UTIL.log("LS returned %s -> %s", k, value);
 		if (!error) {
 		    for (var i = 0; i < value.length; i++)
-			if (UTIL.stringp(value[i]))
+			if (value[i])
 			    value[i] = this.parser.decode(serialization.parse_atom(value[i]));
 			else return callback(new SyncDB.Error.NotFound());
 		    callback(false, value);
