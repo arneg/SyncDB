@@ -630,7 +630,7 @@ SyncDB.LS = function(prefix) {
 	    }
 	});
     if (SyncDB.KeyValueStorage) {
-	if (UTIL.App.is_firefox && !UTIL.App.has_indexedDB) {
+	if (window.JSON && !UTIL.App.has_indexedDB) {
 	    return new (SyncDB.KeyValueMapping.extend({
 		constructor : function(prefix) {
 		    this.prefix = prefix;
@@ -666,7 +666,6 @@ SyncDB.LS = function(prefix) {
 		is_permanent : true
 	    }))(prefix);
 	}
-	throw("booooh!");
 	return new SyncDB.KeyValueStorage(prefix);
     } else return new SyncDB.KeyValueMapping(prefix);
 };
