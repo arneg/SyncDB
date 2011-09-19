@@ -56,7 +56,7 @@ object parser(function|void filter) {
 
 object parser_in() {
     return parser(lambda(string field, SyncDB.Types.Base type) {
-	return type->is_writable && !type->is_automatic; 
+	return type->is_writable && !type->is_automatic || field == "version" || type->is_key;
     });
 }
 
