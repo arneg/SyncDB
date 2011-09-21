@@ -372,6 +372,13 @@ SyncDB.KeyValueMapping = UTIL.Base.extend({
 	delete this.m[key];
 	UTIL.call_later(cb, null, false, v);
     },
+    size : function(cb) {
+	var size = 0;
+	for (var key in this.m) if (this.m.hasOwnPropert(key)) {
+	    size += key.length + this.m[key].length;
+	}
+	UTIL.call_later(cb, null, false, size);
+    },
     clear : function(cb) {
 	this.m = {};
 	UTIL.call_later(cb, null, false);
@@ -424,9 +431,28 @@ if (UTIL.App.has_local_storage) {
 		UTIL.call_later(cb, null, err);
 	    }
 	},
+	size : function(cb) {
+	    var size = 0;
+	    for (i = 0; i < localStorage.length; i++) {
+		var key = localStorage.key(i);
+		if (key.search(this.prefix) == 0) {
+		    size += key.length + localStorage[key].length;
+		}
+	    }
+	    UTIL.call_later(cb, null, false, size);
+	},
 	clear : function(cb) {
 	    // TODO: remove only prefix LS entries
-	    localStorage.clear();
+	    var r = [], i;
+	    for (i = 0; i < localStorage.length; i++) {
+		var key = localStorage.key(i);
+		if (key.search(this.prefix) == 0) {
+		    r.push(key);
+		}
+	    }
+	    for (i = 0; i < r.length; i++) {
+		localStorage.removeItem(r[i]);
+	    }
 	    UTIL.call_later(cb, null, false);
 	},
 	toString : function() {
@@ -462,6 +488,19 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 	    } catch (err) {
 		this.M(cb)(err);
 	    }
+	},
+	size : function(cb) {
+	    this.push("select sum(length(key)) as keys, sum(length(value)) as values from sLsA;", [],
+		      function(tx, data) {
+			  if (data.rows.length != 1) {
+			      cb(true, "got only "+data.rows.length+"rows");
+			  } else {
+			     cb(false, parseInt(data.rows.item(0).keys) + parseInt(data.rows.item(0).values));
+			  }
+		      },
+		      function(tx, err) {
+			  cb(err);
+		      });
 	},
 	is_permanent : true,
 	_wrap : function(cb1, cb2) {
