@@ -129,7 +129,7 @@ class Foreign {
     }
 
     int(0..1) `is_auto_increment() {
-	return sql_schema[fid]->flags->auto_increment;
+	return sql_schema[fid]->flags->is_automatic;
     }
 }
 
@@ -349,7 +349,7 @@ void create(string dbname, Sql.Sql con, SyncDB.Schema schema, string table) {
 		    error("Unsupported link flag.\n");
 		}
 		tables[name] = p(name, field, fid);
-		if (table_o->sql_schema[field]->flags->auto_increment && tables[name]->is_auto_increment && schema[fid]->is_writable) {
+		if (table_o->sql_schema[field]->flags->is_automatic && tables[name]->is_auto_increment && schema[fid]->is_writable) {
 		    error("Link fields cannot be both automatic in %s and %s (%O, %O).\n", table, name, fid, schema[fid]->flags);
 		}
 	    }
