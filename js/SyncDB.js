@@ -490,12 +490,12 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 	    }
 	},
 	size : function(cb) {
-	    this.push("select sum(length(key)) as keys, sum(length(value)) as values from sLsA;", [],
+	    this.push("select sum(length(key)) as s1, sum(length(value)) as s2 from sLsA;", [],
 		      function(tx, data) {
 			  if (data.rows.length != 1) {
 			      cb(true, "got only "+data.rows.length+"rows");
 			  } else {
-			     cb(false, parseInt(data.rows.item(0).keys) + parseInt(data.rows.item(0).values));
+			     cb(false, parseInt(data.rows.item(0).s1) + parseInt(data.rows.item(0).s2));
 			  }
 		      },
 		      function(tx, err) {
