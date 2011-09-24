@@ -45,6 +45,10 @@ class Table {
 
     string name;
 
+    int(0..1) `is_automatic() {
+	return schema->id->is_automatic;
+    }
+
     void create(string name) {
 	this_program::name = name;
 	array a = sql->list_fields(name);
@@ -121,15 +125,16 @@ class Foreign {
 	    if (row[id]) {
 		new[sprintf("%s.%s", name, fid)]
 		    = schema[id]->encode_sql_value(row[id]);
-	    } else if (!is_auto_increment) {
+	    } else if (!is_automatic) {
 		error("join id needs to be either automatic or specified."); 
 	    } 
 	}
 	return new;
     }
 
-    int(0..1) `is_auto_increment() {
-	return sql_schema[fid]->flags->is_automatic;
+    int(0..1) `is_automatic() {
+	werror("auto_increment: %O %O %O\n", sql_schema[fid], sql_schema[fid]->flags, sql_schema[fid]->flags->auto_increment);
+	return sql_schema[fid]->is_automatic;
     }
 }
 
@@ -143,7 +148,7 @@ class Join {
 	    if (row[id]) {
 		new[sprintf("%s.%s", name, fid)]
 		    = schema[id]->encode_sql_value(row[id]);
-	    } else if (!is_auto_increment) {
+	    } else if (!is_automatic) {
 		error("join id needs to be either automatic or specified."); 
 	    } 
 	    // TODO: we somehow have to signal that we want to insert here
@@ -159,7 +164,7 @@ class Join {
 		s += sprintf(", %s.%s=%s", name, fid, schema[id]->encode_sql(name, row));
 	    } else {
 		if (!oldrow[id]) {
-		    if (is_auto_increment) {
+		    if (is_automatic) {
 			mapping new = insert(row);
 			// insert data
 			// change row[id] to the auto incremented value
@@ -267,8 +272,8 @@ array(Table) table_objects() {
     // TODO: move sorting to create
     array a = values(tables), r;
     sort(indices(tables), a);
-    r = filter(a, a->is_auto_increment) + ({ table_o });
-    r += filter(a, map(a->is_auto_increment, `!));
+    r = filter(a, a->is_automatic) + ({ table_o });
+    r += filter(a, map(a->is_automatic, `!));
     return r;
 }
 
@@ -349,7 +354,7 @@ void create(string dbname, Sql.Sql con, SyncDB.Schema schema, string table) {
 		    error("Unsupported link flag.\n");
 		}
 		tables[name] = p(name, field, fid);
-		if (table_o->sql_schema[field]->flags->is_automatic && tables[name]->is_auto_increment && schema[fid]->is_writable) {
+		if (table_o->sql_schema[field]->flags->is_automatic && tables[name]->is_automatic && schema[fid]->is_writable) {
 		    error("Link fields cannot be both automatic in %s and %s (%O, %O).\n", table, name, fid, schema[fid]->flags);
 		}
 	    }
@@ -514,7 +519,7 @@ void insert(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... e
 	foreach (table_objects(); ; Table t) {
 	    mapping new = t->insert(row);
 	    if (!new) {
-		if (t->is_auto_increment && sizeof(t->writable())) {
+		if (t->is_automatic && sizeof(t->writable())) {
 		    new = ([]);
 		}
 		continue;
@@ -522,7 +527,9 @@ void insert(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... e
 	    string into = indices(new)*",";
 	    string values = values(new)*",";
 	    query("INSERT INTO %s (%s) VALUES (%s);", t->name, into, values);
-	    if (t->is_auto_increment && t->is_link) {
+	    // we need todo this potentially for all automatic fields (not only
+	    // mysql auto increment).
+	    if (t->is_automatic && t->is_ass_on_fire && t->is_link) {
 		mapping last = query("SELECT * FROM %s WHERE %s=LAST_INSERT_ID()", t->name, t->fid)[0];
 		row[t->id] = (int)last[t->fid];
 	    }
