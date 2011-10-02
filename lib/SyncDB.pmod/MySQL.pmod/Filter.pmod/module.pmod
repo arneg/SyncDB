@@ -1,3 +1,5 @@
+class Base { }
+
 class Or(object ... filters) {
 
     string encode_sql(object table) {
@@ -23,21 +25,48 @@ class And(object ... filters) {
 }
 
 class Equal(string field, mixed value) {
+    inherit Base;
 
     string encode_sql(object table) {
+	return sprintf("%s=%s", table->get_sql_name(field),
+		       encode_sql_value(table));
+    }
+
+    string encode_sql_value(object table) {
 	mixed o = value;
 	object type = table->schema[field];
-	if (!type->is_index)
+
+	if (!type->is_index) { // relieve this check for restrictions?
 	    error("Trying to index non-indexable field.\n");
 	if (!type->is_readable)
 	    error("Trying to index non-readable field.\n");
 	if (objectp(o) && Program.inherits(object_program(o), Serialization.Atom)) 
 	    o = type->parser()->decode(o);
-	return sprintf("%s=%s", table->get_sql_name(field), type->encode_sql_value(o));
+
+	return type->encode_sql_value(o);
+	}
     }
 
     string _sprintf(int type) {
 	return sprintf("Equal(%O, %O)", field, value);
+    }
+
+    void insert(object table, string name, mapping|void new) {
+	object f;
+	string t;
+
+	if (!new) new = ([ ]);
+
+	f = table->schema[field]->f_foreign;
+
+	if (f)
+	    t = f->table;
+	if (!t)
+	    t = table->table;
+	if (t == name)
+	    new[table->get_sql_name(field)] = encode_sql_value(table);
+
+	return new;
     }
 }
 

@@ -103,6 +103,9 @@ class Table {
 	    if (type == schema->id) continue;
 	    type->encode_sql(name, row, new);
 	}
+	if (schema->restriction) {
+	    schema->restriction->insert(this, table, new);
+	}
 	return sizeof(new) ? new : 0;
     }
 }
@@ -388,8 +391,16 @@ void create(string dbname, Sql.Sql con, SyncDB.Schema schema, string table) {
 	install_triggers(foreign_table);
     }
 
-    update_sql += "%s";
-    select_sql += " WHERE 1=1 AND %s";
+    select_sql += " WHERE 1=1 AND ";
+    if (schema->restriction) {
+	string restriction = sprintf("(%s) ", replace(schema->restriction->encode_sql(this), "%", "%%"));
+
+	update_sql += restriction;
+	select_sql += restriction;
+    }
+
+    update_sql += "(%s)";
+    select_sql += "(%s)";
 
     // Initialize version
     t = table_names();

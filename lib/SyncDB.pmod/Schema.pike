@@ -4,14 +4,24 @@ string key;
 SyncDB.Types.Base id;
 array(string) index = ({ });
 string automatic;
+object restriction;
 
 void create(object ... m) {
     fields = m;
     this_program::m = mkmapping(m->name, m);
 #if 1
-    foreach (fields;; SyncDB.Types.Base type) {
+    //foreach (fields;; SyncDB.Types.Base type) {
+    foreach (fields;; object type) {
 	if (type->name == "version") {
 	    error("field called 'version' is reserved.");
+	}
+	// WINNER: Table(..., schema->m->foo->Equal("12"));
+	// Schema(..., SyncDB.Restriction.String("field", ...Equal("hans")))
+	if (Program.inherits(object_program(type), SyncDB.MySQL.Filter.Base)) {
+	    if (restriction) error("You cannot have more than one restriction "
+				   "(use And/Or/...)\n");
+	    restriction = type;
+	    continue;
 	}
 	if (type->is_index) index += ({ type->name });
 	if (type->is_key) {

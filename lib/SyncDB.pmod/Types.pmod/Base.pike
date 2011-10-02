@@ -81,6 +81,7 @@ array(string) sql_names(string table) {
 }
 
 string encode_json(string p, void|array extra) {
+    if (this->is_hidden) return "";
     if (!extra) extra = ({});
     extra = ({ Standards.JSON.encode(name) }) + extra + filter(map(flags, Standards.JSON.encode), sizeof);
     return sprintf("(new %s(%s))", p, extra * (",\n"+" "*8));
