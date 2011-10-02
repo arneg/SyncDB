@@ -589,13 +589,19 @@ void syncreq(SyncDB.Version version, mapping filter, function cb, mixed ... args
 	foreach (rows;; mapping row) {
 	    int(0..1) do_send;
 
-	    foreach (filter; string name; object filter) {
+OUTER: 	    foreach (filter; string name; object filter) {
 		function lookup = filter->has || filter->`[];
 		mixed e = catch {
 		    werror("syncreq: %O %O %O.\n", row[name], filter, lookup(row[name]));
-		    if (lookup(row[name])) {
+		    int val = lookup(row[name]);
+		    switch (val) {
+		    case 1:
 			do_send = 1;
-			continue;
+			//continue OUTER;
+			break;
+		    case -1:
+			do_send = 0;
+			break OUTER;
 		    }
 		};
 		if (e) {
