@@ -435,7 +435,7 @@ void select(object filter, function(int(0..1), array(mapping)|mixed:void) cb,
     }
 }
 
-void update(mapping keys, SyncDB.Version version, function(int(0..1),mapping|mixed:void) cb2, mixed ... extra) {
+void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mapping|mixed:void) cb2, mixed ... extra) {
     int(0..1) noerr;
     mixed err;
     mixed k;
@@ -454,10 +454,12 @@ void update(mapping keys, SyncDB.Version version, function(int(0..1),mapping|mix
 
     string where = mapping_implode(t, "=", " AND ");
 
-    t = schema["version"]->encode_sql(table, ([ "version" : version  ]), t);
+    if (!mappingp(version)) version = ([ "version" : version ]);
+    foreach (version; string name; mixed value) {
+	t = schema[name]->encode_sql(table, version, t);
+    }
 
     string uwhere = mapping_implode(t, "=", " AND ");
-
 
     err = catch {
 	query("LOCK TABLES %s WRITE;", table_names() * " WRITE,");
