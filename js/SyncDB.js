@@ -2332,11 +2332,11 @@ SyncDB.DraftTable = SyncDB.LocalTable.extend({
     }
 });
 SyncDB.Connector = SyncDB.LocalField.extend({
-    constructor : function(drafts, online, cb) {
+    constructor : function(ls, drafts, online, cb) {
 	this.drafts = drafts;
 	this.online = online;
 	this.cb = cb;
-	this.base("_syncdb_connector_"+drafts.name+"_"+online.name,
+	this.base(ls, "_syncdb_connector_"+drafts.name+"_"+online.name,
 		  new serialization.Object(drafts.schema.m[drafts.schema.key].parser()),
 		  { });
 	this.get(this.M(function () {
