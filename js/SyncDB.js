@@ -2375,8 +2375,8 @@ SyncDB.Connector = SyncDB.LocalField.extend({
 		// update or delete
 		if (!row) this.online.remove_by(oid, callback);
 		else this.online.select_by(oid, this.M(function (err, orow) {
-			if (err) UTIL.error("Something fishy in Connector#commit: %o", err);
-			this.online.update(row, callback, orow);
+			if (err || orow.length != 1) UTIL.error("Something fishy in Connector#commit: %o", err);
+			this.online.update(row, callback, orow[0]);
 		}));
 	    } else this.online.insert(row, callback);
 	}));
