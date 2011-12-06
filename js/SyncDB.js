@@ -2369,7 +2369,7 @@ SyncDB.Connector = SyncDB.LocalField.extend({
 	    });
 	    this.value[key] = 1;
 	    this.sync();
-	    var oid = this.drafts.draft_index.get(key);
+	    var oid = this.drafts.draft_index.lookup_equal(key);
 	    if (oid.length) { // corresponds to online entry
 		oid = oid[0];
 		// update or delete
