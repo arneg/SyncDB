@@ -1563,7 +1563,7 @@ SyncDB.MeteorTable = SyncDB.Table.extend({
 SyncDB.LocalTable = SyncDB.Table.extend({
     constructor : function(name, schema, ls, db) {
 	var done = 3;
-	this.ls = ls;
+	this.ls = ls || SyncDB.LS("");
 	this.config = new SyncDB.TableConfig(ls, "_syncdb_"+name);
 	this.base(name, schema, db);
 	var eag = new UTIL.EventAggregator();
