@@ -2306,11 +2306,14 @@ SyncDB.Serialization.Schema = serialization.Array.extend({
     }
 });
 SyncDB.DraftTable = SyncDB.LocalTable.extend({
-    constructor : function(name, schema) {
+    constructor : function(name, schema, ls, db) {
 	// add some extra fields to the schema
 	// we also need to support deletes?
 	// insert/update
-	this.base(name, schema);
+	//
+	// we disallow chaining here. its really not supposed to work
+	if (db) UTIL.error("Chaining not allowed with Draft tables.");
+	this.base(name, schema, ls);
 	this.draft_index = (new SyncDB.Index(this.ls, "_syncdb_DI_" + this.name, schema.m[schema.key], schema.m[schema.key]))
 			    .extend(SyncDB.MappingIndex);
     },
