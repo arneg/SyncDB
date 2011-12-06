@@ -2325,7 +2325,7 @@ SyncDB.DraftTable = SyncDB.LocalTable.extend({
     create_draft : function(row, cb) {
 	SyncDB.LocalTable.prototype.insert.call(this, row, this.M(function(err, row_) {
 	    if (err) return cb(err, row_);
-	    if (row.hasOwnProperty(this.schema.key))
+	    if (row[this.schema.key])
 		this.draft_index.insert(row_[this.schema.key],
 				     row [this.schema.key]);
 	    cb(err, row_);
