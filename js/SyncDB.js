@@ -2377,7 +2377,7 @@ SyncDB.Connector = SyncDB.LocalField.extend({
 		else this.online.select_by(oid, this.M(function (err, orow) {
 			if (err) UTIL.error("Something fishy in Connector#commit: %o", err);
 			this.online.update(row, callback, orow);
-		});
+		}));
 	    } else this.online.insert(row, callback);
 	}));
     }
