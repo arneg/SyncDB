@@ -4,3 +4,12 @@
 - LS(prefix)
   * doesnt detect several windows working on the same LS. It should internally
     lock using CAS or poll the fields if its already set.
+
+===== Similar projects and comparison ==
+
+- jStorage (http://www.jstorage.info/)
+  * is basically equivalent to our SyncDB.LS object which implements one
+    simple key value storage api on top of different browser technologies.
+    Supports even IE 6 with up to 128k of storage.
+
+
