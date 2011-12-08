@@ -547,6 +547,7 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 	    UTIL.log("executing: %d statements", q.length);
 	    for (var i = 0; i < q.length; i++) {
 		var cb = ea.get_cb();
+		UTIL.log("executeSql(%o, %o)", q[i][0], q[i][1]);
 		tx.executeSql(q[i][0], q[i][1],
 			      this._wrap(q[i][2], cb,
 			      this._wrap(q[i][3], cb)));
