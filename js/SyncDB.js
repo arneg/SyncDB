@@ -1923,10 +1923,13 @@ SyncDB.Flags.Automatic = SyncDB.Flags.Base.extend({
     is_automatic: 1
 });
 SyncDB.Flags.AutoIncrement = SyncDB.Flags.Automatic.extend({
+    constructor : function(ls) {
+	if (ls) this.ls = ls;
+    },
     get_val : function (db, name, type, cb) {
 	var n = "_syncdb_CNT_" + db.name + "_" + name;
 	if (!SyncDB.Flags.AutoCache[n])
-	    SyncDB.Flags.AutoCache[n] = new SyncDB.LocalField(n, type.parser(), 1);
+	    SyncDB.Flags.AutoCache[n] = new SyncDB.LocalField(this.ls || SyncDB.LS(""), type.parser(), 1);
 
 	var field = SyncDB.Flags.AutoCache[n];
 	field.get(function(val) {
