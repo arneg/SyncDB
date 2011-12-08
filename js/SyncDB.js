@@ -544,14 +544,14 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 		this.q = null;
 	    }
 	    var t = new Date();
-	    console.log("executing: %d statements", q.length);
+	    UTIL.log("executing: %d statements", q.length);
 	    for (var i = 0; i < q.length; i++) {
 		var cb = ea.get_cb();
 		tx.executeSql(q[i][0], q[i][1],
 			      this._wrap(q[i][2], cb,
 			      this._wrap(q[i][3], cb)));
 	    }
-	    ea.ready(function() { console.log("done in %o ms", new Date() - t); });
+	    ea.ready(function() { UTIL.log("done in %o ms", new Date() - t); });
 	    ea.start();
 	},
 	get : function(key, cb) {
