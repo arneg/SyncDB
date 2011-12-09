@@ -531,7 +531,15 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
 	    if (!force && this.running) return;
 	    if (this.Q.length && this.Q[0].length) {
 		this.running = true;
-		err = this.M(function(err) { UTIL.error("err: %o", err); });
+		err = this.M(function(err) {
+			     if (UTIL.objectp(err)
+				 && err.hasOwnProperty("code")
+				 && err.hasOwnProperty("message"))
+				UTIL.error("err: %o (%d %o)",
+					   err, err.code, err.message);
+			     else
+				UTIL.error("err: %o", err);
+		});
 		this.db.transaction(this.M(this._transaction), err, this.M(this.run, true));
 	    } else {
 		this.running = false;
