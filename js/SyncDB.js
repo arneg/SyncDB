@@ -669,8 +669,10 @@ if (UTIL.App.is_ipad || UTIL.App.is_phone || UTIL.App.has_local_database) {
     });
 }
 SyncDB.LS = function(prefix) {
+    if (SyncDB.LS.cache.hasOwnProperty(prefix))
+	return SyncDB.LS.cache[prefix];
     if (SyncDB.KeyValueDatabase)
-	return new SyncDB.KeyValueDatabase(prefix, function (err) {
+	return SyncDB.LS.cache[prefix] = new SyncDB.KeyValueDatabase(prefix, function (err) {
 	    if (err) {
 		UTIL.error("failed to initialize local database. fallback deactivated right now! (%o)", err);
 		// rewrite this here with functions from a fallback!
@@ -679,7 +681,7 @@ SyncDB.LS = function(prefix) {
 	});
     if (SyncDB.KeyValueStorage) {
 	if (window.JSON && !UTIL.App.has_indexedDB) {
-	    return new (SyncDB.KeyValueMapping.extend({
+	    return SyncDB.LS.cache[prefix] = new (SyncDB.KeyValueMapping.extend({
 		constructor : function(prefix) {
 		    this.prefix = prefix;
 		    this.field = "syncdb_ls_"+prefix;
@@ -714,9 +716,12 @@ SyncDB.LS = function(prefix) {
 		is_permanent : true
 	    }))(prefix);
 	}
-	return new SyncDB.KeyValueStorage(prefix);
-    } else return new SyncDB.KeyValueMapping(prefix);
+	return SyncDB.LS.cache[prefix] = new SyncDB.KeyValueStorage(prefix);
+    } else return SyncDB.LS.cache[prefix] = new SyncDB.KeyValueMapping(prefix);
 };
+
+SyncDB.LS.cache = {};
+
 SyncDB.LocalField = UTIL.Base.extend({
     constructor : function(ls, name, parser, def) {
 	this.ls = ls;
