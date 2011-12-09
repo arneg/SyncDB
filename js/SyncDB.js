@@ -167,8 +167,8 @@ SyncDB.Row.prototype = {
     Copy : function() {
 	var c = new SyncDB.Row(this.schema);
 
-	for (var x in c) {
-	    if (!c.hasOwnProperty(x)) continue;
+	for (var x in this) {
+	    if (!this.hasOwnProperty(x)) continue;
 	    c[x] = this[x];
 	}
 
