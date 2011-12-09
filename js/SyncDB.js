@@ -1950,6 +1950,8 @@ SyncDB.Flags.AutoIncrement = SyncDB.Flags.Automatic.extend({
 SyncDB.Flags.AutoCache = {};
 SyncDB.Serialization.Flag = serialization.generate_structs({
     _automatic : SyncDB.Flags.Automatic,
+    _autoincrement : SyncDB.Flags.AutoIncrement, // for schema hash
+						 // generation
     //_hash : SyncDB.Flags.Hash,
     _index : SyncDB.Flags.Index,
     _key : SyncDB.Flags.Key,
