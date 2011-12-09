@@ -1358,7 +1358,7 @@ SyncDB.Table = UTIL.Base.extend({
     },
     auto_set : function(row, cb) {
 	this.schema.get_auto_set(this, function(as) {
-	    if (as.length) {
+	    if (UTIL.keys(as).length) {
 		row = UTIL.copy(row);
 		for (var x in as) row[x] = as[x];
 	    }
