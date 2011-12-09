@@ -163,7 +163,17 @@ SyncDB.Row.prototype = {
 	r[this.schema.key] = this[this.schema.key];
 	r.version = this.version;
 	return r;
-    }
+    },
+    Copy : function() {
+	var c = new SyncDB.Row(this.schema);
+
+	for (var x in c) {
+	    if (!c.hasOwnProperty(x)) continue;
+	    c[x] = this[x];
+	}
+
+	return c;
+    },
 };
 /*
  * what do we need for index lookup in a filter:
@@ -1359,7 +1369,7 @@ SyncDB.Table = UTIL.Base.extend({
     auto_set : function(row, cb) {
 	this.schema.get_auto_set(this, function(as) {
 	    if (UTIL.keys(as).length) {
-		row = UTIL.copy(row);
+		row = row.Copy();
 		for (var x in as) row[x] = as[x];
 	    }
 	    cb(row);
