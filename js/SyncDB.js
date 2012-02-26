@@ -2133,6 +2133,12 @@ SyncDB.Types.String = SyncDB.Types.Filterable.extend({
 	return new UTIL.SHA256.Hash();
     }
 });
+SyncDB.Types.JSON = SyncDB.Types.Base.extend({
+    parser : function() {
+	return serialization.json;
+    },
+    toString : function() { return "JSON"; },
+});
 SyncDB.Types.Image = SyncDB.Types.Base.extend({
     parser : function() {
 	return serialization.image;
@@ -2306,6 +2312,7 @@ SyncDB.Types.Array = SyncDB.Types.Base.extend({
 });
 SyncDB.Serialization.Type = serialization.generate_structs({
     _string : SyncDB.Types.String,
+    _json : SyncDB.Types.JSON,
     _integer : SyncDB.Types.Integer,
     _range : SyncDB.Types.Range,
     _vector : SyncDB.Types.Vector,
