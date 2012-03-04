@@ -36,7 +36,7 @@ class Equal(string field, mixed value) {
 	mixed o = value;
 	object type = table->schema[field];
 
-	if (!type->is_index) { // relieve this check for restrictions?
+	if (!type->is_index) // relieve this check for restrictions?
 	    error("Trying to index non-indexable field.\n");
 	if (!type->is_readable)
 	    error("Trying to index non-readable field.\n");
@@ -44,7 +44,6 @@ class Equal(string field, mixed value) {
 	    o = type->parser()->decode(o);
 
 	return type->encode_sql_value(o, quote);
-	}
     }
 
     string _sprintf(int type) {
