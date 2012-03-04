@@ -8,7 +8,7 @@ program get_critbit() {
     return ADT.CritBit.IntTree;
 }
 
-string encode_sql_value(mixed val) {
+string encode_sql_value(mixed val, function quote) {
     return sprintf("'%d'", val);
 }
 

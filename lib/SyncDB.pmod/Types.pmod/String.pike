@@ -8,8 +8,8 @@ program get_critbit() {
     return ADT.CritBit.Tree;
 }
 
-string encode_sql_value(mixed val) {
-    return sprintf("'%s'", Sql.sql_util.quote(val));
+string encode_sql_value(mixed val, function quote) {
+    return sprintf("'%s'", quote(val));
 }
 
 string encode_json(string|void type) {

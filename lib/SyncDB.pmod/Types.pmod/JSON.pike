@@ -8,9 +8,9 @@ program get_critbit() {
     return ADT.CritBit.Tree;
 }
 
-string encode_sql_value(mixed val) {
+string encode_sql_value(mixed val, function quote) {
     // TODO:: reencode JSON to canonical format?
-    return sprintf("'%s'", Sql.sql_util.quote(Standards.JSON.encode(val)));
+    return ::encode_sql_value(Standards.JSON.encode(val), quote);
 }
 
 string decode_sql_value(string s) {

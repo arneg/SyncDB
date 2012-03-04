@@ -38,9 +38,8 @@ mixed decode_sql_value(string s) {
     return s;
 }
 
-string encode_sql_value(mixed v) {
-    werror("casting: %O\n", v);
-    return (string)v;
+string encode_sql_value(mixed v, function quote) {
+    return sprintf("'%s'", quote((string)v));
 }
 
 mixed decode_sql(string table, mapping row, mapping|void new) {
@@ -57,12 +56,12 @@ mixed decode_sql(string table, mapping row, mapping|void new) {
     return UNDEFINED;
 }
 
-mapping encode_sql(string table, mapping row, mapping|void new) {
+mapping encode_sql(string table, mapping row, function quote, mapping|void new) {
     if (!new) new = ([]);
     if (has_index(row, name)) {
 	new[sql_name(table)] = (row[name] == SyncDB.Null)
 				? "NULL"
-				: encode_sql_value(row[name]);
+				: encode_sql_value(row[name], quote);
     }
     return new;
 }

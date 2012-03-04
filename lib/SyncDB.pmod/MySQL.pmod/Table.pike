@@ -79,7 +79,7 @@ class Table {
 	    if (!type->is_index) continue;
 	    // TODO: this will only work for single field types
 	    // later we somehow have to use filters, Equal by default
-	    type->encode_sql(name, row, new);
+	    type->encode_sql(name, row, sql->quote, new);
 	}
 	return sizeof(new) ? mapping_implode(new, "=", " AND ") : 0;
     }
@@ -92,7 +92,7 @@ class Table {
 	mapping new = ([]);
 	foreach (writable();; object type) {
 	    if (type == schema->id) continue;
-	    type->encode_sql(name, row, new);
+	    type->encode_sql(name, row, sql->quote, new);
 	}
 	return sizeof(new) ? mapping_implode(new, "=", ", ") : 0;
     }
@@ -101,7 +101,7 @@ class Table {
 	mapping new = ([]);
 	foreach (writable();; object type) {
 	    if (type == schema->id) continue;
-	    type->encode_sql(name, row, new);
+	    type->encode_sql(name, row, sql->quote, new);
 	}
 	if (schema->restriction) {
 	    schema->restriction->insert(this, table, new);
@@ -127,7 +127,7 @@ class Foreign {
 	if (new) {
 	    if (row[id]) {
 		new[sprintf("%s.%s", name, fid)]
-		    = schema[id]->encode_sql_value(row[id]);
+		    = schema[id]->encode_sql_value(row[id], sql->quote);
 	    } else if (!is_automatic) {
 		error("join id needs to be either automatic or specified."); 
 	    } 
@@ -150,7 +150,7 @@ class Join {
 	    new = ([]);
 	    if (row[id]) {
 		new[sprintf("%s.%s", name, fid)]
-		    = schema[id]->encode_sql_value(row[id]);
+		    = schema[id]->encode_sql_value(row[id], sql->quote);
 	    } else if (!is_automatic) {
 		error("join id needs to be either automatic or specified."); 
 	    } 
@@ -557,8 +557,9 @@ void insert(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... e
 	}
     };
     if (!err) err = catch {
-	string where = mapping_implode(schema->id->encode_sql(table, row), "=",
-				       " AND ");
+	string where = mapping_implode(schema->id->encode_sql(table, row,
+							      sql->quote),
+				       "=", " AND ");
 	rows = query(sprintf(select_sql, where));
 	if (sizeof(rows) != 1) error("foo");
 	version = schema["version"]->decode_sql(table, rows[0]);
