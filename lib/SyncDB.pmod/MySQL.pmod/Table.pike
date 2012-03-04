@@ -104,7 +104,7 @@ class Table {
 	    type->encode_sql(name, row, sql->quote, new);
 	}
 	if (schema->restriction) {
-	    schema->restriction->insert(this, table, new);
+	    schema->restriction->insert(this, table, sql->quote, new);
 	}
 	return sizeof(new) ? new : 0;
     }
@@ -164,7 +164,7 @@ class Join {
 	string s = ::update(row, oldrow);
 	if (s) { // need to add the corresponding link id
 	    if (has_index(row, id)) {
-		s += sprintf(", %s.%s=%s", name, fid, schema[id]->encode_sql(name, row));
+		s += sprintf(", %s.%s=%s", name, fid, schema[id]->encode_sql(name, row, sql->quote));
 	    } else {
 		if (!oldrow[id]) {
 		    if (is_automatic) {
@@ -393,7 +393,7 @@ void create(string dbname, Sql.Sql con, SyncDB.Schema schema, string table) {
 
     select_sql += " WHERE 1=1 AND ";
     if (schema->restriction) {
-	string restriction = sprintf("(%s) ", replace(schema->restriction->encode_sql(this), "%", "%%"));
+	string restriction = sprintf("(%s) ", replace(schema->restriction->encode_sql(this, sql->quote), "%", "%%"));
 
 	update_sql += restriction;
 	select_sql += restriction;
@@ -418,7 +418,7 @@ void select(object filter, function(int(0..1), array(mapping)|mixed:void) cb,
     array(mapping) rows;
 
     mixed err = catch {
-	string index = filter->encode_sql(this);
+	string index = filter->encode_sql(this, sql->quote);
 	if (!sizeof(index)) {
 	    // needs error type, i guess
 	    cb(1, "Need indexable field(s).\n", @extra);
@@ -444,7 +444,7 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),map
     mixed cb(int(0..1) error, mixed bla) {
 	return cb2(error, bla, @extra);
     };
-    mapping t = schema->id->encode_sql(table, keys);
+    mapping t = schema->id->encode_sql(table, keys, sql->quote);
     SyncDB.Version oversion, nversion;
 
     if (!sizeof(t)) {
@@ -456,7 +456,7 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),map
 
     if (!mappingp(version)) version = ([ "version" : version ]);
     foreach (version; string name; mixed value) {
-	t = schema[name]->encode_sql(table, version, t);
+	t = schema[name]->encode_sql(table, version, sql->quote, t);
     }
 
     string uwhere = mapping_implode(t, "=", " AND ");

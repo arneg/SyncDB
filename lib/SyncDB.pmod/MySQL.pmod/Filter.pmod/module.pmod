@@ -2,9 +2,9 @@ class Base { }
 
 class Or(object ... filters) {
 
-    string encode_sql(object table) {
+    string encode_sql(object table, function quote) {
 	if (!sizeof(filters)) error("empty filter!");
-	return "(" + filters->encode_sql(table) * " OR " + ")";
+	return "(" + filters->encode_sql(table, quote) * " OR " + ")";
     }
 
     string _sprintf(int type) {
@@ -14,9 +14,9 @@ class Or(object ... filters) {
 
 class And(object ... filters) {
 
-    string encode_sql(object table) {
+    string encode_sql(object table, function quote) {
 	if (!sizeof(filters)) error("empty filter!");
-	return "(" + filters->encode_sql(table) * " AND " + ")";
+	return "(" + filters->encode_sql(table, quote) * " AND " + ")";
     }
 
     string _sprintf(int type) {
@@ -27,12 +27,12 @@ class And(object ... filters) {
 class Equal(string field, mixed value) {
     inherit Base;
 
-    string encode_sql(object table) {
+    string encode_sql(object table, function quote) {
 	return sprintf("%s=%s", table->get_sql_name(field),
-		       encode_sql_value(table));
+		       encode_sql_value(table, quote));
     }
 
-    string encode_sql_value(object table) {
+    string encode_sql_value(object table, function quote) {
 	mixed o = value;
 	object type = table->schema[field];
 
@@ -43,7 +43,7 @@ class Equal(string field, mixed value) {
 	if (objectp(o) && Program.inherits(object_program(o), Serialization.Atom)) 
 	    o = type->parser()->decode(o);
 
-	return type->encode_sql_value(o);
+	return type->encode_sql_value(o, quote);
 	}
     }
 
@@ -51,7 +51,7 @@ class Equal(string field, mixed value) {
 	return sprintf("Equal(%O, %O)", field, value);
     }
 
-    void insert(object table, string name, mapping|void new) {
+    void insert(object table, string name, function quote, mapping|void new) {
 	object f;
 	string t;
 
@@ -64,14 +64,14 @@ class Equal(string field, mixed value) {
 	if (!t)
 	    t = table->table;
 	if (t == name)
-	    new[table->get_sql_name(field)] = encode_sql_value(table);
+	    new[table->get_sql_name(field)] = encode_sql_value(table, quote);
 
 	return new;
     }
 }
 
 class True(string field) {
-    string encode_sql(object table) {
+    string encode_sql(object table, function quote) {
 	return sprintf("%s IS NOT NULL", table->get_sql_name(field));
     }
     string _sprintf(int type) {
@@ -80,7 +80,7 @@ class True(string field) {
 }
 
 class False(string field) {
-    string encode_sql(object table) {
+    string encode_sql(object table, function quote) {
 	return sprintf("%s IS NULL", table->get_sql_name(field));
     }
     string _sprintf(int type) {
@@ -112,16 +112,16 @@ class RangeLookup(string field, Serialization.Atom value) {
 class Overlaps {
     inherit RangeLookup;
 
-    string encode_sql(object table) {
+    string encode_sql(object table, function quote) {
 	object range;
 	range = parser(table)->decode(value);
 	werror("Range: %O %O", object_program(range), range);
 
 	return sprintf("(%s <= %s AND %s >= %s)",
 		       start(table)->sql_name(table->table),
-		       start(table)->encode_sql_value(range->stop),
+		       start(table)->encode_sql_value(range->stop, quote),
 		       stop(table)->sql_name(table->table),
-		       stop(table)->encode_sql_value(range->start));
+		       stop(table)->encode_sql_value(range->start, quote));
     }
     string _sprintf(int type) {
 	return sprintf("Overlaps(%O)", field);
@@ -131,7 +131,7 @@ class Overlaps {
 class Contains {
     inherit RangeLookup;
 
-    string encode_sql(object table) {
+    string encode_sql(object table, function quote) {
 	object range;
 	range = parser(table)->decode(value);
 
@@ -139,9 +139,9 @@ class Contains {
 
 	return sprintf("(%s >= %s AND %s <= %s)",
 		       start(table)->sql_name(table->table),
-		       start(table)->encode_sql_value(range->start),
+		       start(table)->encode_sql_value(range->start, quote),
 		       stop(table)->sql_name(table->table),
-		       stop(table)->encode_sql_value(range->stop));
+		       stop(table)->encode_sql_value(range->stop, quote));
     }
     string _sprintf(int type) {
 	return sprintf("Overlaps(%O)", field);
@@ -149,9 +149,11 @@ class Contains {
 }
 
 class Lt(string field, Serialization.Atom value) {
-    string encode_sql(object table) {
+    string encode_sql(object table, function quote) {
 	object type = table->schema[field];
-	return sprintf("%s < %s", table->get_sql_name(field), type->encode_sql_value(type->parser()->decode(value)));
+	return sprintf("%s < %s", table->get_sql_name(field),
+		       type->encode_sql_value(type->parser()->decode(value),
+					      quote));
     }
     string _sprint(int type) {
 	return sprintf("Lt(%O)", field);
@@ -159,9 +161,11 @@ class Lt(string field, Serialization.Atom value) {
 }
 
 class Le(string field, Serialization.Atom value) {
-    string encode_sql(object table) {
+    string encode_sql(object table, function quote) {
 	object type = table->schema[field];
-	return sprintf("%s <= %s", table->get_sql_name(field), type->encode_sql_value(type->parser()->decode(value)));
+	return sprintf("%s <= %s", table->get_sql_name(field),
+		       type->encode_sql_value(type->parser()->decode(value),
+					      quote));
     }
     string _sprintf(int type) {
 	return sprintf("Le(%O)", field);
@@ -169,9 +173,11 @@ class Le(string field, Serialization.Atom value) {
 }
 
 class Gt(string field, Serialization.Atom value) {
-    string encode_sql(object table) {
+    string encode_sql(object table, function quote) {
 	object type = table->schema[field];
-	return sprintf("%s > %s", table->get_sql_name(field), type->encode_sql_value(type->parser()->decode(value)));
+	return sprintf("%s > %s", table->get_sql_name(field),
+		       type->encode_sql_value(type->parser()->decode(value),
+					      quote));
     }
     string _sprintf(int type) {
 	return sprintf("Gt(%O)", field);
@@ -179,9 +185,11 @@ class Gt(string field, Serialization.Atom value) {
 }
 
 class Ge(string field, Serialization.Atom value) {
-    string encode_sql(object table) {
+    string encode_sql(object table, function quote) {
 	object type = table->schema[field];
-	return sprintf("%s >= %s", table->get_sql_name(field), type->encode_sql_value(type->parser()->decode(value)));
+	return sprintf("%s >= %s", table->get_sql_name(field),
+		       type->encode_sql_value(type->parser()->decode(value),
+					      function quote));
     }
     string _sprintf(int type) {
 	return sprintf("Ge(%O)", field);
