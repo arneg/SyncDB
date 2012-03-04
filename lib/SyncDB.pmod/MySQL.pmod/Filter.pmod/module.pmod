@@ -188,7 +188,7 @@ class Ge(string field, Serialization.Atom value) {
 	object type = table->schema[field];
 	return sprintf("%s >= %s", table->get_sql_name(field),
 		       type->encode_sql_value(type->parser()->decode(value),
-					      function quote));
+					      quote));
     }
     string _sprintf(int type) {
 	return sprintf("Ge(%O)", field);
