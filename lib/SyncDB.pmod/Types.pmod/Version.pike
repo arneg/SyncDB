@@ -23,11 +23,12 @@ string encode_json() {
     return ::encode_json("SyncDB.Types.Version", ({ (string)sizeof(fields) }));
 }
 
-mapping encode_sql(string table, mapping row, void|mapping new) {
+mapping encode_sql(string table, mapping row, function quote,
+		   void|mapping new) {
     if (has_index(row, name))
 	row += ([ name : row[name]->a ]);
 
-    return ::encode_sql(table, row, new);
+    return ::encode_sql(table, row, quote, new);
 }
 
 SyncDB.Version|mapping decode_sql(string table, mapping row, void|mapping new) {
