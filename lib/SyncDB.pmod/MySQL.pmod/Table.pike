@@ -455,7 +455,7 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),map
     mixed err;
     mixed k;
     array|mapping rows;
-    string sql = "";
+    string sql_query = "";
     mixed cb(int(0..1) error, mixed bla) {
 	return cb2(error, bla, @extra);
     };
@@ -482,12 +482,12 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),map
 	oversion = schema["version"]->decode_sql(table, rows);
     };
 
-    sql = filter(table_objects()->update(keys, rows), `!=, 0)*",";
+    sql_query = filter(table_objects()->update(keys, rows), `!=, 0)*",";
 
-    sql = sprintf(update_sql, sql, uwhere);
+    sql_query = sprintf(update_sql, sql_query, uwhere);
 
     err = catch {
-	query(sql);
+	query(sql_query);
 	if (this_program::sql->master_sql->info) {
 	    string info = this_program::sql->master_sql->info();
 	    if (!info || -1 != search(info, "Changed: 0")) {
