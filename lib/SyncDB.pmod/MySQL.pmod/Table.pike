@@ -412,10 +412,22 @@ void create(string dbname, Sql.Sql con, SyncDB.Schema schema, string table) {
     version = schema["version"]->decode_sql(table, r[0]);
 }
 
+//! @decl void select(object filter, object|function(int(0..1), array(mapping)|mixed:void) cb,
+//!		      mixed ... extra)
+//! @decl void select(object filter, object order, object|function(int(0..1), array(mapping)|mixed:void) cb,
+//!		      mixed ... extra)
+//! @expr{order@} is an optional parameter allowing results to be ordered.
 
-void select(object filter, function(int(0..1), array(mapping)|mixed:void) cb,
+void select(object filter, object|function(int(0..1), array(mapping)|mixed:void) cb,
 	    mixed ... extra) {
     array(mapping) rows;
+    object order;
+
+    if (objectp(cb)) {
+	order = cb;
+	cb = extra[0];
+	extra = extra[1..];
+    }
 
     mixed err = catch {
 	string index = filter->encode_sql(this, sql->quote);
@@ -424,7 +436,10 @@ void select(object filter, function(int(0..1), array(mapping)|mixed:void) cb,
 	    cb(1, "Need indexable field(s).\n", @extra);
 	    return;
 	}
-	rows = query(sprintf(select_sql, index));
+	index = sprintf(select_sql, index);
+	if (order)
+	    index += " ORDER BY " + order->encode_sql(this, sql->quote);
+	rows = query(index);
     };
 
     if (!err) {
