@@ -463,7 +463,7 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),map
     SyncDB.Version oversion, nversion;
 
     if (!sizeof(t)) {
-	cb(1, "Need unique indexable field (or key) to update.\n");
+	cb(1, "Need unique indexable field (or key) to update.\n", @extra);
 	return;
     }
 
@@ -505,11 +505,11 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),map
     if (noerr) {
 	if (nversion > oversion) {
 	    version = nversion;
-	    cb(0, sizeof(rows) && sanitize_result(rows[0]));
+	    cb(0, sizeof(rows) && sanitize_result(rows[0]), @extra);
 	} else 
-	    cb(1, "Collision!");
+	    cb(1, "Collision!", @extra);
     } else {
-	cb(1, err);
+	cb(1, err, @extra);
     }
 }
 
