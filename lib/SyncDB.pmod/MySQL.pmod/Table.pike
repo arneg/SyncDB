@@ -25,7 +25,7 @@ SyncDB.Version version;
 mixed query(mixed ... args) {
     string s = sprintf(@args);
 #ifdef DB_DEBUG
-    werror("SQL:\t%s\n", s);
+    werror("SQL:\t%s\n", String.width(s) > 8 ? string_to_utf8(s) : s);
 #endif
     return sql->query(s);
 }
