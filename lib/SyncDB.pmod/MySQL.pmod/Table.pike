@@ -1,7 +1,26 @@
 // vim:syntax=lpc
 inherit SyncDB.Table;
 
-Sql.Sql sql;
+function(void:Sql.Sql) _sql_cb;
+Sql.Sql _sql;
+
+Sql.Sql `sql() {
+    if (_sql_cb && (!_sql || !_sql->is_open() || _sql->ping() == -1)) {
+	_sql = _sql_cb();
+    }
+
+    return _sql;
+}
+
+Sql.Sql `sql=(Sql.Sql|function(void:Sql.Sql) o) {
+    if (functionp(o)) {
+	_sql_cb = o;
+	_sql = o();
+    } else {
+	_sql = o;
+    }
+}
+
 string table;
 Table table_o;
 SyncDB.Version version;
@@ -324,7 +343,7 @@ void install_triggers(string table) {
     ", table));
 }
 
-void create(string dbname, Sql.Sql con, SyncDB.Schema schema, string table) {
+void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema schema, string table) {
     this_program::table = table;
     sql = con;
     table_o = Table(table);
