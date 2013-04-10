@@ -25,8 +25,7 @@ mixed `->(string index) {
 	}
 	return t[0];
     }
-    //return this_program::`[](index);
-    return this[index];
+    return call_function(::`->, index, this);
 }
 
 void create(string name, SyncDB.Flags.Base ... flags) {
