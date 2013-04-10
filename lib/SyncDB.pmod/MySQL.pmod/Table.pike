@@ -483,14 +483,15 @@ void select(object filter, object|function(int(0..1), array(mapping)|mixed:void)
     }
 }
 
-void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mapping|mixed:void) cb2, mixed ... extra) {
+void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mixed,mixed...:void) cb2, mixed ... extra) {
     int(0..1) noerr;
     mixed err;
     mixed k;
     array|mapping rows;
     string sql_query = "";
-    mixed cb(int(0..1) error, mixed bla) {
-	return cb2(error, bla, @extra);
+    void cb(int(0..1) error, mixed bla) {
+	cb2(error, bla, @extra);
+	return;
     };
     mapping t = schema->id->encode_sql(table, keys, sql->quote);
     SyncDB.Version oversion, nversion;
@@ -550,12 +551,13 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),map
 // 'v3',v4, 'v5', 'v6'); 
 
 
-void insert(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... extra) {
+void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb2, mixed ... extra) {
     mixed err;
     int(0..1) noerr;
     array rows;
-    mixed cb(int(0..1) error, mixed bla) {
-	return cb2(error, bla, @extra);
+    void cb(int(0..1) error, mixed bla) {
+	cb2(error, bla, @extra);
+	return;
     };
 
     // TODO:
