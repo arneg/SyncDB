@@ -27,3 +27,7 @@ object get_filter_parser() {
     return master()->resolv("SyncDB.Serialization.BloomFilter")(MMP.Utils.Bloom.IntHash);
 #endif
 }
+
+string sql_type() {
+    return "BIGINT " + flags->sql_type() * " ";
+}

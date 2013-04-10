@@ -15,3 +15,7 @@ string encode_sql_value(mixed val, function quote) {
 string encode_json(string|void type) {
     return ::encode_json(type || "SyncDB.Types.String");
 }
+
+string sql_type() {
+    return "TEXT " + flags->sql_type() * " ";
+}

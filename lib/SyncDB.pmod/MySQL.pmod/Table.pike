@@ -25,6 +25,10 @@ string table;
 Table table_o;
 SyncDB.Version version;
 
+int(0..1) init_table(array extra) {
+    return table_o->init_table(extra);
+}
+
 /*
  * JOIN (using INNER JOIN)
  *  - join id in secondary table has to be automatic
@@ -63,6 +67,16 @@ class Table {
     mapping sql_schema = ([]);
 
     string name;
+
+    int(0..1) init_table(array extra) {
+	array a = (extra || ({})) + fields;
+
+	string s = "CREATE TABLE IF NOT EXISTS " + name + " (";
+	s += fields->sql_type() * ", ";
+	s += ")";
+
+	query(s);
+    }
 
     int(0..1) `is_automatic() {
 	return schema->id->is_automatic;
