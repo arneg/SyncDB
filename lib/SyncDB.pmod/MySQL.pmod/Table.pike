@@ -25,10 +25,6 @@ string table;
 Table table_o;
 SyncDB.Version version;
 
-int(0..1) init_table(array extra) {
-    return table_o->init_table(extra);
-}
-
 /*
  * JOIN (using INNER JOIN)
  *  - join id in secondary table has to be automatic
@@ -67,16 +63,6 @@ class Table {
     mapping sql_schema = ([]);
 
     string name;
-
-    int(0..1) init_table(array extra) {
-	array a = (extra || ({})) + fields;
-
-	string s = "CREATE TABLE IF NOT EXISTS " + name + " (";
-	s += fields->sql_type() * ", ";
-	s += ")";
-
-	query(s);
-    }
 
     int(0..1) `is_automatic() {
 	return schema->id->is_automatic;
@@ -357,6 +343,11 @@ void install_triggers(string table) {
     ", table));
 }
 
+string get_where(mapping keys) {
+    mapping t = schema->id->encode_sql(table, keys, sql->quote);
+    return mapping_implode(t, "=", " AND ");
+}
+
 void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema schema, string table) {
     this_program::table = table;
     sql = con;
@@ -486,22 +477,20 @@ void select(object filter, object|function(int(0..1), array(mapping)|mixed:void)
 void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mixed,mixed...:void) cb2, mixed ... extra) {
     int(0..1) noerr;
     mixed err;
-    mixed k;
     array|mapping rows;
     string sql_query = "";
+    mapping t;
     void cb(int(0..1) error, mixed bla) {
 	cb2(error, bla, @extra);
 	return;
     };
-    mapping t = schema->id->encode_sql(table, keys, sql->quote);
     SyncDB.Version oversion, nversion;
+    string where = get_where(keys);
 
-    if (!sizeof(t)) {
+    if (!sizeof(where)) {
 	cb(1, "Need unique indexable field (or key) to update.\n");
 	return;
     }
-
-    string where = mapping_implode(t, "=", " AND ");
 
     if (!mappingp(version)) version = ([ "version" : version ]);
     foreach (version; string name; mixed value) {
@@ -607,9 +596,7 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb2, mixed ... 
 	}
     };
     if (!err) err = catch {
-	string where = mapping_implode(schema->id->encode_sql(table, row,
-							      sql->quote),
-				       "=", " AND ");
+	string where = get_where(row);
 	rows = query(sprintf(select_sql, where));
 	if (sizeof(rows) != 1) error("foo");
 	version = schema["version"]->decode_sql(table, rows[0]);
