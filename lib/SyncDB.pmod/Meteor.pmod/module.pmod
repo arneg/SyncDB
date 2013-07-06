@@ -1,3 +1,5 @@
+#if !constant(Serialization)
+#else
 class Sync(void|string id, void|array(mapping) rows) {
     string _sprintf(int type) {
 	return sprintf("%O(%O, %d rows)", this_program, id, sizeof(rows));
@@ -34,5 +36,4 @@ class Reply(string id, array(mapping) rows) {
     }
 }
 class Insert { inherit Base; }
-
-
+#endif

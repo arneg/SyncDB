@@ -1,7 +1,26 @@
 // vim:syntax=lpc
 inherit SyncDB.Table;
 
-Sql.Sql sql;
+function(void:Sql.Sql) _sql_cb;
+Sql.Sql _sql;
+
+Sql.Sql `sql() {
+    if (_sql_cb && (!_sql || !_sql->is_open() || _sql->ping() == -1)) {
+	_sql = _sql_cb();
+    }
+
+    return _sql;
+}
+
+Sql.Sql `sql=(Sql.Sql|function(void:Sql.Sql) o) {
+    if (functionp(o)) {
+	_sql_cb = o;
+	_sql = o();
+    } else {
+	_sql = o;
+    }
+}
+
 string table;
 Table table_o;
 SyncDB.Version version;
@@ -25,7 +44,7 @@ SyncDB.Version version;
 mixed query(mixed ... args) {
     string s = sprintf(@args);
 #ifdef DB_DEBUG
-    werror("SQL:\t%s\n", s);
+    werror("SQL:\t%s\n", String.width(s) > 8 ? string_to_utf8(s) : s);
 #endif
     return sql->query(s);
 }
@@ -324,7 +343,12 @@ void install_triggers(string table) {
     ", table));
 }
 
-void create(string dbname, Sql.Sql con, SyncDB.Schema schema, string table) {
+string get_where(mapping keys) {
+    mapping t = schema->id->encode_sql(table, keys, sql->quote);
+    return mapping_implode(t, "=", " AND ");
+}
+
+void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema schema, string table) {
     this_program::table = table;
     sql = con;
     table_o = Table(table);
@@ -450,24 +474,23 @@ void select(object filter, object|function(int(0..1), array(mapping)|mixed:void)
     }
 }
 
-void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mapping|mixed:void) cb2, mixed ... extra) {
+void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mixed,mixed...:void) cb2, mixed ... extra) {
     int(0..1) noerr;
     mixed err;
-    mixed k;
     array|mapping rows;
     string sql_query = "";
-    mixed cb(int(0..1) error, mixed bla) {
-	return cb2(error, bla, @extra);
+    mapping t;
+    void cb(int(0..1) error, mixed bla) {
+	cb2(error, bla, @extra);
+	return;
     };
-    mapping t = schema->id->encode_sql(table, keys, sql->quote);
     SyncDB.Version oversion, nversion;
+    string where = get_where(keys);
 
-    if (!sizeof(t)) {
-	cb(1, "Need unique indexable field (or key) to update.\n", @extra);
+    if (!sizeof(where)) {
+	cb(1, "Need unique indexable field (or key) to update.\n");
 	return;
     }
-
-    string where = mapping_implode(t, "=", " AND ");
 
     if (!mappingp(version)) version = ([ "version" : version ]);
     foreach (version; string name; mixed value) {
@@ -517,12 +540,13 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),map
 // 'v3',v4, 'v5', 'v6'); 
 
 
-void insert(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... extra) {
+void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb2, mixed ... extra) {
     mixed err;
     int(0..1) noerr;
     array rows;
-    mixed cb(int(0..1) error, mixed bla) {
-	return cb2(error, bla, @extra);
+    void cb(int(0..1) error, mixed bla) {
+	cb2(error, bla, @extra);
+	return;
     };
 
     // TODO:
@@ -572,9 +596,7 @@ void insert(mapping row, function(int(0..1),mapping|mixed:void) cb2, mixed ... e
 	}
     };
     if (!err) err = catch {
-	string where = mapping_implode(schema->id->encode_sql(table, row,
-							      sql->quote),
-				       "=", " AND ");
+	string where = get_where(row);
 	rows = query(sprintf(select_sql, where));
 	if (sizeof(rows) != 1) error("foo");
 	version = schema["version"]->decode_sql(table, rows[0]);

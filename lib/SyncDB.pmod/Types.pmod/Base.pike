@@ -24,9 +24,10 @@ mixed `->(string index) {
 	    return UNDEFINED;
 	}
 	return t[0];
+    } else if (has_index(SyncDB.MySQL.Filter, index)) {
+	return Function.curry(SyncDB.MySQL.Filter[index])(name);
     }
-    //return this_program::`[](index);
-    return this[index];
+    return call_function(::`->, index, this);
 }
 
 void create(string name, SyncDB.Flags.Base ... flags) {
@@ -86,6 +87,7 @@ string encode_json(string p, void|array extra) {
     return sprintf("(new %s(%s))", p, extra * (",\n"+" "*8));
 }
 
+#if constant(Serialization)
 object get_parser();
 
 object _parser;
@@ -111,4 +113,9 @@ object get_filter_parser() {
 #else
     return master()->resolv("SyncDB.Serialization.BloomFilter")(MMP.Utils.Bloom.SHA256);
 #endif
+}
+#endif
+
+string sql_type() {
+    return 0;
 }

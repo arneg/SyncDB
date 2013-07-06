@@ -42,7 +42,7 @@ void start(int i, mixed conf) {
 	string name = query("syncdb_name");
 	string sql = query("sql");
 	if (sizeof(sql) && sizeof(name)) {
-	    Sql.Sql sql = Sql.Sql(sql);
+	    Sql.Sql sql = Sql.Sql(sql, 0, 0, 0, ([ "reconnect" : 1 ]));
 	    sql->set_charset("unicode");
 	    table = SyncDB.Meteor.Table(name, schema, 
 		    SyncDB.MySQL.Table(name, sql, schema, query("sql_table")));

@@ -35,6 +35,7 @@ mixed decode_sql(string table, mapping row, void|mapping new) {
     return v;
 }
 
+#if constant(Serialization)
 object get_parser() {
 #ifdef TEST_RESOLVER
     return SyncDB.Serialization.Range(fields[0]->parser());
@@ -52,6 +53,7 @@ object get_filter_parser() {
 #endif
 	    (fields[0]->get_critbit(), fields[0]->get_parser());
 }
+#endif
 
 string encode_json() {
     return ::encode_json("SyncDB.Types.Range", map(fields, Standards.JSON.encode));

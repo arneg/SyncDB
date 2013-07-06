@@ -33,9 +33,11 @@ mixed decode_sql(string table, mapping row, void|mapping new) {
     return ret;
 }
 
+#if constant(Serialization)
 object get_parser() {
     return Serialization.Types.Tuple("_vector", 0, @fields->get_parser());
 }
+#endif
 
 array(string) sql_names(string table) {
     return `+(@fields->sql_names(table));
@@ -44,4 +46,8 @@ array(string) sql_names(string table) {
 string encode_json(void|string p, void|array extra) {
     return ::encode_json(p||"SyncDB.Types.Vector", 
 			 extra||map(fields, Standards.JSON.encode));
+}
+
+array(string)|string sql_type(void|function(object:int(0..1)) filter_cb) {
+    return filter(fields, filter_cb)->sql_type();
 }

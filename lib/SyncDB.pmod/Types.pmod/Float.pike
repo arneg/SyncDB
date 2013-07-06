@@ -8,12 +8,12 @@ object get_parser() {
 
 #if constant(ADT.CritBit)
 program get_critbit() {
-    return ADT.CritBit.IntTree;
+    return ADT.CritBit.FloatTree;
 }
 #endif
 
 string encode_sql_value(mixed val, function quote) {
-    return sprintf("'%d'", val);
+    return sprintf("'%f'", val);
 }
 
 mixed decode_sql_value(string s) {
@@ -35,5 +35,5 @@ object get_filter_parser() {
 #endif
 
 string sql_type() {
-    return name + " BIGINT " + flags->sql_type() * " ";
+    return name + " DOUBLE " + flags->sql_type() * " ";
 }
