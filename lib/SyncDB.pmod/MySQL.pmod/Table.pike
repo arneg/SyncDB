@@ -560,6 +560,7 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb2, mixed ... 
 	error("RETARDO! (%O != %O)\n", schema->key, schema->automatic);
     }
     err = catch {
+	row = schema->default_row + row;
 	query("LOCK TABLES %s WRITE;", table_names()*" WRITE,");
 
 	// first do the ones which have the fid AUTO_INCREMENT

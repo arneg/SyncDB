@@ -6,6 +6,8 @@ array(string) index = ({ });
 string automatic;
 object restriction;
 
+mapping default_row = ([]);
+
 void create(object ... m) {
     fields = m;
     this_program::m = mkmapping(m->name, m);
@@ -35,6 +37,7 @@ void create(object ... m) {
 	}
     }
 #endif
+    fields->get_default(default_row);
     add_type(SyncDB.Types.Version("version", tables()));
 }
 

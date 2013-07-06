@@ -30,6 +30,14 @@ mixed `->(string index) {
     return call_function(::`->, index, this);
 }
 
+void get_default(mapping def) {
+    object f = this->f_default;
+
+    if (f) {
+	def[name] = f->default_value;
+    }
+}
+
 void create(string name, SyncDB.Flags.Base ... flags) {
     this_program::name = name;
     this_program::flags = flags;

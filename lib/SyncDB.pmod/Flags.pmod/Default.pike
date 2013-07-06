@@ -1,9 +1,11 @@
 inherit .Base;
 
-mixed val;
+int is_default = 1;
+
+mixed default_value;
 
 void create(mixed v) {
-    val = v;
+    default_value = v;
 }
 
 string encode_json() {
@@ -11,5 +13,5 @@ string encode_json() {
 }
 
 string sql_type(function(mixed:string) encode) {
-    return sprintf("NOT NULL DEFAULT %s", encode(val));
+    return sprintf("NOT NULL");
 }
