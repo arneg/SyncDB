@@ -10,7 +10,7 @@ void create(string name, array(string) options, SyncDB.Flags.Base ... flags) {
 }
 
 string encode_sql_value(mixed val, function quote) {
-    if (!allowed(val)) {
+    if (!allowed[val]) {
 	error("bad value %O for %O\n", val, options);
     }
     return ::encode_sql_value(val, quote);

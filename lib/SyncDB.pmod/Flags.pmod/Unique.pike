@@ -6,6 +6,6 @@ string encode_json() {
     return "(new SyncDB.Types.Unique())";
 }
 
-string sql_type() {
+string sql_type(function(mixed:string) encode) {
     return "UNIQUE";
 }

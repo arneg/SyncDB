@@ -11,5 +11,5 @@ string encode_json() {
 }
 
 string sql_type(function(mixed:string) encode) {
-    return "NOT NULL DEFAULT '"+encode(val)+"'";
+    return sprintf("NOT NULL DEFAULT %s", encode(val));
 }

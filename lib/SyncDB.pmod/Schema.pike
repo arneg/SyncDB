@@ -39,7 +39,10 @@ void create(object ... m) {
 }
 
 this_program `+(this_program o) {
-    return this_program(fields + o->fields);
+    array(object) la = fields - ({ m->version });
+    array(object) lb = o->fields - ({ o["version"] });
+    // reversing the order here doesnt change anything, but makes the table structure a little more natural.
+    return this_program(@(lb + la));
 }
 
 mixed `[](mixed in) {

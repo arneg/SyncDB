@@ -41,7 +41,7 @@ SyncDB.Version version;
  */
 
 #define DB_DEBUG
-mixed query(mixed ... args) {
+private mixed query(mixed ... args) {
     string s = sprintf(@args);
 #ifdef DB_DEBUG
     werror("SQL:\t%s\n", String.width(s) > 8 ? string_to_utf8(s) : s);
@@ -528,11 +528,11 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
     if (noerr) {
 	if (nversion > oversion) {
 	    version = nversion;
-	    cb(0, sizeof(rows) && sanitize_result(rows[0]), @extra);
+	    cb(0, sizeof(rows) && sanitize_result(rows[0]));
 	} else 
-	    cb(1, "Collision!", @extra);
+	    cb(1, "Collision!");
     } else {
-	cb(1, err, @extra);
+	cb(1, err);
     }
 }
 

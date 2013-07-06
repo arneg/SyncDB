@@ -125,6 +125,6 @@ object get_filter_parser() {
 
 string sql_type(Sql.Sql sql, void|string type) {
     if (type) 
-	return name + " "+type+" " + flags->sql_type(sql_encode_cb(s)) * " ";
+	return sprintf("%s %s %s", name, type, flags->sql_type(sql_encode_cb(sql)) * " ");
     else return 0;
 }

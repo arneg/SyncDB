@@ -5,4 +5,4 @@ int get_priority() {
 // hide flag by default
 string encode_json() { return ""; }
 
-string sql_type() { return ""; }
+string sql_type(function(mixed:string) encode_sql) { return ""; }

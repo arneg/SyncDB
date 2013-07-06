@@ -6,6 +6,6 @@ string encode_json() {
     return "(new SyncDB.Flags.Mandatory())";
 }
 
-string sql_type() {
+string sql_type(function(mixed:string) encode) {
     return "NOT NULL";
 }
