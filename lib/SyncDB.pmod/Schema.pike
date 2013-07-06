@@ -38,8 +38,16 @@ void create(object ... m) {
     add_type(SyncDB.Types.Version("version", tables()));
 }
 
+this_program `+(this_program o) {
+    return this_program(fields + o->fields);
+}
+
 mixed `[](mixed in) {
     return m[in];
+}
+
+array(SyncDB.Types.Base) index_fields() {
+    return filter(fields, fields->is_index);
 }
 
 void add_type(object type) {
@@ -48,6 +56,7 @@ void add_type(object type) {
     m[type->name] = type;
 }
 
+#if constant(Serialization)
 object parser(function|void filter) {
     mapping(string:SyncDB.Types.Base) n = ([ ]);
 
@@ -75,6 +84,7 @@ object parser_out() {
 	  return type->is_readable && !type->is_hidden; 
     });
 }
+#endif
 
 string encode_json() {
     return sprintf("(new SyncDB.Schema(%s))", filter(map(fields, Standards.JSON.encode), sizeof)*(",\n"+" "*4));

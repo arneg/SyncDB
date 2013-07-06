@@ -43,6 +43,13 @@ string encode_sql_value(mixed v, function quote) {
     return sprintf("'%s'", quote((string)v));
 }
 
+function(mixed:string) sql_encode_cb(Sql.Sql sql) {
+    string _enc(mixed s) {
+	return encode_sql_value(s, sql->quote);
+    };
+    return _enc;
+}
+
 mixed decode_sql(string table, mapping row, mapping|void new) {
     string n = sql_name(table);
     mixed v;
@@ -116,6 +123,8 @@ object get_filter_parser() {
 }
 #endif
 
-string sql_type() {
-    return 0;
+string sql_type(Sql.Sql sql, void|string type) {
+    if (type) 
+	return name + " "+type+" " + flags->sql_type(sql_encode_cb(s)) * " ";
+    else return 0;
 }

@@ -48,6 +48,6 @@ string encode_json(void|string p, void|array extra) {
 			 extra||map(fields, Standards.JSON.encode));
 }
 
-array(string)|string sql_type(void|function(object:int(0..1)) filter_cb) {
-    return filter(fields, filter_cb)->sql_type();
+array(string)|string sql_type(Sql.Sql sql, void|function(object:int(0..1)) filter_cb) {
+    return filter(fields, filter_cb)->sql_type(sql);
 }

@@ -39,6 +39,6 @@ string encode_json() {
     return ::encode_json("SyncDB.Types.Date");
 }
 
-string sql_type() {
-    return name + " DATETIME " + flags->sql_type() * " ";
+string sql_type(Sql.Sql sql) {
+    return ::sql_type(sql, "DATETIME");
 }

@@ -34,6 +34,6 @@ object get_filter_parser() {
 }
 #endif
 
-string sql_type() {
-    return name + " BIGINT " + flags->sql_type() * " ";
+string sql_type(Sql.Sql s) {
+    return ::sql_type(s, "BIGINT");
 }

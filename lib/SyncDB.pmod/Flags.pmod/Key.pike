@@ -8,5 +8,5 @@ string encode_json() {
 }
 
 string sql_type() {
-    return "UNIQUE KEY";
+    return "PRIMARY UNIQUE KEY";
 }

@@ -34,6 +34,6 @@ object get_filter_parser() {
 }
 #endif
 
-string sql_type() {
-    return name + " DOUBLE " + flags->sql_type() * " ";
+string sql_type(Sql.Sql sql) {
+    return ::sql_type(sql, "DOUBLE");
 }

@@ -19,6 +19,6 @@ string encode_json(string|void type) {
     return ::encode_json(type || "SyncDB.Types.JSON");
 }
 
-string sql_type() {
-    return name + " LONGBLOB " + flags->sql_types() * " ";
+string sql_type(Sql.Sql sql) {
+    return ::sql_type(sql, "LONGBLOB");
 }
