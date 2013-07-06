@@ -37,7 +37,7 @@ class Equal(string field, mixed value) {
 	object type = table->schema[field];
 
 	if (!type->is_index) // relieve this check for restrictions?
-	    error("Trying to index non-indexable field.\n");
+	    werror("Trying to index non-indexable field %O.\n", type);
 	if (!type->is_readable)
 	    error("Trying to index non-readable field.\n");
 	if (objectp(o) && Program.inherits(object_program(o), Serialization.Atom)) 
