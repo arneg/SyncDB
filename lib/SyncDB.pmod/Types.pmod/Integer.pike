@@ -1,12 +1,16 @@
 inherit .Base;
 
+#ifdef constant(Serialization)
 object get_parser() {
     return Serialization.Types.Int();
 }
+#endif
 
+#if constant(ADT.CritBit)
 program get_critbit() {
     return ADT.CritBit.IntTree;
 }
+#endif
 
 string encode_sql_value(mixed val, function quote) {
     return sprintf("'%d'", val);
@@ -20,6 +24,7 @@ string encode_json() {
     return ::encode_json("SyncDB.Types.Integer");
 }
 
+#ifdef constant(Serialization)
 object get_filter_parser() {
 #ifdef TEST_RESOLVER
     return SyncDB.Serialization.BloomFilter(MMP.Utils.Bloom.IntHash);
@@ -27,7 +32,8 @@ object get_filter_parser() {
     return master()->resolv("SyncDB.Serialization.BloomFilter")(MMP.Utils.Bloom.IntHash);
 #endif
 }
+#endif
 
 string sql_type() {
-    return "BIGINT " + flags->sql_type() * " ";
+    return name + " BIGINT " + flags->sql_type() * " ";
 }

@@ -1,3 +1,6 @@
+#if !constant(Serialization)
+constant this_program_does_not_exist = 1;
+#else
 inherit Serialization.BasicTypes;
 inherit SyncDB.Table;
 
@@ -188,3 +191,4 @@ void incoming(object session, Serialization.Atom a) {
 	error("Unknown message type: %O\n", message);
     }
 }
+#endif

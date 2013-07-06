@@ -1,3 +1,6 @@
+#if !constant(Serialization)
+constant this_program_does_not_exist = 1;
+#else
 object Flag, Type, Schema, Filter, Null;
 
 // this ignore boundaries
@@ -125,3 +128,4 @@ void create(mapping|void overwrites) {
     Null = Serialization.Types.Singleton("_null", SyncDB.Null);
     Schema = pSchema();
 }
+#endif

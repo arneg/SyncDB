@@ -7,17 +7,19 @@ void create(string name, array(string) tables, SyncDB.Flags.Base ... flags) {
 	a[i] = SyncDB.Types.Integer(sprintf("_version_%d", i),
 				SyncDB.Flags.Foreign(tables[i], "version"));
     }
-    a[i] = SyncDB.Types.Integer("_version_0", SyncDB.Flags.Foreign(0, "version"));
+    a[i] = SyncDB.Types.Integer("version");
     flags += ({ SyncDB.Flags.ReadOnly() });
     ::create(name, a, @flags);
 }
 
+#if constant(Serialization)
 object get_parser() {
     object o = ::get_parser();
     o->type = "_version";
     o->constructor = lambda (int ... a) { return SyncDB.Version(a); };
     return o;
 }
+#endif
 
 string encode_json() {
     return ::encode_json("SyncDB.Types.Version", ({ (string)sizeof(fields) }));
