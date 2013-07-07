@@ -21,7 +21,4 @@ class DeletedRow {
     inherit RowBased;
 }
 
-class pNull {
-}
-
-object Null = pNull();
+object Null = Val.null;
