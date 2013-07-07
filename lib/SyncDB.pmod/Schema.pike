@@ -38,7 +38,9 @@ void create(object ... m) {
     }
 #endif
     fields->get_default(default_row);
-    add_type(SyncDB.Types.Version("version", tables()));
+    add_type(SyncDB.Types.Version("version", tables(),
+				  SyncDB.Flags.Unique(),
+				  SyncDB.Flags.Index()));
 }
 
 this_program `+(this_program o) {
