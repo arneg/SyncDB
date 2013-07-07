@@ -479,6 +479,7 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
     mixed err;
     array|mapping rows;
     string sql_query = "";
+    object sql = this_program::sql;
     mapping t;
     void cb(int(0..1) error, mixed bla) {
 	cb2(error, bla, @extra);
@@ -498,6 +499,7 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
     }
 
     string uwhere = mapping_implode(t, "=", " AND ");
+    uwhere += " AND " + where;
 
     err = catch {
 	query("LOCK TABLES %s WRITE;", table_names() * " WRITE,");
@@ -511,10 +513,10 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
 
     err = catch {
 	query(sql_query);
-	if (this_program::sql->master_sql->info) {
-	    string info = this_program::sql->master_sql->info();
+	if (sql->master_sql->info) {
+	    string info = sql->master_sql->info();
 	    if (!info || -1 != search(info, "Changed: 0")) {
-		error("Collision!");
+		error("Collision: %s\n", info);
 	    }
 	}
 	rows = query(sprintf(select_sql, where));
@@ -530,7 +532,7 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
 	    version = nversion;
 	    cb(0, sizeof(rows) && sanitize_result(rows[0]));
 	} else 
-	    cb(1, "Collision!");
+	    cb(1, sprintf("Collision! old version: %O vs new version: %O\n", oversion, nversion));
     } else {
 	cb(1, err);
     }
@@ -589,9 +591,7 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb2, mixed ... 
 	    
 	    if (t == table_o && schema[schema->key]->is_automatic) {
 		mixed last = query("SELECT LAST_INSERT_ID() as id;");
-		werror(">last> %O\n", last);
 		if (sizeof(last)) last = last[0];
-		werror("setting %s to %s\n", schema->key, last->id);
 		row[schema->key] = (int)last->id;
 	    }
 	}
