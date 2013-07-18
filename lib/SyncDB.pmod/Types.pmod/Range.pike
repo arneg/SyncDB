@@ -1,9 +1,9 @@
-inherit .Vector : base;
+inherit .Vector;
 
 void create(string name, object from, object to, SyncDB.Flags.Base ... flags) {
     if (object_program(to) != object_program(from))
 	error("Range only work with one single type now.\n");
-    base::create(name, ({ from, to }), @flags);
+    create(name, ({ from, to }), @flags);
 }
 
 mixed `a() {

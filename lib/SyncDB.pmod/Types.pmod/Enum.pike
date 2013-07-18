@@ -9,15 +9,14 @@ void create(string name, array(string) options, SyncDB.Flags.Base ... flags) {
     ::create(name, @flags);
 }
 
-string encode_sql_value(mixed val, function quote) {
+string encode_sql_value(mixed val) {
     if (!allowed[val]) {
 	error("bad value %O for %O\n", val, options);
     }
-    return ::encode_sql_value(val, quote);
+    return ::encode_sql_value(val);
 }
 
 string sql_type(Sql.Sql sql) {
-    function(mixed:string) enc = sql_encode_cb(sql);
-    array(string) list = map(options, enc);
-    return ::sql_type(sql, sprintf("ENUM(%s)", list*","));
+    array(string) list = map(options, sql->quote);
+    return ::sql_type(sql, sprintf("ENUM('%s')", list*"','"));
 }

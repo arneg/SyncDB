@@ -98,7 +98,7 @@ class Table {
 	    if (!type->is_index) continue;
 	    // TODO: this will only work for single field types
 	    // later we somehow have to use filters, Equal by default
-	    type->encode_sql(name, row, sql->quote, new);
+	    type->encode_sql(name, row, new);
 	}
 	return sizeof(new) ? mapping_implode(new, "=", " AND ") : 0;
     }
@@ -107,23 +107,18 @@ class Table {
 	return index(row);
     }
 
-    string update(mapping row, mapping oldrow) {
-	mapping new = ([]);
+    void update(mapping row, mapping oldrow, mapping new) {
 	foreach (writable();; object type) {
 	    if (type == schema->id) continue;
-	    type->encode_sql(name, row, sql->quote, new);
+	    type->encode_sql(name, row, new);
 	}
-	return sizeof(new) ? mapping_implode(new, "=", ", ") : 0;
     }
 
     mapping insert(mapping row) {
 	mapping new = ([]);
 	foreach (writable();; object type) {
 	    if (type == schema->id) continue;
-	    type->encode_sql(name, row, sql->quote, new);
-	}
-	if (schema->restriction) {
-	    schema->restriction->insert(this, table, sql->quote, new);
+	    type->encode_sql(name, row, new);
 	}
 	return sizeof(new) ? new : 0;
     }
@@ -146,7 +141,7 @@ class Foreign {
 	if (new) {
 	    if (row[id]) {
 		new[sprintf("%s.%s", name, fid)]
-		    = schema[id]->encode_sql_value(row[id], sql->quote);
+		    = schema[id]->encode_sql_value(row[id]);
 	    } else if (!is_automatic) {
 		error("join id needs to be either automatic or specified."); 
 	    } 
@@ -169,7 +164,7 @@ class Join {
 	    new = ([]);
 	    if (row[id]) {
 		new[sprintf("%s.%s", name, fid)]
-		    = schema[id]->encode_sql_value(row[id], sql->quote);
+		    = schema[id]->encode_sql_value(row[id]);
 	    } else if (!is_automatic) {
 		error("join id needs to be either automatic or specified."); 
 	    } 
@@ -179,11 +174,12 @@ class Join {
 	return new;
     }
 
-    string update(mapping row, mapping oldrow) {
-	string s = ::update(row, oldrow);
-	if (s) { // need to add the corresponding link id
+    void update(mapping row, mapping oldrow, mapping new) {
+	int i = sizeof(new);
+	::update(row, oldrow, new);
+	if (sizeof(new) - i) { // need to add the corresponding link id
 	    if (has_index(row, id)) {
-		s += sprintf(", %s.%s=%s", name, fid, schema[id]->encode_sql(name, row, sql->quote));
+		schema[id]->encode_sql(name, row, new);
 	    } else {
 		if (!oldrow[id]) {
 		    if (is_automatic) {
@@ -200,8 +196,6 @@ class Join {
 		}
 	    }
 	}
-
-	return s;
     }
 
     string join(string table) {
@@ -214,9 +208,10 @@ class Join {
 class Link {
     inherit Foreign;
 
-    string update(mapping row, mapping oldrow) {
-	string s = ::update(row, oldrow);
-	if (s) { // need to add the corresponding link id
+    void update(mapping row, mapping oldrow, mapping new) {
+	int i = sizeof(new);
+	::update(row, oldrow, new);
+	if (sizeof(new) - i) { // need to add the corresponding link id
 	    if (has_index(row, id)) {
 		if (row[id] != Sql.Null) {
 		}
@@ -224,8 +219,6 @@ class Link {
 		// or Sql.Null
 	    }
 	}
-
-	return s;
     }
 
     string join(string table) {
@@ -304,7 +297,14 @@ array(string) table_names() {
 }
 
 mapping tables = ([ ]);
-string select_sql, update_sql, insert_sql;
+.Query select_sql, _update_sql, restriction;
+
+.Query update_sql(array(string) fields, array(mixed) values) {
+    .Query q = (_update_sql + fields*"=%s, ") + "=%s WHERE ";
+    q += values;
+    if (restriction) q += restriction + " AND ";
+    return q;
+}
 
 void install_triggers(string table) {
     catch {
@@ -343,9 +343,22 @@ void install_triggers(string table) {
     ", table));
 }
 
-string get_where(mapping keys) {
-    mapping t = schema->id->encode_sql(table, keys, sql->quote);
-    return mapping_implode(t, "=", " AND ");
+object gen_where(mapping t) {
+    array a = allocate(sizeof(t));
+    array values = allocate(sizeof(t));
+    int i = 0;
+
+    foreach (t; string field; mixed v) {
+	a[i] = sprintf("%s = %%s", field);
+	values[i++] = v;
+    }
+
+    return .Query(a * " AND ", @values);
+}
+
+object get_where(mapping keys) {
+    mapping t = schema->id->encode_sql(table, keys);
+    return gen_where(t);
 }
 
 void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema schema, string table) {
@@ -363,8 +376,6 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
     });
 
 #define CASE(x) if (Program.inherits(object_program(type), (x)))
-
-
     foreach (schema;; object type) {
 	string field = type->name;
 	if (type->is_link) {
@@ -400,32 +411,29 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
 	t += type->sql_names(table);
     }
 
-    select_sql = sprintf("SELECT %s FROM %s", t*",", table);
-    update_sql = sprintf("UPDATE %s SET ", (indices(tables)+({ table }))*",");
+    select_sql = .Query(sprintf("SELECT %s FROM %s", t*",", table));
+    _update_sql = .Query(sprintf("UPDATE %s SET ", table_names()*","));
 
     t = ({});
     install_triggers(table);
-    update_sql += "%s WHERE ";
     foreach (tables; string foreign_table; Table t) {
 	// generate the version triggers
 	select_sql += t->join(table);
+	/*
 	update_sql += sprintf("%s.%s = %s.%s AND ", 
 		      foreign_table, t->fid, table, t->id);
+	*/
 	// generate proper selects/inserts
 	install_triggers(foreign_table);
     }
 
     select_sql += " WHERE 1=1 AND ";
     if (schema->restriction) {
-	string restriction = sprintf("(%s) ", replace(schema->restriction->encode_sql(this, sql->quote), "%", "%%"));
+	restriction = schema->restriction->encode_sql(this);
 
-	update_sql += restriction;
 	select_sql += restriction;
+	select_sql += " AND ";
     }
-
-    update_sql += "(%s)";
-    select_sql += "(%s)";
-
     // Initialize version
     t = table_names();
 
@@ -454,16 +462,19 @@ void select(object filter, object|function(int(0..1), array(mapping)|mixed:void)
     }
 
     mixed err = catch {
-	string index = filter->encode_sql(this, sql->quote);
+	//werror(">>>>\t%O\n", select_sql);
+	mixed foo = filter->encode_sql(this);
+	//werror("foo : %O\n", foo);
+	.Query index = filter->encode_sql(this);
+	//werror("<<<<\t%O\n", index);
 	if (!sizeof(index)) {
 	    // needs error type, i guess
 	    cb(1, "Need indexable field(s).\n", @extra);
 	    return;
 	}
-	index = sprintf(select_sql, index);
 	if (order)
-	    index += " ORDER BY " + order->encode_sql(this, sql->quote);
-	rows = query(index);
+	    index += " ORDER BY " + order->encode_sql(this);
+	rows = (select_sql + index)(sql);
     };
 
     if (!err) {
@@ -480,13 +491,13 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
     array|mapping rows;
     string sql_query = "";
     object sql = this_program::sql;
-    mapping t;
+    mapping t = ([]);
     void cb(int(0..1) error, mixed bla) {
 	cb2(error, bla, @extra);
 	return;
     };
     SyncDB.Version oversion, nversion;
-    string where = get_where(keys);
+    object where = get_where(keys);
 
     if (!sizeof(where)) {
 	cb(1, "Need unique indexable field (or key) to update.\n");
@@ -495,37 +506,39 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
 
     if (!mappingp(version)) version = ([ "version" : version ]);
     foreach (version; string name; mixed value) {
-	t = schema[name]->encode_sql(table, version, sql->quote, t);
+	schema[name]->encode_sql(table, version, t);
     }
 
-    string uwhere = mapping_implode(t, "=", " AND ");
-    uwhere += " AND " + where;
+    object uwhere = where + " AND " + gen_where(t);
+    werror("-> %O\n", uwhere);
+
+    int locked = 0;
 
     err = catch {
-	query("LOCK TABLES %s WRITE;", table_names() * " WRITE,");
-	rows = query(sprintf(select_sql, where))[0];
+	lock_tables(sql);
+	locked = 1;
+	rows = (select_sql + where)(sql);
+	if (sizeof(rows) != 1) error("foo");
+	rows = rows[0];
 	oversion = schema["version"]->decode_sql(table, rows);
-    };
-
-    sql_query = filter(table_objects()->update(keys, rows), `!=, 0)*",";
-
-    sql_query = sprintf(update_sql, sql_query, uwhere);
-
-    err = catch {
-	query(sql_query);
+	mapping new = ([]);
+	table_objects()->update(keys, rows, new);
+	.Query q = update_sql(indices(new), values(new)) + uwhere;
+	werror("UPDATE: %O\n", q);
+	q(sql);
 	if (sql->master_sql->info) {
 	    string info = sql->master_sql->info();
 	    if (!info || -1 != search(info, "Changed: 0")) {
 		error("Collision: %s\n", info);
 	    }
 	}
-	rows = query(sprintf(select_sql, where));
+	rows = (select_sql + where)(sql);
 	if (sizeof(rows) != 1) error("foo");
 	nversion = schema["version"]->decode_sql(table, rows[0]);
 	noerr = 1;
     };
 
-    query("UNLOCK TABLES;");
+    if (locked) unlock_tables(sql);
 
     if (noerr) {
 	if (nversion > oversion) {
@@ -540,6 +553,15 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
 
 // INSERT INTO table1(c1, c2, c3), table2(c4, c5, c6) VALUES ('v1', 'v2', 
 // 'v3',v4, 'v5', 'v6'); 
+//
+
+.Query `lock_tables() {
+    return .Query(sprintf("LOCK TABLES %s WRITE;", table_names()*" WRITE,"));
+}
+
+.Query `unlock_tables() {
+    return .Query("UNLOCK TABLES;");
+}
 
 
 void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb2, mixed ... extra) {
@@ -550,6 +572,7 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb2, mixed ... 
 	cb2(error, bla, @extra);
 	return;
     };
+    object sql = this_program::sql;
 
     // TODO:
     // 	schema->key != shcema-»automatic
@@ -563,7 +586,7 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb2, mixed ... 
     }
     err = catch {
 	row = schema->default_row + row;
-	query("LOCK TABLES %s WRITE;", table_names()*" WRITE,");
+	lock_tables(sql);
 
 	// first do the ones which have the fid AUTO_INCREMENT
 	// use those automatic values to populate the link ids
@@ -576,34 +599,37 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb2, mixed ... 
 	    if (!new) {
 		if (t->is_automatic && sizeof(t->writable())) {
 		    new = ([]);
+		    // DEAD
 		}
 		continue;
 	    }
 	    string into = indices(new)*",";
-	    string values = values(new)*",";
-	    query("INSERT INTO %s (%s) VALUES (%s);", t->name, into, values);
+	    object insert_sql = .Query("INSERT INTO " + t->name + " (" + indices(new)*"," + ") VALUES ("
+				       + allocate(sizeof(new), "%s")*"," + ");", @values(new));
+
+	    insert_sql(sql);
 	    // we need todo this potentially for all automatic fields (not only
 	    // mysql auto increment).
 	    if (t->is_automatic && t->is_ass_on_fire && t->is_link) {
-		mapping last = query("SELECT * FROM %s WHERE %s=LAST_INSERT_ID()", t->name, t->fid)[0];
+		mapping last = sql->query("SELECT * FROM %s WHERE %s=LAST_INSERT_ID()", t->name, t->fid)[0];
 		row[t->id] = (int)last[t->fid];
 	    }
 	    
 	    if (t == table_o && schema[schema->key]->is_automatic) {
-		mixed last = query("SELECT LAST_INSERT_ID() as id;");
+		mixed last = sql->query("SELECT LAST_INSERT_ID() as id;");
 		if (sizeof(last)) last = last[0];
 		row[schema->key] = (int)last->id;
 	    }
 	}
     };
     if (!err) err = catch {
-	string where = get_where(row);
-	rows = query(sprintf(select_sql, where));
+	.Query where = select_sql + get_where(row);
+	rows = where(sql);
 	if (sizeof(rows) != 1) error("foo");
 	version = schema["version"]->decode_sql(table, rows[0]);
 	noerr = 1;
     };
-    query("UNLOCK TABLES;");
+    unlock_tables(sql);
 
     if (noerr) {
 	cb(0, sizeof(rows) ? sanitize_result(rows[0]) : 0);
@@ -633,7 +659,7 @@ void syncreq(SyncDB.Version version, mapping filter, function cb, mixed ... args
 	t[i] = sprintf("%s.version > %d", tab->name, version[i]);	
     }
 
-    rows = map(query(sprintf(select_sql, t*" OR ")), sanitize_result);
+    rows = map((select_sql + t*" OR ")(sql), sanitize_result);
 
     if (sizeof(filter)) {
 	rows_to_send = allocate(sizeof(rows));

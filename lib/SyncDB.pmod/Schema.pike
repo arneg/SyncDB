@@ -1,7 +1,7 @@
 mapping(string:SyncDB.Types.Base) m;
 array(SyncDB.Types.Base) fields;
 string key;
-SyncDB.Types.Base id;
+object id, version;
 array(string) index = ({ });
 string automatic;
 object restriction;
@@ -38,9 +38,13 @@ void create(object ... m) {
     }
 #endif
     fields->get_default(default_row);
-    add_type(SyncDB.Types.Version("version", tables(),
-				  SyncDB.Flags.Unique(),
-				  SyncDB.Flags.Index()));
+    add_type(version = SyncDB.Types.Version("version", tables(),
+					    SyncDB.Flags.Unique(),
+					    SyncDB.Flags.Index()));
+}
+
+mixed get_unique_identifier(mapping row) {
+    return (string)row->version;
 }
 
 this_program `+(this_program o) {

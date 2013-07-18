@@ -9,15 +9,14 @@ void create(string name, array(object) fields, SyncDB.Flags.Base ... flags) {
     ::create(name, @flags);
 }
 
-mapping encode_sql(string table, mapping row, function quote,
-		   void|mapping new) {
+mapping encode_sql(string table, mapping row, void|mapping new) {
     if (!new) new = ([]);
     if (has_index(row, name)) {
 	mixed a = row[name];
 	if (!arrayp(a) || sizeof(a) != sizeof(fields))
 	    error("Type mismatch. %O\n", a);
 	foreach (fields; int i; object type) {
-	    type->encode_sql(table, ([ type->name : a[i] ]), quote, new);
+	    type->encode_sql(table, ([ type->name : a[i] ]), new);
 	}
     }
     return new;

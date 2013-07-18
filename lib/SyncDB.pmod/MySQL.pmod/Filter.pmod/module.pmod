@@ -1,10 +1,9 @@
-class Base { }
 
 class Or(object ... filters) {
 
-    string encode_sql(object table, function quote) {
+    object encode_sql(object table, function quote) {
 	if (!sizeof(filters)) error("empty filter!");
-	return "(" + filters->encode_sql(table, quote) * " OR " + ")";
+	return SyncDB.MySQL.Query("(", filters->encode_sql(table, quote), " OR ") + ")";
     }
 
     string _sprintf(int type) {
@@ -14,9 +13,9 @@ class Or(object ... filters) {
 
 class And(object ... filters) {
 
-    string encode_sql(object table, function quote) {
+    object encode_sql(object table, function quote) {
 	if (!sizeof(filters)) error("empty filter!");
-	return "(" + filters->encode_sql(table, quote) * " AND " + ")";
+	return SyncDB.MySQL.Query("(", filters->encode_sql(table, quote), " AND ") + ")";
     }
 
     string _sprintf(int type) {
@@ -24,26 +23,40 @@ class And(object ... filters) {
     }
 }
 
-class Equal(string field, mixed value) {
-    inherit Base;
+class Base {
+    object type;
+    mixed value;
 
-    string encode_sql(object table, function quote) {
-	return sprintf("%s=%s", table->get_sql_name(field),
-		       encode_sql_value(table, quote));
+    string `field() {
+	return type->name;
     }
 
-    string encode_sql_value(object table, function quote) {
-	mixed o = value;
-	object type = table->schema[field];
+    void create(object type, mixed value) {
+	this_program::type = type;
+	this_program::value = value;
+    }
+
+    mapping `row() {
+	return ([ field : value ]);
+    }
+}
+
+class Equal {
+    inherit Base;
+
+    object encode_sql(object table) {
+	mapping new = ([]);
 
 	if (!type->is_index) // relieve this check for restrictions?
 	    werror("Trying to index non-indexable field %O.\n", type);
 	if (!type->is_readable)
 	    error("Trying to index non-readable field.\n");
-	if (objectp(o) && Program.inherits(object_program(o), Serialization.Atom)) 
-	    o = type->parser()->decode(o);
-
-	return type->encode_sql_value(o, quote);
+#if constant(Serialization)
+	if (objectp(value) && Program.inherits(object_program(value), Serialization.Atom)) 
+	    value = type->parser()->decode(value);
+#endif
+	type->encode_sql(table->table, row, new);
+	return SyncDB.MySQL.Query("(", new, " = ", " AND ") + ")";
     }
 
     string _sprintf(int type) {
@@ -51,42 +64,59 @@ class Equal(string field, mixed value) {
     }
 
     void insert(object table, string name, function quote, mapping|void new) {
-	object f;
-	string t;
-
 	if (!new) new = ([ ]);
 
-	f = table->schema[field]->f_foreign;
-
-	if (f)
-	    t = f->table;
-	if (!t)
-	    t = table->table;
-	if (t == name)
-	    new[table->get_sql_name(field)] = encode_sql_value(table, quote);
+	type->encode_sql(table->table, row, new);
 
 	return new;
     }
 }
 
-class True(string field) {
-    string encode_sql(object table, function quote) {
-	return sprintf("%s IS NOT NULL", table->get_sql_name(field));
+class Unary(object type, string op) {
+
+    string `field() {
+	return type->name;
     }
+
+    object encode_sql(object table, function quote) {
+	array a = type->sql_names(table->table);
+
+	foreach (a; int i; mixed v) {
+	    a[i] = sprintf("%s %s", v, op);
+	}
+
+	return SyncDB.MySQL.Query("(" + a * " AND " + ")");
+    }
+
+}
+
+class True {
+    inherit Unary;
+
+    void create(object type) {
+	::create(type, "IS NOT NULL");
+    }
+
     string _sprintf(int type) {
 	return sprintf("True(%O)", field);
     }
 }
 
 class False(string field) {
-    string encode_sql(object table, function quote) {
-	return sprintf("%s IS NULL", table->get_sql_name(field));
+    inherit Unary;
+
+    void create(object type) {
+	::create(type, "IS NULL");
     }
+
     string _sprintf(int type) {
 	return sprintf("False(%O)", field);
     }
 }
 
+// TODO: these should get the decoded value passed, instead of relying on 
+// parser creation
+#if constant(Serialization)
 class RangeLookup(string field, Serialization.Atom value) {
 
     object parser(object table) {
@@ -194,3 +224,4 @@ class Ge(string field, Serialization.Atom value) {
 	return sprintf("Ge(%O)", field);
     }
 }
+#endif

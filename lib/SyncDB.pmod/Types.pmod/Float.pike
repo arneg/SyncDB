@@ -12,10 +12,6 @@ program get_critbit() {
 }
 #endif
 
-string encode_sql_value(mixed val, function quote) {
-    return sprintf("'%f'", val);
-}
-
 mixed decode_sql_value(string s) {
     return (int)s;
 }

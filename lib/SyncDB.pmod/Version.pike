@@ -55,6 +55,8 @@ string _sprintf(int fmt) {
 mixed cast(string type) {
     if (type == "array") {
 	return a;
+    } else if (type == "string") {
+	return (array(string))a * ".";
     } else error("Cannot cast %O into %s\n", this, type);
 }
 

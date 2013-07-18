@@ -25,7 +25,7 @@ mixed `->(string index) {
 	}
 	return t[0];
     } else if (has_index(SyncDB.MySQL.Filter, index)) {
-	return Function.curry(SyncDB.MySQL.Filter[index])(name);
+	return Function.curry(SyncDB.MySQL.Filter[index])(this);
     }
     return call_function(::`->, index, this);
 }
@@ -47,15 +47,8 @@ mixed decode_sql_value(string s) {
     return s;
 }
 
-string encode_sql_value(mixed v, function quote) {
-    return sprintf("'%s'", quote((string)v));
-}
-
-function(mixed:string) sql_encode_cb(Sql.Sql sql) {
-    string _enc(mixed s) {
-	return encode_sql_value(s, sql->quote);
-    };
-    return _enc;
+string encode_sql_value(mixed v) {
+    return v;
 }
 
 mixed decode_sql(string table, mapping row, mapping|void new) {
@@ -72,12 +65,12 @@ mixed decode_sql(string table, mapping row, mapping|void new) {
     return UNDEFINED;
 }
 
-mapping encode_sql(string table, mapping row, function quote, mapping|void new) {
+mapping encode_sql(string table, mapping row, mapping|void new) {
     if (!new) new = ([]);
     if (has_index(row, name)) {
 	new[sql_name(table)] = (row[name] == SyncDB.Null)
 				? "NULL"
-				: encode_sql_value(row[name], quote);
+				: encode_sql_value(row[name]);
     }
     return new;
 }
@@ -133,6 +126,6 @@ object get_filter_parser() {
 
 string sql_type(Sql.Sql sql, void|string type) {
     if (type) 
-	return sprintf("%s %s %s", name, type, flags->sql_type(sql_encode_cb(sql)) * " ");
+	return sprintf("%s %s %s", name, type, flags->sql_type(encode_sql_value) * " ");
     else return 0;
 }

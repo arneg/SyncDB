@@ -6,12 +6,12 @@ object get_parser() {
 }
 #endif
 
-string encode_sql_value(mixed val, function quote) {
+string encode_sql_value(mixed val) {
     // TODO:: reencode JSON to canonical format?
-    return ::encode_sql_value(string_to_utf8(Standards.JSON.encode(val)), quote);
+    return string_to_utf8(Standards.JSON.encode(val));
 }
 
-string decode_sql_value(string s) {
+mixed decode_sql_value(string s) {
     return Standards.JSON.decode_utf8(s);
 }
 
