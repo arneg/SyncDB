@@ -529,7 +529,7 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
 	if (sql->master_sql->info) {
 	    string info = sql->master_sql->info();
 	    if (!info || -1 != search(info, "Changed: 0")) {
-		error("Collision: %s\n", info);
+		error("Collision: %O\n", info);
 	    }
 	}
 	rows = (select_sql + where)(sql);
