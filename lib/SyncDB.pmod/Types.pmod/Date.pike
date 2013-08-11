@@ -19,9 +19,9 @@ program get_critbit() {
 
 string encode_sql_value(object date) {
     // TODO:: mysql-FROM_UNIXTIME is not an option, use ints?
-    if (!(objectp(date) && (!prog || Program.inherits(object_program(date), prog))))
+    if (!(objectp(date) || (!prog || Program.inherits(object_program(date), prog))))
 	error("Type mismatch. Expected %O. Got %O\n", prog, date);
-    return sprintf("FROM_UNIXTIME(%d)", date->ux + date->utc_offset());
+    return date->set_timezone("UTC")->format_time();
 }
 
 object decode_sql_value(string s) {
