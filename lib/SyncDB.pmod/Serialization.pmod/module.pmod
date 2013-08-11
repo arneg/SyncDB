@@ -125,7 +125,7 @@ void create(mapping|void overwrites) {
     });
     black_magic->etype = Type;
 
-    Null = Serialization.Types.Singleton("_null", SyncDB.Null);
+    Null = Serialization.Types.Singleton("_null", Val.null);
     Schema = pSchema();
 }
 #endif

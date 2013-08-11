@@ -20,5 +20,3 @@ class RowBased(mapping row) {
 class DeletedRow {
     inherit RowBased;
 }
-
-object Null = Val.null;
