@@ -15,7 +15,7 @@ protected void create(string fmt, mixed ... args) {
     case 2:
 	if (arrayp(args[0]) && stringp(args[1])) {
 	    this_program::fmt = fmt;
-	    this_program::args = args;
+	    this_program::args = ({ });
 	    string s = args[1];
 	    foreach (args[0]; int i; mixed v) {
 		if (i) `+=(s);
@@ -103,9 +103,13 @@ protected mixed `+=(mixed ... list) {
 }
 
 protected string _sprintf(int t) {
-    return sprintf("%O(%O, %d args)", this_program, fmt, sizeof(args));
+    return sprintf("%O(%O, %O)", this_program, fmt, (args));
 }
 
 protected int _sizeof() {
     return sizeof(fmt);
+}
+
+string render(function quote) {
+    return sprintf(fmt, @map(args, quote));
 }
