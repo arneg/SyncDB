@@ -213,7 +213,7 @@ class Link {
 	::update(row, oldrow, new);
 	if (sizeof(new) - i) { // need to add the corresponding link id
 	    if (has_index(row, id)) {
-		if (row[id] != Sql.Null) {
+		if (row[id] != Val.null) {
 		}
 		// check if the new link id has a corresponding field in the other table
 		// or Sql.Null
@@ -359,6 +359,12 @@ object gen_where(mapping t) {
 object get_where(mapping keys) {
     mapping t = schema->id->encode_sql(table, keys);
     return gen_where(t);
+}
+
+string get_unique_identifier(mapping row) {
+    function quote = sql->quote;
+    // OMFG!!
+    return schema->id->Equal(row[schema->key])->encode_sql(this, quote)->render(quote);
 }
 
 void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema schema, string table) {
