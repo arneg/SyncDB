@@ -72,6 +72,20 @@ class Equal {
     }
 }
 
+class Match {
+    inherit Base;
+
+    string _sprintf(int type) {
+	return sprintf("Match(%O, %O)", field, value);
+    }
+
+    object encode_sql(object table) {
+	mapping new = ([]);
+	type->encode_sql(table->table, row, new);
+	return SyncDB.MySQL.Query("(", new, " like ", " AND ") + ")";
+    }
+}
+
 class Unary(object type, string op) {
 
     string `field() {
