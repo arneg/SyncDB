@@ -58,7 +58,7 @@ mixed decode_sql(string table, mapping row, mapping|void new) {
 	v = row[n];
 	if (stringp(v)) {
 	    v = decode_sql_value(v);
-	} else v = SyncDB.Null;
+	} else v = Val.null;
 	if (new) new[name] = v;
 	return v;
     }
@@ -68,8 +68,8 @@ mixed decode_sql(string table, mapping row, mapping|void new) {
 mapping encode_sql(string table, mapping row, mapping|void new) {
     if (!new) new = ([]);
     if (has_index(row, name)) {
-	new[sql_name(table)] = (row[name] == SyncDB.Null)
-				? "NULL"
+	new[sql_name(table)] = (row[name] == Val.null)
+				? Val.null
 				: encode_sql_value(row[name]);
     }
     return new;
