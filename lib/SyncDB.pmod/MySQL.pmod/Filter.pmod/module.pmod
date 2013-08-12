@@ -72,6 +72,29 @@ class Equal {
     }
 }
 
+class _In {
+    inherit Base;
+
+    object encode_sql(object table) {
+        string l = "%s" + ",%s" * (sizeof(value) - 1);
+        string fmt = sprintf("(%s in (%s))", type->sql_name(table->table), l);
+
+	return SyncDB.MySQL.Query(fmt, @map(value, type->encode_sql_value));
+    }
+
+    string _sprintf(int type) {
+	return sprintf("In(%O, %O)", field, value);
+    }
+}
+
+object In(object type, array values) {
+    if (!type->encode_sql_value) {
+        return Or(@map(values, type->Equal));
+    }
+
+    return _In(type, values);
+}
+
 class Match {
     inherit Base;
 
