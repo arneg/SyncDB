@@ -27,6 +27,14 @@ class Base {
     object type;
     mixed value;
 
+    object And(object ... filters) {
+        return .And(this, @filters);
+    }
+
+    object Or(object ... filters) {
+        return .Or(this, @filters);
+    }
+
     string `field() {
 	return type->name;
     }
@@ -88,6 +96,10 @@ class _In {
 }
 
 object In(object type, array values) {
+    if (!sizeof(values)) {
+        return FALSE();
+    }
+
     if (!type->encode_sql_value) {
         return Or(@map(values, type->Equal));
     }
@@ -127,6 +139,20 @@ class Unary(object type, string op) {
 
 }
 
+class Constant(SyncDB.MySQL.Query q) {
+    object encode_sql(object table, function quote) {
+        return q;
+    }
+}
+
+object FALSE() {
+    return Constant(SyncDB.MySQL.Query("FALSE"));
+}
+
+object TRUE() {
+    return Constant(SyncDB.MySQL.Query("TRUE"));
+}
+
 class True {
     inherit Unary;
 
@@ -139,7 +165,7 @@ class True {
     }
 }
 
-class False(string field) {
+class False {
     inherit Unary;
 
     void create(object type) {
