@@ -44,7 +44,7 @@ SyncDB.Version version;
 private mixed query(mixed ... args) {
     string s = sprintf(@args);
 #ifdef DB_DEBUG
-    werror("SQL:\t%s\n", String.width(s) > 8 ? string_to_utf8(s) : s);
+   // werror("SQL:\t%s\n", String.width(s) > 8 ? string_to_utf8(s) : s);
 #endif
     return sql->query(s);
 }
@@ -516,7 +516,7 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
     }
 
     object uwhere = where + " AND " + gen_where(t);
-    werror("-> %O\n", uwhere);
+    //werror("-> %O\n", uwhere);
 
     int locked = 0;
 

@@ -103,7 +103,7 @@ protected mixed `+=(mixed ... list) {
 }
 
 protected string _sprintf(int t) {
-    return sprintf("%O(%O, %O)", this_program, fmt, (args));
+    return sprintf("%O(%O, %d args)", this_program, fmt, sizeof(args));
 }
 
 protected int _sizeof() {
