@@ -41,4 +41,8 @@ void create(string name, mixed ... args) {
     }
 
     ::create(name, @args);
+
+    if (!length) {
+        length = (int)this->f_maxlength;
+    }
 }
