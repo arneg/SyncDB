@@ -1,39 +1,67 @@
+class Base {
+    object And(object ... filters) {
+        return master()->resolv("SyncDB.MySQL.Filters.And")(this, @filters);
+    }
 
-class Or(object ... filters) {
+    object Or(object ... filters) {
+        return master()->resolv("SyncDB.MySQL.Filters.Or")(this, @filters);
+    }
+
+    object Not() {
+        return master()->resolv("SyncDB.MySQL.Filters.Not")(this);
+    }
+
+    mixed `&(mixed o) {
+        return And(o);
+    }
+
+    mixed `|(mixed o) {
+        return Or(o);
+    }
+}
+
+class Combine {
+    array(object) filters;
+
+    void create(object ... filters) {
+        array a = ({ });
+        foreach (filters; int i; object o) {
+            if (object_program(o) == this_program) {
+                a += o->filters;
+                filters[i] = 0;
+            }
+        }
+        this_program::filters = filter(filters, filters) + a;
+    }
+
+    string _sprintf(int type) {
+	return sprintf("%O(%s)", this_program, filters->_sprintf('O')*", ");
+    }
+}
+
+class Or {
+    inherit Combine;
 
     object encode_sql(object table, function quote) {
 	if (!sizeof(filters)) error("empty filter!");
 	return SyncDB.MySQL.Query("(", filters->encode_sql(table, quote), " OR ") + ")";
     }
-
-    string _sprintf(int type) {
-	return sprintf("Or(%s)", filters->_sprintf('O')*", ");
-    }
 }
 
 class And(object ... filters) {
+    inherit Combine;
 
     object encode_sql(object table, function quote) {
 	if (!sizeof(filters)) error("empty filter!");
 	return SyncDB.MySQL.Query("(", filters->encode_sql(table, quote), " AND ") + ")";
     }
-
-    string _sprintf(int type) {
-	return sprintf("And(%s)", filters->_sprintf('O')*", ");
-    }
 }
 
-class Base {
+class FieldFilter {
+    inherit Base;
+
     object type;
     mixed value;
-
-    object And(object ... filters) {
-        return .And(this, @filters);
-    }
-
-    object Or(object ... filters) {
-        return .Or(this, @filters);
-    }
 
     string `field() {
 	return type->name;
@@ -50,7 +78,7 @@ class Base {
 }
 
 class Equal {
-    inherit Base;
+    inherit FieldFilter;
 
     object encode_sql(object table) {
 	mapping new = ([]);
@@ -80,8 +108,39 @@ class Equal {
     }
 }
 
-class _In {
+class Ne {
+    inherit FieldFilter;
+
+    object encode_sql(object table) {
+	mapping new = ([]);
+
+	if (!type->is_index) // relieve this check for restrictions?
+	    werror("Trying to index non-indexable field %O.\n", type);
+	if (!type->is_readable)
+	    error("Trying to index non-readable field.\n");
+#if constant(Serialization)
+	if (objectp(value) && Program.inherits(object_program(value), Serialization.Atom)) 
+	    value = type->parser()->decode(value);
+#endif
+	type->encode_sql(table->table, row, new);
+	return SyncDB.MySQL.Query("(", new, " != ", " OR ") + ")";
+    }
+
+    string _sprintf(int type) {
+	return sprintf("Ne(%O, %O)", field, value);
+    }
+}
+
+class Not(object filter) {
     inherit Base;
+
+    object encode_sql(object table) {
+	return "NOT (" + filter->encode_sql(table) + ")";
+    }
+}
+
+class _In {
+    inherit FieldFilter;
 
     object encode_sql(object table) {
         string l = "%s" + ",%s" * (sizeof(value) - 1);
@@ -108,7 +167,7 @@ object In(object type, array values) {
 }
 
 class Match {
-    inherit Base;
+    inherit FieldFilter;
 
     string _sprintf(int type) {
 	return sprintf("Match(%O, %O)", field, value);
@@ -122,6 +181,7 @@ class Match {
 }
 
 class Unary(object type, string op) {
+    inherit Base;
 
     string `field() {
 	return type->name;
@@ -140,6 +200,8 @@ class Unary(object type, string op) {
 }
 
 class Constant(SyncDB.MySQL.Query q) {
+    inherit Base;
+
     object encode_sql(object table, function quote) {
         return q;
     }
