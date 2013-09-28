@@ -1,6 +1,8 @@
 // vim:syntax=lpc
 inherit SyncDB.Table;
 
+function(object:void) onupdate;
+
 function(void:Sql.Sql) _sql_cb;
 Sql.Sql _sql;
 
@@ -64,12 +66,16 @@ class Table {
 
     string name;
 
+    .Query modified_sql;
+
     int(0..1) `is_automatic() {
 	return schema->id->is_automatic;
     }
 
     void create(string name) {
 	this_program::name = name;
+        modified_sql = .Query("SELECT update_time FROM information_schema.tables "
+                              "WHERE table_schema=DATABASE() AND table_name = %s;", name);
 	array a = sql->list_fields(name);
 	foreach (a;; mapping m) {
 	    sql_schema[m->name] = m;
@@ -510,10 +516,7 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
 	return;
     }
 
-    if (!mappingp(version)) version = ([ "version" : version ]);
-    foreach (version; string name; mixed value) {
-	schema[name]->encode_sql(table, version, t);
-    }
+    schema["version"]->encode_sql(table, ([ "version" : version ]), t);
 
     object uwhere = where + " AND " + gen_where(t);
     //werror("-> %O\n", uwhere);
@@ -530,7 +533,6 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
 	mapping new = ([]);
 	table_objects()->update(keys, rows, new);
 	.Query q = update_sql(indices(new), values(new)) + uwhere;
-	werror("UPDATE: %O\n", q);
 	q(sql);
 	if (sql->master_sql->info) {
 	    string info = sql->master_sql->info();
@@ -548,7 +550,7 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
 
     if (noerr) {
 	if (nversion > oversion) {
-	    version = nversion;
+            this_program::version = nversion;
 	    cb(0, sizeof(rows) && sanitize_result(rows[0]));
 	} else 
 	    cb(1, sprintf("Collision! old version: %O vs new version: %O\n", oversion, nversion));
@@ -642,6 +644,41 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb2, mixed ... 
     } else {
 	cb(1, err);
     }
+}
+
+array last_modified;
+
+void request_update(function cb, mixed ... args) {
+    array t = table_objects();
+
+    array mod = t->modified_sql(sql)->update_time;
+
+    if (!equal(mod, last_modified)) {
+        last_modified = mod;
+        array(mapping) rows;
+        .Query _low_update_sql;
+
+        _low_update_sql = select_sql;
+
+        foreach (t;int i;Table tab) {
+            if (i) _low_update_sql += " OR ";
+            _low_update_sql += .Query(sprintf("%s.version > %%d", tab->name), version[i]);
+        }
+
+        rows = map(_low_update_sql(sql), sanitize_result);
+
+        if (sizeof(rows)) {
+            array aa = Array.columns(rows->version->a, enumerate(sizeof(version)));
+
+            foreach (aa; int i; array a) {
+                aa[i] = max(@a);
+            }
+
+            version = SyncDB.Version(aa);
+        }
+
+        cb(0, rows, @args);
+    } else cb(0, ({}), @args);
 }
 
 void syncreq(SyncDB.Version version, mapping filter, function cb, mixed ... args) {
