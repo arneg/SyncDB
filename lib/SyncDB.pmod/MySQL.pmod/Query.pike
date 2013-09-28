@@ -46,12 +46,20 @@ void add(string fmt, mixed ... args) {
     this_program::args += args;
 }
 
-#define DB_DEBUG
+//#define DB_DEBUG
 protected mixed `()(Sql.Sql sql) {
 #ifdef DB_DEBUG
-    werror("SQL: %O\n", this);
-#endif
+    array res;
+
+    int t = gethrtime();
+
+    res = sql->query(fmt, @args);
+
+    werror("SQL(%2f ms): %O\n", (gethrtime() - t) / 1000.0, this);
+    return res;
+#else
     return sql->query(fmt, @args);
+#endif
 }
 
 protected mixed `+(mixed ... list) {
@@ -103,7 +111,7 @@ protected mixed `+=(mixed ... list) {
 }
 
 protected string _sprintf(int t) {
-    return sprintf("%O(%O, %d args)", this_program, fmt, sizeof(args));
+    return sprintf("%O(%O, %O)", this_program, fmt, (args));
 }
 
 protected int _sizeof() {
