@@ -6,8 +6,7 @@ constant _types = ::_types + ([
     "prog" : -1
 ]);
 
-void create(string name, void|function(int:object)|program prog, SyncDB.Flags.Base ... flags) {
-    this_program::prog = prog;
+void create(string name, SyncDB.Flags.Base ... flags) {
     ::create(name, @flags);
 }
 
