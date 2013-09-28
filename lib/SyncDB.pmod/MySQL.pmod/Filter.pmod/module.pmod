@@ -207,11 +207,11 @@ class Constant(SyncDB.MySQL.Query q) {
     }
 }
 
-object FALSE() {
+object `FALSE() {
     return Constant(SyncDB.MySQL.Query("FALSE"));
 }
 
-object TRUE() {
+object `TRUE() {
     return Constant(SyncDB.MySQL.Query("TRUE"));
 }
 
