@@ -74,7 +74,8 @@ class Table {
 
     void create(string name) {
 	this_program::name = name;
-        modified_sql = .Query("SELECT update_time FROM information_schema.tables "
+        modified_sql = .Query("SELECT update_time, (NOW() - update_time) > 0 as _time_diff "
+                              "FROM information_schema.tables "
                               "WHERE table_schema=DATABASE() AND table_name = %s;", name);
 	array a = sql->list_fields(name);
 	foreach (a;; mapping m) {
@@ -651,7 +652,7 @@ array last_modified;
 void request_update(function cb, mixed ... args) {
     array t = table_objects();
 
-    array mod = t->modified_sql(sql)->update_time;
+    array mod = t->modified_sql(sql);
 
     if (!equal(mod, last_modified)) {
         last_modified = mod;
