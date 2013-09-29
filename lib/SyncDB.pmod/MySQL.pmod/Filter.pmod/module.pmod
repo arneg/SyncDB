@@ -1,14 +1,14 @@
 class Base {
     object And(object ... filters) {
-        return master()->resolv("SyncDB.MySQL.Filters.And")(this, @filters);
+        return master()->resolv("SyncDB.MySQL.Filter.And")(this, @filters);
     }
 
     object Or(object ... filters) {
-        return master()->resolv("SyncDB.MySQL.Filters.Or")(this, @filters);
+        return master()->resolv("SyncDB.MySQL.Filter.Or")(this, @filters);
     }
 
     object Not() {
-        return master()->resolv("SyncDB.MySQL.Filters.Not")(this);
+        return master()->resolv("SyncDB.MySQL.Filter.Not")(this);
     }
 
     mixed `&(mixed o) {
