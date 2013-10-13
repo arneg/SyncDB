@@ -51,11 +51,17 @@ protected mixed `()(Sql.Sql sql) {
 #ifdef DB_DEBUG
     array res;
 
-    int t = gethrtime();
+    mixed err = catch {
+        int t = gethrtime();
+        res = sql->query(fmt, @args);
+        werror("SQL(%2f ms): %O\n", (gethrtime() - t) / 1000.0, this);
+    };
 
-    res = sql->query(fmt, @args);
+    if (err) {
+        werror("failed: %O\n", this);
+        throw(err);
+    }
 
-    werror("SQL(%2f ms): %O\n", (gethrtime() - t) / 1000.0, this);
     return res;
 #else
     return sql->query(fmt, @args);
