@@ -325,8 +325,8 @@ void install_triggers(string table) {
 	BEFORE INSERT ON %<s
 	FOR EACH ROW
 	BEGIN
-	    DECLARE v INT;
-	    SELECT MAX(%<s.version) INTO v FROM %<s WHERE 1;
+            DECLARE v INT;
+	    SELECT MAX(ABS(%<s.version)) INTO v FROM %<s WHERE 1;
 	    IF v IS NULL THEN
 		SET NEW.version=1;
 	    ELSE 
@@ -339,13 +339,15 @@ void install_triggers(string table) {
 	BEFORE UPDATE ON %<s
 	FOR EACH ROW
 	BEGIN
-	    DECLARE v INT;
-	    SELECT MAX(%<s.version) INTO v FROM %<s WHERE 1;
-	    IF v IS NULL THEN
-		SET NEW.version=1;
-	    ELSE 
-		SET NEW.version=v + 1;
-	    END IF;
+            DECLARE v INT;
+            IF NEW.version > 0 THEN
+                SELECT MAX(ABS(%<s.version)) INTO v FROM %<s WHERE 1;
+                IF v IS NULL THEN
+                    SET NEW.version=1;
+                ELSE 
+                    SET NEW.version=v + 1;
+                END IF;
+            END IF;
 	END;
     ", table));
 }
@@ -440,7 +442,14 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
 	install_triggers(foreign_table);
     }
 
-    select_sql += " WHERE 1=1 AND ";
+    select_sql += " WHERE ";
+
+    t = table_names();
+
+    foreach (t; int i; string name) {
+        select_sql += sprintf("%s.version > 0 AND ", name);
+    }
+
     if (schema->restriction) {
 	restriction = schema->restriction->encode_sql(this);
 
@@ -448,7 +457,6 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
 	select_sql += " AND ";
     }
     // Initialize version
-    t = table_names();
 
     foreach (t; int i; string name) {
 	t[i] = sprintf("MAX(%s.version) AS '%<s.version'", name);
@@ -557,6 +565,52 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
 	    cb(1, sprintf("Collision! old version: %O vs new version: %O\n", oversion, nversion));
     } else {
 	cb(1, err);
+    }
+}
+
+void delete(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mixed,mixed...:void) cb,
+            mixed ... extra) {
+    int(0..1) noerr;
+    mixed err;
+    object sql = this_program::sql;
+
+    object where = get_where(keys);
+
+    if (!sizeof(where)) {
+	cb(1, "Need unique indexable field (or key) to update.\n");
+	return;
+    }
+
+    mapping t = ([]);
+
+    schema["version"]->encode_sql(table, ([ "version" : version ]), t);
+
+    object uwhere = where + " AND " + gen_where(t);
+
+    schema["version"]->encode_sql(table, ([ "version" : -version ]), t);
+
+    int locked = 0;
+
+    err = catch {
+	lock_tables(sql);
+	locked = 1;
+	.Query q = update_sql(indices(t), values(t)) + uwhere;
+	q(sql);
+	if (sql->master_sql->info) {
+	    string info = sql->master_sql->info();
+	    if (!info || -1 != search(info, "Changed: 0")) {
+		error("Collision: %O\n", info);
+	    }
+	}
+	noerr = 1;
+    };
+
+    if (locked) unlock_tables(sql);
+
+    if (noerr) {
+        cb(0, 0, @extra);
+    } else {
+	cb(1, err, @extra);
     }
 }
 
