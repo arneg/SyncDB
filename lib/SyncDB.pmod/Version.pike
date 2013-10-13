@@ -26,14 +26,6 @@ int `[]=(mixed idx, mixed val) {
     return val;
 }
 
-int `<(mixed o) {
-    if (objectp(o) && arrayp(o->a) && sizeof(o->a) == sizeof(a)) {
-	array t = o->a[*] - a[*];
-	return (min(@t) > 0 && max(@t) > 0);
-    }
-    return 0;
-}
-
 int `>(mixed o) {
     if (objectp(o) && arrayp(o->a) && sizeof(o->a) == sizeof(a)) {
 	array t = a[*] - o->a[*];
@@ -50,6 +42,10 @@ string _sprintf(int fmt) {
 	return sprintf("SyncDB.Version(%s)", (array(string))a*".");
     }
     return 0;
+}
+
+this_program `-(mixed arg) {
+    return this_program(map(a, predef::`-));
 }
 
 mixed cast(string type) {
