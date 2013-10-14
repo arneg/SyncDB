@@ -27,6 +27,17 @@ string table;
 Table table_o;
 SyncDB.Version version;
 
+object sql_error(object sql, mixed err) {
+    string state;
+    if (!err) return 0;
+    if (functionp(sql->sqlstate)) {
+        state = sql->sqlstate();
+    } else {
+        state = "IM001";
+    }
+    return SyncDB.MySQL.Error(state, this, err[0], err[1]);
+}
+
 /*
  * JOIN (using INNER JOIN)
  *  - join id in secondary table has to be automatic
@@ -476,13 +487,15 @@ void select(object filter, object|function(int(0..1), array(mapping)|mixed:void)
     array(mapping) rows;
     object order;
 
+    object sql = this_program::sql;
+
     if (objectp(cb)) {
 	order = cb;
 	cb = extra[0];
 	extra = extra[1..];
     }
 
-    mixed err = catch {
+    mixed err = sql_error(sql, catch {
 	//werror(">>>>\t%O\n", select_sql);
 	mixed foo = filter->encode_sql(this);
 	//werror("foo : %O\n", foo);
@@ -496,34 +509,24 @@ void select(object filter, object|function(int(0..1), array(mapping)|mixed:void)
 	if (order)
 	    index += " ORDER BY " + order->encode_sql(this);
 	rows = (select_sql + index)(sql);
-    };
+    });
 
     if (!err) {
 	cb(0, sanitize_result(rows), @extra);
     } else {
-	werror("SELECT ERROR: %s\n%s", describe_error(err), describe_backtrace(err[1]));
-	cb(1, err, @extra); // convert sql -> atom errors etc.
+	cb(1, err, @extra);
     }
 }
 
-void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mixed,mixed...:void) cb2, mixed ... extra) {
-    int(0..1) noerr;
+void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mixed,mixed...:void) cb,
+            mixed ... extra) {
     mixed err;
     array|mapping rows;
-    string sql_query = "";
     object sql = this_program::sql;
     mapping t = ([]);
-    void cb(int(0..1) error, mixed bla) {
-	cb2(error, bla, @extra);
-	return;
-    };
     SyncDB.Version oversion, nversion;
-    object where = get_where(keys);
 
-    if (!sizeof(where)) {
-	cb(1, "Need unique indexable field (or key) to update.\n");
-	return;
-    }
+    object where = get_where(keys);
 
     schema["version"]->encode_sql(table, ([ "version" : version ]), t);
 
@@ -531,8 +534,9 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
     //werror("-> %O\n", uwhere);
 
     int locked = 0;
+    int affected_rows = 0;
 
-    err = catch {
+    err = sql_error(sql, catch {
 	lock_tables(sql);
 	locked = 1;
 	rows = (select_sql + where)(sql);
@@ -542,29 +546,26 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
 	mapping new = ([]);
 	table_objects()->update(keys, rows, new);
 	.Query q = update_sql(indices(new), values(new)) + uwhere;
+
 	q(sql);
-	if (sql->master_sql->info) {
-	    string info = sql->master_sql->info();
-	    if (!info || -1 != search(info, "Changed: 0")) {
-		error("Collision: %O\n", info);
-	    }
-	}
-	rows = (select_sql + where)(sql);
-	if (sizeof(rows) != 1) error("foo");
-	nversion = schema["version"]->decode_sql(table, rows[0]);
-	noerr = 1;
-    };
+
+        affected_rows = sql->master_sql->affected_rows();
+
+        rows = (select_sql + where)(sql);
+
+        nversion = schema["version"]->decode_sql(table, rows[0]);
+    });
 
     if (locked) unlock_tables(sql);
 
-    if (noerr) {
-	if (nversion > oversion) {
+    if (!err) {
+	if (affected_rows == 1 && nversion > oversion) {
             this_program::version = nversion;
-	    cb(0, sizeof(rows) && sanitize_result(rows[0]));
+	    cb(0, sizeof(rows) && sanitize_result(rows[0]), @extra);
 	} else 
-	    cb(1, sprintf("Collision! old version: %O vs new version: %O\n", oversion, nversion));
+	    cb(1, SyncDB.Error.Collision(this, nversion, oversion), @extra);
     } else {
-	cb(1, err);
+	cb(1, err, @extra);
     }
 }
 
@@ -575,12 +576,6 @@ void delete(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
     object sql = this_program::sql;
 
     object where = get_where(keys);
-
-    if (!sizeof(where)) {
-	cb(1, "Need unique indexable field (or key) to update.\n");
-	return;
-    }
-
     mapping t = ([]);
 
     schema["version"]->encode_sql(table, ([ "version" : version ]), t);
@@ -591,7 +586,7 @@ void delete(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
 
     int locked = 0;
 
-    err = catch {
+    err = sql_error(sql, catch {
 	lock_tables(sql);
 	locked = 1;
 	.Query q = update_sql(indices(t), values(t)) + uwhere;
@@ -603,7 +598,7 @@ void delete(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
 	    }
 	}
 	noerr = 1;
-    };
+    });
 
     if (locked) unlock_tables(sql);
 
@@ -647,7 +642,7 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb2, mixed ... 
     } else if (schema->key != schema->automatic) {
 	error("RETARDO! (%O != %O)\n", schema->key, schema->automatic);
     }
-    err = catch {
+    err = sql_error(sql, catch {
 	row = schema->default_row + row;
 	lock_tables(sql);
 
@@ -656,6 +651,9 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb2, mixed ... 
 	// in the main table
 	// insert the main one
 	// insert the others
+        //
+        // TODO: turn this into _one_ insert into several tables. or else turn this into
+        // a transaction
 
 	foreach (table_objects(); ; Table t) {
 	    mapping new = t->insert(row);
@@ -684,17 +682,16 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb2, mixed ... 
 		row[schema->key] = (int)last->id;
 	    }
 	}
-    };
-    if (!err) err = catch {
+
 	.Query where = select_sql + get_where(row);
 	rows = where(sql);
 	if (sizeof(rows) != 1) error("foo");
 	version = schema["version"]->decode_sql(table, rows[0]);
-	noerr = 1;
-    };
+    });
+
     unlock_tables(sql);
 
-    if (noerr) {
+    if (!err) {
 	cb(0, sizeof(rows) ? sanitize_result(rows[0]) : 0);
     } else {
 	cb(1, err);
@@ -813,14 +810,4 @@ array(mapping)|mapping sanitize_result(array(mapping)|mapping rows) {
 
 string get_sql_name(string field) {
     return schema[field]->sql_name(table);
-}
-
-/*
-LocalTable(name, schema, MeteorTable(name, schema, channel[, db]))
-MeteorTable(MysqlTable(schema, dbname, sql))
-*/
-
-int main() {
-    write("All fine.\n");
-    return 0;
 }
