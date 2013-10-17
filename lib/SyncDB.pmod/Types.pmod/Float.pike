@@ -13,7 +13,11 @@ program get_critbit() {
 #endif
 
 mixed decode_sql_value(string s) {
-    return (int)s;
+    return (float)s;
+}
+
+string encode_sql_value(mixed v) {
+    return (string)v;
 }
 
 string encode_json() {
