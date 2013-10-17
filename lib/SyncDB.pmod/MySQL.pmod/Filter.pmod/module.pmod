@@ -18,6 +18,10 @@ class Base {
     mixed `|(mixed o) {
         return Or(o);
     }
+
+    void insert(mapping row) {
+        werror("%O does not properly work as a restriction on insert.\n");
+    }
 }
 
 class Combine {
@@ -56,6 +60,10 @@ class And(object ... filters) {
     object encode_sql(object table, function quote) {
 	if (!sizeof(filters)) error("empty filter!");
 	return SyncDB.MySQL.Query("(", filters->encode_sql(table, quote), " AND ") + ")";
+    }
+
+    void insert(mapping row) {
+        filters->insert(row);
     }
 }
 
@@ -101,12 +109,8 @@ class Equal {
 	return sprintf("Equal(%O, %O)", field, value);
     }
 
-    void insert(object table, string name, function quote, mapping|void new) {
-	if (!new) new = ([ ]);
-
-	type->encode_sql(table->table, row, new);
-
-	return new;
+    void insert(mapping new) {
+        new[field] = value;
     }
 }
 
@@ -238,6 +242,10 @@ class False {
 
     string _sprintf(int type) {
 	return sprintf("False(%O)", field);
+    }
+
+    void insert(mapping row) {
+        row[field] = Val.null;
     }
 }
 

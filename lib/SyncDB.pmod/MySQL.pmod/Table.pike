@@ -524,7 +524,10 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
     schema["version"]->encode_sql(table, ([ "version" : version ]), t);
 
     object uwhere = where + " AND " + gen_where(t);
-    //werror("-> %O\n", uwhere);
+
+    if (restriction) {
+        uwhere += " AND " + restriction->encode_sql(this);
+    }
 
     int locked = 0;
     int affected_rows = 0;
@@ -574,6 +577,10 @@ void delete(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
     schema["version"]->encode_sql(table, ([ "version" : version ]), t);
 
     object uwhere = where + " AND " + gen_where(t);
+
+    if (restriction) {
+        uwhere += " AND " + restriction->encode_sql(this);
+    }
 
     schema["version"]->encode_sql(table, ([ "version" : -version ]), t);
 
@@ -647,6 +654,10 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb2, mixed ... 
         //
         // TODO: turn this into _one_ insert into several tables. or else turn this into
         // a transaction
+        //
+        if (restriction) {
+            restriction->insert(row);
+        }
 
 	foreach (table_objects(); ; Table t) {
 	    mapping new = t->insert(row);
@@ -705,9 +716,17 @@ void request_update(function cb, mixed ... args) {
 
         _low_update_sql = select_sql;
 
+        _low_update_sql += "(";
+
         foreach (t;int i;Table tab) {
             if (i) _low_update_sql += " OR ";
             _low_update_sql += .Query(sprintf("%s.version > %%d", tab->name), version[i]);
+        }
+
+        _low_update_sql += ")";
+
+        if (restriction) {
+            restriction += " AND " + restriction->encode_sql(this);
         }
 
         rows = map(_low_update_sql(sql), sanitize_result);
@@ -726,6 +745,7 @@ void request_update(function cb, mixed ... args) {
     } else cb(0, ({}), @args);
 }
 
+__deprecated__
 void syncreq(SyncDB.Version version, mapping filter, function cb, mixed ... args) {
     array(mapping) rows;
     array t = table_objects();
