@@ -9,6 +9,6 @@ void create(mixed dbname, mixed schema, void|mixed db) {
 }
 
 mixed `->(string name) {
-    if (schema[name]) return schema[name];
+    if (schema && schema[name]) return schema[name];
     return call_function(::`->, name, this);
 }
