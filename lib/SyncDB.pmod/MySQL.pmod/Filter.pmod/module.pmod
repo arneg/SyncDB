@@ -21,6 +21,8 @@ class Base {
 }
 
 class Combine {
+    inherit Base;
+
     array(object) filters;
 
     void create(object ... filters) {
@@ -156,7 +158,7 @@ class _In {
 
 object In(object type, array values) {
     if (!sizeof(values)) {
-        return FALSE();
+        return FALSE;
     }
 
     if (!type->encode_sql_value) {
