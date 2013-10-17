@@ -315,12 +315,13 @@ array(string) table_names() {
 }
 
 mapping tables = ([ ]);
-.Query select_sql, _update_sql, restriction;
+.Query select_sql, _update_sql;
+object restriction;
 
 .Query update_sql(array(string) fields, array(mixed) values) {
     .Query q = (_update_sql + fields*"=%s, ") + "=%s WHERE ";
     q += values;
-    if (restriction) q += restriction + " AND ";
+    if (restriction) q += restriction->encode_sql(this) + " AND ";
     return q;
 }
 
@@ -461,12 +462,6 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
         select_sql += sprintf("%s.version > 0 AND ", name);
     }
 
-    if (schema->restriction) {
-	restriction = schema->restriction->encode_sql(this);
-
-	select_sql += restriction;
-	select_sql += " AND ";
-    }
     // Initialize version
 
     foreach (t; int i; string name) {
@@ -495,14 +490,12 @@ void select(object filter, object|function(int(0..1), array(mapping)|mixed:void)
 	extra = extra[1..];
     }
 
+    if (restriction) filter &= restriction;
+
     mixed err = sql_error(sql, catch {
-	//werror(">>>>\t%O\n", select_sql);
-	mixed foo = filter->encode_sql(this);
-	//werror("foo : %O\n", foo);
 	.Query index = filter->encode_sql(this);
-	//werror("<<<<\t%O\n", index);
+
 	if (!sizeof(index)) {
-	    // needs error type, i guess
 	    cb(1, "Need indexable field(s).\n", @extra);
 	    return;
 	}
