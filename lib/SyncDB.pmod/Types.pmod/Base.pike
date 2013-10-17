@@ -129,3 +129,7 @@ string sql_type(Sql.Sql sql, void|string type) {
 	return sprintf("%s %s %s", name, type, flags->sql_type(encode_sql_value) * " ");
     else return 0;
 }
+
+string _sprintf(int t) {
+    return sprintf("%O(%O)", this_program, sql_name(""));
+}
