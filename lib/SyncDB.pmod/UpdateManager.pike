@@ -12,11 +12,11 @@ void create(int interval) {
 }
 
 void register_table(object table) {
-    tables = set_weak_flag(tables + ({ table }), Pike.WEAK_VALUS);
+    tables = set_weak_flag(tables + ({ table }), Pike.WEAK_VALUES);
 }
 
 void unregister_table(object table) {
-    tables = set_weak_flag(tables - ({ table }), Pike.WEAK_VALUS);
+    tables = set_weak_flag(tables - ({ table }), Pike.WEAK_VALUES);
 }
 
 void request_updates() {
