@@ -2,7 +2,10 @@ array(object) tables = set_weak_flag(({}), Pike.WEAK_VALUES);
 
 int interval;
 
+// this might get called more often
 void create(int interval) {
+    remove_call_out(request_updates);
+    this_program::interval = interval;
     if (interval) {
         call_out(request_updates, interval);
     }
