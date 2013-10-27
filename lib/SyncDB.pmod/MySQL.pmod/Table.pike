@@ -25,7 +25,6 @@ Sql.Sql `sql=(Sql.Sql|function(void:Sql.Sql) o) {
 
 string table;
 Table table_o;
-SyncDB.Version version;
 
 object sql_error(object sql, mixed err) {
     string state;
@@ -260,47 +259,6 @@ class Reference {
     }
 }
 
-#if 0
-void install_triggers(string table) {
-    catch {
-	query(sprintf("DROP TRIGGER _syncdb_version_insert_%s;", table));
-    };
-    catch {
-	query(sprintf("DROP TRIGGER _syncdb_version_update_%s;", table));
-    };
-
-    query(sprintf(#"CREATE TRIGGER _syncdb_version_insert_%s
-	BEFORE INSERT ON %<s
-	FOR EACH ROW
-	BEGIN
-	    DECLARE v INT;
-	    SELECT MAX(%<s.version) INTO v FROM %<s WHERE 1;
-	    SET NEW.version=v + 1;
-	END;
-    ;
-    ", table));
-#ifdef SQL_EVENTS
-    query(sprintf(#"CREATE TRIGGER _syncdb_event_update_%s
-	AFTER UPDATE ON %<s
-	FOR EACH ROW
-	BEGIN
-	    SELECT * INTO FILE '/dev/shm/interSync/db_%<s' FROM %<s WHERE %<s.version = NEW.version;
-	END;
-    ", table));
-#endif
-    query(sprintf(#"CREATE TRIGGER _syncdb_version_update_%s
-	BEFORE UPDATE ON %<s
-	FOR EACH ROW
-	BEGIN
-	    DECLARE v INT;
-	    SELECT MAX(%<s.version) INTO v FROM %<s WHERE 1;
-	    SET NEW.version=v + 1;
-	END;
-    ", table));
-}
-#endif
-
-
 array(Table) table_objects() {
     // TODO: move sorting to create
     array a = values(tables), r;
@@ -446,10 +404,6 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
     foreach (tables; string foreign_table; Table t) {
 	// generate the version triggers
 	select_sql += t->join(table);
-	/*
-	update_sql += sprintf("%s.%s = %s.%s AND ", 
-		      foreign_table, t->fid, table, t->id);
-	*/
 	// generate proper selects/inserts
 	install_triggers(foreign_table);
     }
@@ -556,7 +510,7 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
 
     if (!err) {
 	if (affected_rows == 1 && nversion > oversion) {
-            this_program::version = nversion;
+            signal_update(nversion, rows);
 	    cb(0, sizeof(rows) && sanitize_result(rows[0]), @extra);
 	} else 
 	    cb(1, SyncDB.Error.Collision(this, nversion, oversion), @extra);
@@ -690,7 +644,7 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb2, mixed ... 
 	.Query where = select_sql + get_where(row);
 	rows = where(sql);
 	if (sizeof(rows) != 1) error("foo");
-	version = schema["version"]->decode_sql(table, rows[0]);
+        signal_update(schema["version"]->decode_sql(table, rows[0]), rows);
     });
 
     unlock_tables(sql);
@@ -704,14 +658,13 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb2, mixed ... 
 
 array last_modified;
 
-void request_update(function cb, mixed ... args) {
+void request_update(void|function cb, mixed ... args) {
     array t = table_objects();
-
+    array(mapping) rows = ({});
     array mod = t->modified_sql(sql);
 
     if (!equal(mod, last_modified)) {
         last_modified = mod;
-        array(mapping) rows;
         .Query _low_update_sql;
 
         _low_update_sql = select_sql;
@@ -738,74 +691,11 @@ void request_update(function cb, mixed ... args) {
                 aa[i] = max(@a);
             }
 
-            version = SyncDB.Version(aa);
+            signal_update(SyncDB.Version(aa), rows);
         }
-
-        cb(0, rows, @args);
-    } else cb(0, ({}), @args);
-}
-
-__deprecated__
-void syncreq(SyncDB.Version version, mapping filter, function cb, mixed ... args) {
-    array(mapping) rows;
-    array t = table_objects();
-    array(mapping) rows_to_send;
-    int cnt;
-
-    werror("SyncDB.MySQL.Table#syncreq(version: %O, filter: %O)\n",
-	   version, filter);
-
-    if (sizeof(version) != sizeof(t)) {
-	if (!sizeof(version)) {
-	    version = SyncDB.Version(allocate(sizeof(t)));
-	} else 
-	    error("invalid version %O(%d), expected %d entries.", version, 
-		  sizeof(version), sizeof(t));
     }
 
-    foreach (t;int i;Table tab) {
-	t[i] = sprintf("%s.version > %d", tab->name, version[i]);	
-    }
-
-    rows = map((select_sql + t*" OR ")(sql), sanitize_result);
-
-    if (sizeof(filter)) {
-	rows_to_send = allocate(sizeof(rows));
-
-	foreach (rows;; mapping row) {
-	    int(0..1) do_send;
-
-OUTER: 	    foreach (filter; string name; object filter) {
-		function lookup = filter->has || filter->`[];
-		mixed e = catch {
-		    werror("syncreq: %O %O %O.\n", row[name], filter, lookup(row[name]));
-		    int val = lookup(row[name]);
-		    switch (val) {
-		    case 1:
-			do_send = 1;
-			//continue OUTER;
-			break;
-		    case -1:
-			do_send = 0;
-			break OUTER;
-		    }
-		};
-		if (e) {
-		    werror("SyncDB.MySQL.Table#syncreq(...) failed: %O in %O->has(%O(%O)).\n", master()->describe_backtrace(e), filter, row[name], name);
-		}
-	    }
-
-	    if (do_send) rows_to_send[cnt++] = row;
-	}
-	rows_to_send = rows_to_send[.. cnt-1];
-    } else {
-	rows_to_send = rows;
-    }
-
-    werror("SyncDB.MySQL.Table#syncreq(...) will send %d rows.\n",
-	   sizeof(rows_to_send));
-
-    call_out(cb, 0, 0, rows_to_send, @args, this_program::version);
+    if (cb) cb(0, rows, @args);
 }
 
 array(mapping)|mapping sanitize_result(array(mapping)|mapping rows) {
