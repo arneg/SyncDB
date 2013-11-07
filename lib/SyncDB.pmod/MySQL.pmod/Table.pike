@@ -439,7 +439,7 @@ void select(object filter, object|function(int(0..1), array(mapping)|mixed:void)
 //! @expr{order@} is an optional parameter allowing results to be ordered.
 void select_complex(object filter, object order, object limit, mixed cb, mixed ... extra) {
 
-    array(mapping) rows;
+    mixed rows;
 
     object sql = this_program::sql;
     int num_rows;
@@ -462,15 +462,13 @@ void select_complex(object filter, object order, object limit, mixed cb, mixed .
 
 	rows = (select_sql + index)(sql);
         if (limit) {
-            num_rows = (int)sql->query("SELECT FOUND_ROWS() as num;")[0]->num;
+            rows = SyncDB.MySQL.ResultSet(rows);
+            rows->num_rows = (int)sql->query("SELECT FOUND_ROWS() as num;")[0]->num;
         }
     });
 
     if (!err) {
-        if (limit)
-            cb(0, sanitize_result(rows), num_rows, @extra);
-        else
-            cb(0, sanitize_result(rows), @extra);
+        cb(0, sanitize_result(rows), @extra);
     } else {
 	cb(1, err, @extra);
     }
@@ -709,15 +707,19 @@ void request_update(void|function cb, mixed ... args) {
     if (cb) cb(0, rows, @args);
 }
 
-array(mapping)|mapping sanitize_result(array(mapping)|mapping rows) {
+mixed sanitize_result(mixed rows) {
     if (mappingp(rows)) {
 	mapping new = ([ ]);
 
 	schema->fields->decode_sql(table, rows, new);
 
-	return rows->deleted ? SyncDB.DeletedRow(new) : new;;
-    } else if (arrayp(rows)) {
-	return map(rows, sanitize_result);
+	//return rows->deleted ? SyncDB.DeletedRow(new) : new;;
+        return new;
+    } else {
+        foreach (rows; int i; mapping m) {
+            rows[i] = sanitize_result(m);
+        }
+	return rows;
     }
 
 }
