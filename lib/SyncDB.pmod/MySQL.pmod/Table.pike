@@ -396,7 +396,8 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
 	t += type->sql_names(table);
     }
 
-    select_sql = .Query(sprintf("SELECT %s FROM %s", t*",", table));
+    // TODO: if this is very slow, we should be using a seperate one for limit queries
+    select_sql = .Query(sprintf("SELECT SQL_CALC_FOUND_ROWS %s FROM %s", t*",", table));
     _update_sql = .Query(sprintf("UPDATE %s SET ", table_names()*","));
 
     t = ({});
@@ -427,22 +428,21 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
 
 //! @decl void select(object filter, object|function(int(0..1), array(mapping)|mixed:void) cb,
 //!		      mixed ... extra)
-//! @decl void select(object filter, object order, object|function(int(0..1), array(mapping)|mixed:void) cb,
-//!		      mixed ... extra)
-//! @expr{order@} is an optional parameter allowing results to be ordered.
 
 void select(object filter, object|function(int(0..1), array(mapping)|mixed:void) cb,
 	    mixed ... extra) {
+    select_complex(filter, 0, 0, cb, @extra);
+}
+
+//! @decl void select_complex(object filter, object order, object|function(int(0..1), array(mapping)|mixed:void) cb,
+//!		      mixed ... extra)
+//! @expr{order@} is an optional parameter allowing results to be ordered.
+void select_complex(object filter, object order, object limit, mixed cb, mixed ... extra) {
+
     array(mapping) rows;
-    object order;
 
     object sql = this_program::sql;
-
-    if (objectp(cb)) {
-	order = cb;
-	cb = extra[0];
-	extra = extra[1..];
-    }
+    int num_rows;
 
     if (restriction) filter &= restriction;
 
@@ -453,13 +453,24 @@ void select(object filter, object|function(int(0..1), array(mapping)|mixed:void)
 	    cb(1, "Need indexable field(s).\n", @extra);
 	    return;
 	}
+
 	if (order)
-	    index += " ORDER BY " + order->encode_sql(this);
+            index += order->encode_sql(this);
+
+        if (limit)
+            index += limit->encode_sql(this);
+
 	rows = (select_sql + index)(sql);
+        if (limit) {
+            num_rows = (int)sql->query("SELECT FOUND_ROWS() as num;")[0]->num;
+        }
     });
 
     if (!err) {
-	cb(0, sanitize_result(rows), @extra);
+        if (limit)
+            cb(0, sanitize_result(rows), num_rows, @extra);
+        else
+            cb(0, sanitize_result(rows), @extra);
     } else {
 	cb(1, err, @extra);
     }
