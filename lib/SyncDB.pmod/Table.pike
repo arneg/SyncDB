@@ -17,7 +17,8 @@ mixed `->(string name) {
 // update triggerd by this table
 void signal_update(SyncDB.Version nversion, void|array(mapping) rows) {
     // TODO: we might lose updates here.
-    handle_update(nversion, rows);
+    version = nversion;
+    //handle_update(nversion, rows);
 
     if (update_manager) {
         update_manager->signal_update(this, nversion, rows);
