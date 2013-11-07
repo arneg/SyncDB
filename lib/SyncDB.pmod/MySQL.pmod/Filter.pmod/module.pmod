@@ -20,7 +20,7 @@ class Base {
     }
 
     void insert(mapping row) {
-        werror("%O does not properly work as a restriction on insert.\n");
+        werror("%O does not properly work as a restriction on insert.\n", this);
     }
 }
 
@@ -93,8 +93,6 @@ class Equal {
     object encode_sql(object table) {
 	mapping new = ([]);
 
-	if (!type->is_index) // relieve this check for restrictions?
-	    werror("Trying to index non-indexable field %O.\n", type);
 	if (!type->is_readable)
 	    error("Trying to index non-readable field.\n");
 #if constant(Serialization)
@@ -120,8 +118,6 @@ class Ne {
     object encode_sql(object table) {
 	mapping new = ([]);
 
-	if (!type->is_index) // relieve this check for restrictions?
-	    werror("Trying to index non-indexable field %O.\n", type);
 	if (!type->is_readable)
 	    error("Trying to index non-readable field.\n");
 #if constant(Serialization)

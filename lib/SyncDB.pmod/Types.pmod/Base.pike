@@ -131,5 +131,5 @@ string sql_type(Sql.Sql sql, void|string type) {
 }
 
 string _sprintf(int t) {
-    return sprintf("%O(%O)", this_program, sql_name(""));
+    return sprintf("%O(%O)", this_program, name);
 }
