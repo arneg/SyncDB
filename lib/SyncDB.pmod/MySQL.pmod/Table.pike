@@ -442,7 +442,6 @@ void select_complex(object filter, object order, object limit, mixed cb, mixed .
     mixed rows;
 
     object sql = this_program::sql;
-    int num_rows;
 
     if (restriction) filter &= restriction;
 
