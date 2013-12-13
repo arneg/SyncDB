@@ -5,7 +5,9 @@ class ASC(object type) {
 }
 
 class DESC(object type) {
-    return SyncDB.MySQL.Query(type->sql_name(table->table) + " DESC");
+    object encode_sql(object table) {
+        return SyncDB.MySQL.Query(type->sql_name(table->table) + " DESC");
+    }
 }
 
 class OrderBy(object ... a) {
