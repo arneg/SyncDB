@@ -32,3 +32,5 @@ void create_table(Sql.Sql sql, string name, object schema) {
     }
 }
 
+mapping(program:object) type_to_schema = ([]);
+mapping(program:array(object)) type_to_fields = ([]);
