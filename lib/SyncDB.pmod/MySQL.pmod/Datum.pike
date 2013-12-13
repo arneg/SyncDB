@@ -162,9 +162,9 @@ void destroy() {
 }
 
 object get_table(function(void:Sql.Sql) get_sql, string name, void|function|program prog) {
-    return TypedTable(name, get_sql, schema, name, prog||this_program);
+    return .TypedTable(name, get_sql, schema, name, prog||this_program);
 }
 
 void create_table(function(void:Sql.Sql) get_sql, string name) {
-    SyncDB.MySQL.create_table(get_sql(), name, schema);
+    .create_table(get_sql(), name, schema);
 }

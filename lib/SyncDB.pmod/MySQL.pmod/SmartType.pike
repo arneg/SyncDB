@@ -1,11 +1,12 @@
-private array(Field) _fields = ({});
+protected array(Field) _fields = ({});
 
 array `fields() {
-    return .type_to_fields[this_program];
+    return .get_fields(this_program);
 }
 
 object `schema() {
-    return .type_to_schema[this_program];
+    // TODO: accessing .type_to_fields here directly seems to be a problem
+    return .get_schema(this_program);
 }
 
 protected class Field {
@@ -25,7 +26,7 @@ protected class Field {
 };
 
 void create() {
-    if (!has_index(.type_to_schema, this_program)) {
+    if (!.get_schema(this_program)) {
         array(object) syncdb_types;
         int i = 0;
         array(string) ind = call_function(::_indices, 3);
@@ -44,14 +45,17 @@ void create() {
         }
         syncdb_types = _fields->syncdb_type();
         object schema = SyncDB.Schema(@syncdb_types);
-        .type_to_schema[this_program] = schema;
-        .type_to_fields[this_program] = _fields;
+        .set_schema(this_program, schema);
+        .set_fields(this_program, _fields);
         _fields = 0;
+        //werror("created schema %O for type %O.\n", schema, this_program);
+    } else {
+        //werror("schema %O for type %O already created.\n", .get_schema(this_program), this_program);
     }
 }
 
 #define MAP_TYPE(name)    object name (mixed ... flags) {       \
-    if (has_index(.type_to_schema, this_program)) return 0;  \
+    if (schema) return 0;  \
     return Field(SyncDB.Types. ## name, @flags);            \
 }
 
@@ -63,7 +67,7 @@ MAP_TYPE(Enum)
 MAP_TYPE(Float)
 
 #define MAP_FLAG(name, rname)   object name (mixed ... args) {  \
-    if (has_index(.type_to_schema, this_program)) return 0;  \
+    if (schema) return 0;  \
     return SyncDB.Flags. ## rname (@args);                  \
 }
 
@@ -71,7 +75,7 @@ MAP_FLAG(MAX_LENGTH, MaxLength)
 MAP_FLAG(DEFAULT, Default)
 
 #define MAP_CFLAG(name, rname)   object ` ## name ( ) {     \
-    if (has_index(.type_to_schema, this_program)) return 0;  \
+    if (schema) return 0;  \
     return SyncDB.Flags. ## rname ( );                  \
 }
 

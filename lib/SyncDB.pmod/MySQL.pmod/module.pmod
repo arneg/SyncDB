@@ -34,3 +34,19 @@ void create_table(Sql.Sql sql, string name, object schema) {
 
 mapping(program:object) type_to_schema = ([]);
 mapping(program:array(object)) type_to_fields = ([]);
+
+object get_schema(program type) {
+    return type_to_schema[type];
+}
+
+void set_schema(program type, object schema) {
+    type_to_schema[type] = schema;
+}
+
+array(object) get_fields(program type) {
+    return type_to_fields[type];
+}
+
+void set_fields(program type, array(object) fields) {
+    type_to_fields[type] = fields;
+}
