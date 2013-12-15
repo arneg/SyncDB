@@ -138,7 +138,7 @@ void invalidate_requests(mixed id) {
     array keys = _table_requests;
     
     if (has_index(_requests, id)) {
-        keys += _requests[id];
+        keys += m_delete(_requests, id);
     }
 
     if (!keys || !sizeof(keys)) return;
@@ -151,7 +151,6 @@ void invalidate_requests(mixed id) {
         // tolerate that, so we have to go for a manual destruct here.
         //map(keys, roxen.invalidate);
         map(keys, destruct);
-        _requests[id] = ({});
         _table_requests = ({});
     }
 }
