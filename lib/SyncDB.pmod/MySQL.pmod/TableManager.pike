@@ -1,7 +1,7 @@
 private mapping(string:array(object)) tables = ([]);
 
 void unregister_view(string name, program type, object table) {
-    werror("unregistering table %O %O\n", name, table);
+    if (!tables[name]) return;
     tables[name] -= ({ table });
 }
 
@@ -10,7 +10,6 @@ void register_table(string name, program type, object table) {
         tables[name] = ({ });
     }
     tables[name] += ({ table });
-    werror("registering table %O %O\n", name, table);
 }
 
 mapping(string:array(object)) all_tables() {
