@@ -1,7 +1,7 @@
 inherit SyncDB.MySQL.Restriction;
 
-array(object) fetch(object filter, void|object order, void|object limit) {
-    return table->fetch(filter & restriction, order, limit);
+array(object) fetch(void|object filter, void|object order, void|object limit) {
+    return table->fetch(filter ? filter & restriction : restriction, order, limit);
 }
 
 object put(mapping row) {

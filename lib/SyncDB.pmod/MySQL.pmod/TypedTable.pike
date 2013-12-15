@@ -6,7 +6,7 @@ function|program prog;
 void create(string dbname, function(void:Sql.Sql) cb, SyncDB.Schema schema, string table,
             void|function|program prog) {
     
-    this_program::prog = prog||Datum;
+    this_program::prog = prog||.Datum;
     ::create(dbname, cb, schema, table);
 }
 
@@ -82,13 +82,13 @@ void insert(object|mapping row, function cb, mixed ... extra) {
     ::insert(row, _cb);
 }
 
-array(object) fetch(object filter, void|object order, void|object limit) {
+array(object) fetch(void|object filter, void|object order, void|object limit) {
     mixed ret;
     void cb(int err, mixed v) {
         if (!err) ret = v;
         else throw(v);
     };
-    select_complex(filter, order, limit, cb);
+    select_complex(filter||SyncDB.MySQL.Filter.TRUE, order, limit, cb);
     return ret;
 }
 
