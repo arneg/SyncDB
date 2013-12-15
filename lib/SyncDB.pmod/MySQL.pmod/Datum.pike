@@ -124,7 +124,7 @@ protected void save_unlocked(function(int, mixed...:void)|void cb, mixed ... ext
 }
 
 int(0..1) drop() {
-    int ret;
+    int(0..1) ret;
     void cb(int(0..1) err, mixed b) {
         ret = err;
     };

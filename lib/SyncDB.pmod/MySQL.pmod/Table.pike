@@ -346,6 +346,10 @@ string get_unique_identifier(mapping row) {
     return schema->id->Equal(row[schema->key])->encode_sql(this, quote)->render(quote);
 }
 
+string table_name() {
+    return table;
+}
+
 void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema schema, string table) {
     this_program::table = table;
     sql = con;
@@ -566,6 +570,7 @@ void delete(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
 
     if (noerr) {
         cb(0, 0, @extra);
+        signal_update(version, ({ keys }));
     } else {
 	cb(1, err, @extra);
     }
