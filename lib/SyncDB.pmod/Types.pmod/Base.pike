@@ -68,7 +68,7 @@ mixed decode_sql(string table, mapping row, mapping|void new) {
 mapping encode_sql(string table, mapping row, mapping|void new) {
     if (!new) new = ([]);
     if (has_index(row, name)) {
-	new[sql_name(table)] = (row[name] == Val.null)
+	new[table ? sql_name(table) : name] = (row[name] == Val.null)
 				? Val.null
 				: encode_sql_value(row[name]);
     }
