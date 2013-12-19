@@ -22,7 +22,7 @@ void signal_update(object table, object version, void|array(mapping) rows) {
     mapping t = all_tables();
     string name = table->table_name();
 
-    if (has_index(t, name)) (t[name] - ({ table }))->signal_update(version, rows);
+    if (has_index(t, name)) (t[name] - ({ table }))->handle_update(version, rows);
 }
 
 void unregister_table(object table) {
