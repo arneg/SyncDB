@@ -35,3 +35,7 @@ void handle_update(SyncDB.Version nversion, void|array(mapping) rows) {
 void destroy() {
     if (update_manager) update_manager->unregister_table(this);
 }
+
+SyncDB.Version table_version() {
+    return version;
+}
