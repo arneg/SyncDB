@@ -50,8 +50,9 @@ void select_complex(object filter, object order, object limit,
         function quote = sql->quote;
         string id = filter->encode_sql(this, quote)->render(quote);
         if (has_index(cache, id)) {
-            cb(0, ({ cache[id] }));
+            object o = cache[id];
             destruct(key);
+            cb(0, ({ o }));
             return;
         }
         destruct(key);
