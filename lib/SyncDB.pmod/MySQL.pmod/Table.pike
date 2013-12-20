@@ -521,11 +521,18 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
     if (locked) unlock_tables(sql);
 
     if (!err) {
-	if (affected_rows == 1 && nversion > oversion) {
+        if (oversion >= nversion) {
+            werror("trigger did not increase version. %O >= %O\n%O\n",
+                    oversion, nversion,
+                    sql->query("SELECT MAX(ABS(version)) FROM "+table_name())
+            );
+        }
+	if (affected_rows == 1 || oversion >= nversion) {
             signal_update(nversion, rows);
 	    cb(0, sizeof(rows) && sanitize_result(rows[0]), @extra);
-	} else 
+	} else {
 	    cb(1, SyncDB.Error.Collision(this, nversion, oversion), @extra);
+        }
     } else {
 	cb(1, err, @extra);
     }
