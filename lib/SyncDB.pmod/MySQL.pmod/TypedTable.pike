@@ -18,6 +18,12 @@ void select(object filter, function(int, mixed...:void) cb, mixed ... extra) {
     select_complex(filter, 0, 0, cb, extra);
 }
 
+object dummy() {
+    object o = prog();
+    o->init(([]), this);
+    return o;
+}
+
 void select_complex(object filter, object order, object limit,
                     function(int, mixed...:void) cb, mixed ... extra) {
     void _cb(int err, mixed v) {
