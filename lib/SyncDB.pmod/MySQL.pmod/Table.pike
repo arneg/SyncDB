@@ -424,9 +424,15 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
     // Initialize version
 
     foreach (t; int i; string name) {
-	t[i] = sprintf("MAX(%s.version) AS '%<s.version'", name);
+	t[i] = sprintf("ABS(MAX(%s.version)) AS '%<s.version'", name);
     }
+
     array r = query("SELECT "+t*", "+" FROM %s WHERE 1;", table_names()*",");
+
+    foreach (table_names();; string name) {
+        if (!r[0][name+".version"]) r[0][name+".version"] = "0";
+    }
+
     version = schema["version"]->decode_sql(table, r[0]);
 }
 
