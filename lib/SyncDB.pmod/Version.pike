@@ -39,7 +39,7 @@ string _sprintf(int fmt) {
     case 'd':
 	return (array(string))a * ".";
     case 'O':
-	return sprintf("SyncDB.Version(%s)", (array(string))a*".");
+	return sprintf("SyncDB.Version(%O)", a);
     }
     return 0;
 }
