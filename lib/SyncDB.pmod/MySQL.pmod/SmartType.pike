@@ -43,6 +43,10 @@ void create() {
                 val->name = name;
             }
         }
+
+        // remove overloaded ones
+        _fields = filter(_fields, _fields->name);
+
         syncdb_types = _fields->syncdb_type();
         object schema = SyncDB.Schema(@syncdb_types);
         .set_schema(this_program, schema);
