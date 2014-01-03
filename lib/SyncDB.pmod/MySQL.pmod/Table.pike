@@ -3,6 +3,45 @@ inherit SyncDB.Table;
 
 function(object:void) onupdate;
 
+mapping(string:array) triggers = ([]);
+
+// different types of triggers
+// before_insert ( new row )
+// after_insert ( new row )
+// before_update ( old row, changes )
+// after_update ( new row, changes )
+// before_delete ( keys )
+// after_delete ( keys )
+
+void trigger(string name, mixed ... args) {
+    if (triggers[name]) {
+        triggers[name](this, @args);
+    }
+}
+
+void register_trigger(string name, function cb) {
+    object lock = mutex->lock();
+    if (triggers[name]) {
+        triggers[name] += ({ cb });
+    } else {
+        triggers[name] = ({ cb });
+    }
+}
+
+void unregister_trigger(string name, function cb) {
+    object lock = mutex->lock();
+    array a;
+    if (a = triggers[name]) {
+        a -= ({ cb });
+        if (!sizeof(triggers[name])) {
+            m_delete(triggers, name);
+        } else {
+            triggers[name] = a;
+        }
+    }
+}
+
+
 function(void:Sql.Sql) _sql_cb;
 Sql.Sql _sql;
 
@@ -29,6 +68,9 @@ Table table_o;
 object sql_error(object sql, mixed err) {
     string state;
     if (!err) return 0;
+    // some other error, which we need to pass on
+    if (!arrayp(err)) return err;
+
     if (functionp(sql->sqlstate)) {
         state = sql->sqlstate();
     } else {
@@ -510,6 +552,7 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
 	rows = (select_sql + where)(sql);
 	if (sizeof(rows) != 1) error("foo");
 	rows = rows[0];
+        trigger("before_update", rows, keys);
 	oversion = schema["version"]->decode_sql(table, rows);
 	mapping new = ([]);
 	table_objects()->update(keys, rows, new);
@@ -534,8 +577,10 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
             );
         }
 	if (affected_rows == 1 || oversion >= nversion) {
+            mapping new = sanitize_result(rows[0]);
+            trigger("after_update", new, keys);
             signal_update(nversion, rows);
-	    cb(0, sizeof(rows) && sanitize_result(rows[0]), @extra);
+	    cb(0, new, @extra);
 	} else {
 	    cb(1, SyncDB.Error.Collision(this, nversion, oversion), @extra);
         }
@@ -565,6 +610,8 @@ void delete(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
 
     int locked = 0;
 
+    trigger("before_delete", keys);
+
     err = sql_error(sql, catch {
 	lock_tables(sql);
 	locked = 1;
@@ -582,6 +629,7 @@ void delete(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
     if (locked) unlock_tables(sql);
 
     if (noerr) {
+        trigger("after_delete", keys);
         cb(0, 0, @extra);
         signal_update(version, ({ keys }));
     } else {
@@ -602,28 +650,30 @@ void delete(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
 }
 
 
-void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb2, mixed ... extra) {
+void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb, mixed ... extra) {
     mixed err;
     int(0..1) noerr;
     array rows;
-    void cb(int(0..1) error, mixed bla) {
-	cb2(error, bla, @extra);
-	return;
-    };
     object sql = this_program::sql;
 
     // TODO:
     // 	schema->key != shcema-»automatic
-    if (!schema->automatic) { 
+    if (!schema->automatic) {
 	if (!row[schema->key]) {
-	    cb(1, "Could not insert your row, because it misses an indexed & unique field.\n");
+	    cb(1, "Could not insert your row, because it misses an indexed & unique field.\n",
+               @extra);
 	    return;
 	}
     } else if (schema->key != schema->automatic) {
 	error("RETARDO! (%O != %O)\n", schema->key, schema->automatic);
     }
+
+    row = schema->default_row + row;
+
+    trigger("before_inseert", row);
+
     err = sql_error(sql, catch {
-	row = schema->default_row + row;
+
 	lock_tables(sql);
 
 	// first do the ones which have the fid AUTO_INCREMENT
@@ -676,9 +726,11 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb2, mixed ... 
     unlock_tables(sql);
 
     if (!err) {
-	cb(0, sizeof(rows) ? sanitize_result(rows[0]) : 0);
+        row = sanitize_result(rows[0]);
+        trigger("after_insert", row);
+	cb(0, row, @extra);
     } else {
-	cb(1, err);
+	cb(1, err, @extra);
     }
 }
 
