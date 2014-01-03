@@ -73,14 +73,15 @@ void insert(object|mapping row, function cb, mixed ... extra) {
         } else {
             object key = mutex->lock();
             string id = get_unique_identifier(v);
+            object o;
             //mixed id = schema->get_unique_identifier(v);
-            if (cache[id]) {
-                cache[id]->update(v);
+            if (o = cache[id]) {
+                o->update(v);
             } else {
-                cache[id] = prog();
-                cache[id]->init(v, this);
+                cache[id] = o = prog();
+                o->init(v, this);
             }
-            cb(err, cache[id], @extra);
+            cb(err, o, @extra);
         }
     };
     if (objectp(row)) {
