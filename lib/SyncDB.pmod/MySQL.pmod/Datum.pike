@@ -129,8 +129,11 @@ int(0..1) drop() {
         ret = err;
     };
     delete(cb);
-    return !ret;
-
+    if (!ret) {
+        save_id && remove_call_out(save_id);
+        return 1;
+    } else
+        return 0;
 }
 
 void delete(function(int, mixed...:void)|void cb, mixed ... extra) {
@@ -139,11 +142,18 @@ void delete(function(int, mixed...:void)|void cb, mixed ... extra) {
 
 void save(function(int, mixed...:void)|void cb, mixed ... extra) {
     object key = mutex->lock();
+    if (save_id) {
+        remove_call_out(save_id);
+        save_id = 0;
+    }
     save_unlocked(cb, @extra);
 }
 
+mixed save_id;
+
 void save_later(void|int s) {
-    call_out(save, 5||s);
+    if (save_id) return;
+    save_id = call_out(save, 5||s);
 }
 
 string _sprintf(int type) {
@@ -158,7 +168,7 @@ mixed cast(string type) {
 }
 
 void destroy() {
-    save();
+    // save();
 }
 
 object get_table(function(void:Sql.Sql) get_sql, string name, void|function|program prog) {
