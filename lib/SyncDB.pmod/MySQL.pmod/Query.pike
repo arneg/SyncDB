@@ -46,9 +46,8 @@ void add(string fmt, mixed ... args) {
     this_program::args += args;
 }
 
-//#define DB_DEBUG
 protected mixed `()(Sql.Sql sql) {
-#ifdef DB_DEBUG
+#ifdef DB_TRACE
     array res;
 
     mixed err = catch {
