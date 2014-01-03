@@ -11,12 +11,12 @@ void create_table(Sql.Sql sql, string name, object schema) {
     }
 
     string s = sprintf("CREATE TABLE IF NOT EXISTS `%s` (", name);
-    s += a * ", ";
+    s += a * ",";
     s += ")";
 
-    sql->query(s);
+    .Query(s)(sql);
 
-    array(mapping) tmp = sql->query(sprintf("SHOW INDEX FROM `%s`", name));
+    array(mapping) tmp = .Query(sprintf("SHOW INDEX FROM `%s`", name))(sql);
     mapping mi = mkmapping(tmp->Column_name, allocate(sizeof(tmp), 1));
 
     foreach (schema->index_fields();; object field) {
@@ -28,7 +28,7 @@ void create_table(Sql.Sql sql, string name, object schema) {
 	string q = sprintf("CREATE %s INDEX `%s` ON `%s` (%s)",
 			   (uniq ? " UNIQUE " : ""), field->name, name, field->name);
 
-	sql->query(q);
+        .Query(q)(sql);
     }
 }
 

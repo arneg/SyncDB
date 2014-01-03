@@ -68,7 +68,7 @@ mixed decode_sql(string table, mapping row, mapping|void new) {
 mapping encode_sql(string table, mapping row, mapping|void new) {
     if (!new) new = ([]);
     if (has_index(row, name)) {
-	new[table ? sql_name(table) : name] = (row[name] == Val.null)
+	new[escaped_sql_name(table)] = (row[name] == Val.null)
 				? Val.null
 				: encode_sql_value(row[name]);
     }
@@ -82,6 +82,22 @@ string sql_name(string table) {
 	return sprintf("%s.%s", f->table||table, f->field||name);
     }
     return sprintf("%s.%s", table, name);
+}
+
+string escaped_sql_name(void|string table) {
+    if (table) {
+        object f = this->f_foreign;
+        if (f) {
+            return sprintf("`%s`.`%s`", f->table||table, f->field||name);
+        }
+        return sprintf("`%s`.`%s`", table, name);
+    } else {
+        return sprintf("`%s`", name);
+    }
+}
+
+array(string) escaped_sql_names(string table) {
+    return ({ escaped_sql_name(table) });
 }
 
 array(string) sql_names(string table) {
@@ -126,7 +142,7 @@ object get_filter_parser() {
 
 string sql_type(Sql.Sql sql, void|string type) {
     if (type) 
-	return sprintf("%s %s %s", name, type, flags->sql_type(encode_sql_value) * " ");
+	return sprintf("`%s` %s %s", name, type, flags->sql_type(encode_sql_value) * " ");
     else return 0;
 }
 

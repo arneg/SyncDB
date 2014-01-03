@@ -20,7 +20,6 @@ void trigger(string name, mixed ... args) {
 }
 
 void register_trigger(string name, function cb) {
-    object lock = mutex->lock();
     if (triggers[name]) {
         triggers[name] += ({ cb });
     } else {
@@ -29,7 +28,6 @@ void register_trigger(string name, function cb) {
 }
 
 void unregister_trigger(string name, function cb) {
-    object lock = mutex->lock();
     array a;
     if (a = triggers[name]) {
         a -= ({ cb });
@@ -439,12 +437,12 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
 	} else {
 	    table_o->add_field(type);
 	}
-	t += type->sql_names(table);
+	t += type->escaped_sql_names(table);
     }
 
     // TODO: if this is very slow, we should be using a seperate one for limit queries
-    select_sql = .Query(sprintf("SELECT SQL_CALC_FOUND_ROWS %s FROM %s", t*",", table));
-    _update_sql = .Query(sprintf("UPDATE %s SET ", table_names()*","));
+    select_sql = .Query(sprintf("SELECT SQL_CALC_FOUND_ROWS %s FROM `%s`", t*",", table));
+    _update_sql = .Query(sprintf("UPDATE `%s` SET ", table_names()*"`,`"));
 
     t = ({});
     install_triggers(table);
@@ -460,16 +458,16 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
     t = table_names();
 
     foreach (t; int i; string name) {
-        select_sql += sprintf("%s.version > 0 AND ", name);
+        select_sql += sprintf("`%s`.version > 0 AND ", name);
     }
 
     // Initialize version
 
     foreach (t; int i; string name) {
-	t[i] = sprintf("ABS(MAX(%s.version)) AS '%<s.version'", name);
+	t[i] = sprintf("ABS(MAX(`%s`.version)) AS '%<s.version'", name);
     }
 
-    array r = query("SELECT "+t*", "+" FROM %s WHERE 1;", table_names()*",");
+    array r = query("SELECT "+t*", "+" FROM `%s` WHERE 1;", table_names()*",");
 
     foreach (table_names();; string name) {
         if (!r[0][name+".version"]) r[0][name+".version"] = "0";
