@@ -74,6 +74,10 @@ object sql_error(object sql, mixed err) {
     } else {
         state = "IM001";
     }
+
+    // its not an sql error, afterall
+    if (state == "00000") return err;
+
     return SyncDB.MySQL.Error(state, this, err[0], err[1]);
 }
 
@@ -92,13 +96,8 @@ object sql_error(object sql, mixed err) {
  *    and optional.
  */
 
-#define DB_DEBUG
 private mixed query(mixed ... args) {
-    string s = sprintf(@args);
-#ifdef DB_DEBUG
-   // werror("SQL:\t%s\n", String.width(s) > 8 ? string_to_utf8(s) : s);
-#endif
-    return sql->query(s);
+    return .Query(@args)(sql);
 }
 
 string mapping_implode(mapping m, string s1, string s2) {
@@ -467,7 +466,7 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
 	t[i] = sprintf("ABS(MAX(`%s`.version)) AS '%<s.version'", name);
     }
 
-    array r = query("SELECT "+t*", "+" FROM `%s` WHERE 1;", table_names()*",");
+    array r = query(sprintf("SELECT "+t*", "+" FROM `%s` WHERE 1;", table_names()*"`,`"));
 
     foreach (table_names();; string name) {
         if (!r[0][name+".version"]) r[0][name+".version"] = "0";
@@ -717,7 +716,7 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb, mixed ... e
 
 	.Query where = select_sql + get_where(row);
 	rows = where(sql);
-	if (sizeof(rows) != 1) error("foo");
+	if (sizeof(rows) != 1) error("Got more than one row: %O\n", rows);
         signal_update(schema["version"]->decode_sql(table, rows[0]), rows);
     });
 
