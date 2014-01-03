@@ -27,12 +27,12 @@ void create(object ... m) {
 	}
 	if (type->is_index) index += ({ type->name });
 	if (type->is_key) {
-	    if (key) error("...");
+	    if (key) error("Defined two different keys in one schema.\n");
 	    key = type->name;
 	    id = type;
 	}
 	if (type->is_automatic) {
-	    if (automatic) error("...");
+	    if (automatic) error("Defined two different auto-increment values in one schema\n");
 	    automatic = type->name;
 	}
     }
