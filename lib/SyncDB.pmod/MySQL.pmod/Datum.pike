@@ -53,9 +53,10 @@ void generic_cb(int err, mixed v) {
 }
 
 void update(mapping _data) {
-    this_program::_data = _data;
-    if (_data->version != this_program::_data->version)
+    if (_data->version != this_program::_data->version) {
+        this_program::_data = _data;
         call_out(onchange, 0);
+    }
 }
 
 void onchange() { }
@@ -152,8 +153,9 @@ void save(function(int, mixed...:void)|void cb, mixed ... extra) {
 mixed save_id;
 
 void save_later(void|int s) {
+    object key = mutex->lock();
     if (save_id) return;
-    save_id = call_out(save, 5||s);
+    save_id = call_out(save, s||5);
 }
 
 string _sprintf(int type) {
