@@ -13,6 +13,10 @@ void register_request(object id) {
 private mapping _data = ([]);
 object table;
 
+object get_remote_table(string name, void|program type) {
+    return table->update_manager && table->update_manager->get_table(name, type);
+}
+
 void check_value(string name, mixed key) { }
 
 mixed unique_identifier() {
