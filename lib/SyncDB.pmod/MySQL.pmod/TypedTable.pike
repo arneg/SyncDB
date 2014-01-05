@@ -155,6 +155,9 @@ void invalidate_requests(mixed id) {
 
     if (sizeof(keys)) {
 
+#ifdef CACHE_TRACE
+        werror("invalidating %O\n", keys);
+#endif
         // Tristate cached serve stale cache entries once. we cannot
         // tolerate that, so we have to go for a manual destruct here.
         //map(keys, roxen.invalidate);
