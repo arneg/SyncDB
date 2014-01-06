@@ -2,19 +2,38 @@ inherit .TableManager;
 
 function sqlcb;
 
-mapping(string:array(function)) dependencies = ([]);
+// list of tables keeping references to table 'trigger'+'name'
+mapping(string:mapping(string:array(function))) dependencies = ([]);
 
 void create(function sqlcb) {
     this_program::sqlcb = sqlcb;
 }
-//! @[table_name1] depends on @[table_name2]
-void register_dependency(string table_name1, string table_name2, function check) {
+
+//! register a trigger from a remote table
+void register_dependency(string table, string trigger, function fun) {
+    if (!dependencies[table])
+        dependencies[table] = ([]);
+
+    if (!dependencies[table][trigger])
+        dependencies[table][trigger] = ({});
+
+    dependencies[table][trigger] += ({ fun });
+}
+
+void unregister_dependency(string table, string trigger, function fun) {
+    dependencies[table][trigger] -= ({ fun });
 }
 
 object register_view(string name, program type) {
     object table = type()->get_table(sqlcb, name);
     register_table(name, type, table);
-    table->update_manager = this;
+    table->set_database(this);
+
+    if (has_index(dependencies, name))
+        foreach (dependencies[name]; string trigger; array(function) a)
+            foreach (a;; function fun)
+                table->register_trigger(trigger, fun);
+
     return table;
 }
 

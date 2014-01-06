@@ -10,6 +10,18 @@ void create(string dbname, function(void:Sql.Sql) cb, SyncDB.Schema schema, stri
     ::create(dbname, cb, schema, table);
 }
 
+void set_database(object o) {
+    ::set_database(o);
+    array(object) fields = .get_fields(prog);
+
+    werror("initializing dependencies in %O\n", fields);
+
+    foreach (fields;; object field) {
+        if (field->create_dependencies)
+            field->create_dependencies(this, o);
+    }
+}
+
 void low_select(mixed ... args) {
     ::select(@args);
 }
@@ -176,7 +188,17 @@ void signal_update(SyncDB.Version version, void|array(mapping) rows) {
 }
 
 void destroy() {
+    array(object) fields = .get_fields(prog);
+
     map(indices(_requests), invalidate_requests);
+
+    if (database)
+        foreach (fields;; object field) {
+            if (field->remove_dependencies)
+                field->remove_dependencies(this, database);
+        }
+
+    ::destroy();
 }
 #endif
 
