@@ -20,12 +20,16 @@ void signal_update(SyncDB.Version nversion, void|array(mapping) rows) {
     version = nversion;
     //handle_update(nversion, rows);
 
-    if (update_manager) {
-        update_manager->signal_update(this, nversion, rows);
+    if (database) {
+        database->signal_update(this, nversion, rows);
     }
 }
 
-object update_manager;
+object database;
+
+void set_database(object o) {
+    database = o;
+}
 
 // update triggered from somewhere else
 void handle_update(SyncDB.Version nversion, void|array(mapping) rows) {
@@ -33,7 +37,10 @@ void handle_update(SyncDB.Version nversion, void|array(mapping) rows) {
 }
 
 void destroy() {
-    if (update_manager) update_manager->unregister_table(this);
+    if (database) {
+        database->unregister_table(this);
+        database = 0;
+    }
 }
 
 SyncDB.Version table_version() {
