@@ -16,16 +16,16 @@ program get_critbit() {
 }
 #endif
 
-string encode_sql_value(object date) {
+string encode_sql_value(object datetime) {
     // TODO:: mysql-FROM_UNIXTIME is not an option, use ints?
-    if (!(objectp(date) || (!prog || Program.inherits(object_program(date), prog))))
-	error("Type mismatch. Expected %O. Got %O\n", prog, date);
-    return date->set_timezone("UTC")->format_time();
+    if (!(objectp(datetime) || (!prog || Program.inherits(object_program(datetime), prog))))
+	error("Type mismatch. Expected %O. Got %O\n", prog, datetime);
+    return datetime->set_timezone("UTC")->format_time();
 }
 
 object decode_sql_value(string s) {
-    object date = Calendar.dwim_time(s + " UTC");
-    return prog ? prog(date->ux) : date;
+    object datetime = Calendar.dwim_time(s + " UTC");
+    return prog ? prog(datetime->ux) : datetime;
 }
 
 #if constant(Serialization)
@@ -35,7 +35,7 @@ object get_parser() {
 #endif
 
 string encode_json() {
-    return ::encode_json("SyncDB.Types.Date");
+    return ::encode_json("SyncDB.Types.Datetime");
 }
 
 string sql_type(Sql.Sql sql) {
