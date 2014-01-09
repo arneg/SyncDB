@@ -19,3 +19,11 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb2, mixed ... 
     restriction->insert(row);
     table->insert(row, cb2, extra);
 }
+
+mixed `->(string name) {
+    mixed v = call_function(::`->, name, this); 
+
+    if (v) return v;
+
+    return predef::`->(table, name);
+}

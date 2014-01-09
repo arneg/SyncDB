@@ -311,6 +311,10 @@ array(string) table_names() {
     return table_objects()->name;
 }
 
+object restrict(object filter) {
+    return .Restriction(this, filter);
+}
+
 mapping tables = ([ ]);
 .Query select_sql, _update_sql;
 object restriction;

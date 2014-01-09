@@ -14,8 +14,6 @@ void set_database(object o) {
     ::set_database(o);
     array(object) fields = .get_fields(prog);
 
-    werror("initializing dependencies in %O\n", fields);
-
     foreach (fields;; object field) {
         if (field->create_dependencies)
             field->create_dependencies(this, o);
@@ -132,6 +130,10 @@ mixed `->(string index) {
     }
 
     return call_function(::`->, index, this);
+}
+
+object restrict(object filter) {
+    return .TypedRestriction(this, filter);
 }
 
 #if constant(Roxen)
