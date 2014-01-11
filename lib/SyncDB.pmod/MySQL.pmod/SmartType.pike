@@ -66,6 +66,7 @@ void create() {
 MAP_TYPE(Integer)
 MAP_TYPE(String)
 MAP_TYPE(JSON)
+MAP_TYPE(Datetime)
 MAP_TYPE(Date)
 MAP_TYPE(Enum)
 MAP_TYPE(Float)

@@ -112,7 +112,8 @@ void create(mapping|void overwrites) {
     Type = Serialization.Factory.generate_structs(([
 	"_integer" : SyncDB.Types.Integer(""),
 	"_string" : SyncDB.Types.String(""),
-	"_date" : SyncDB.Types.Date("", Calendar.Second),
+	"_datetime" : SyncDB.Types.Datetime("", Calendar.Second),
+	"_date" : SyncDB.Types.Date("", Calendar.Day),
 	"_vector" : SyncDB.Types.Vector("", ({})),
 	"_range" : SyncDB.Types.Range("", Flag, Flag),
 	"_version" : SyncDB.Types.Version("", ({ "foo" })),

@@ -17,20 +17,19 @@ program get_critbit() {
 #endif
 
 string encode_sql_value(object date) {
-    // TODO:: mysql-FROM_UNIXTIME is not an option, use ints?
     if (!(objectp(date) || (!prog || Program.inherits(object_program(date), prog))))
 	error("Type mismatch. Expected %O. Got %O\n", prog, date);
-    return date->set_timezone("UTC")->format_time();
+    return date->format_ymd();
 }
 
 object decode_sql_value(string s) {
-    object date = Calendar.dwim_time(s + " UTC");
+    object date = Calendar.dwim_day(s);
     return prog ? prog(date->ux) : date;
 }
 
 #if constant(Serialization)
 object get_parser() {
-    return Serialization.Types.Time(prog);
+//Date?    return Serialization.Types.Time(prog);
 }
 #endif
 
@@ -39,5 +38,5 @@ string encode_json() {
 }
 
 string sql_type(Sql.Sql sql) {
-    return ::sql_type(sql, "DATETIME");
+    return ::sql_type(sql, "DATE");
 }
