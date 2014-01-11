@@ -327,42 +327,42 @@ object restriction;
 }
 
 void install_triggers(string table) {
-    catch {
-	query(sprintf("DROP TRIGGER insert_%s;", table));
-    };
-    catch {
-	query(sprintf("DROP TRIGGER update_%s;", table));
-    };
-
-    query(sprintf(#"CREATE TRIGGER insert_%s
-	BEFORE INSERT ON %<s
-	FOR EACH ROW
-	BEGIN
+    string insertt = sprintf(#"BEGIN
             DECLARE v INT;
-	    SELECT MAX(ABS(%<s.version)) INTO v FROM %<s WHERE 1;
+	    SELECT MAX(ABS(%s.version)) INTO v FROM %<s WHERE 1;
 	    IF v IS NULL THEN
 		SET NEW.version=1;
 	    ELSE 
 		SET NEW.version=v + 1;
 	    END IF;
-	END;
-    ;
-    ", table));
-    query(sprintf(#"CREATE TRIGGER update_%s
-	BEFORE UPDATE ON %<s
-	FOR EACH ROW
-	BEGIN
+	END", table);
+    string updatet = sprintf(#"BEGIN
             DECLARE v INT;
             IF NEW.version > 0 THEN
-                SELECT MAX(ABS(%<s.version)) INTO v FROM %<s WHERE 1;
+                SELECT MAX(ABS(%s.version)) INTO v FROM %<s WHERE 1;
                 IF v IS NULL THEN
                     SET NEW.version=1;
                 ELSE 
                     SET NEW.version=v + 1;
                 END IF;
             END IF;
-	END;
-    ", table));
+	END", table);
+
+    array a = query("SHOW TRIGGERS WHERE `Trigger` = %s;", "insert_"+table);
+
+    if (!sizeof(a) || a[0]->Statement != insertt) {
+        if (sizeof(a))
+            query(sprintf("DROP TRIGGER insert_%s;", table));
+        query(sprintf("CREATE TRIGGER insert_%s BEFORE INSERT ON %<s FOR EACH ROW %s ;", table, insertt));
+    }
+
+    a = query("SHOW TRIGGERS WHERE `Trigger` = %s;", "update_"+table);
+
+    if (!sizeof(a) || a[0]->Statement != updatet) {
+        if (sizeof(a))
+            query(sprintf("DROP TRIGGER update_%s;", table));
+        query(sprintf("CREATE TRIGGER update_%s BEFORE UPDATE ON %<s FOR EACH ROW %s ;", table, updatet));
+    }
 }
 
 object gen_where(mapping t) {
