@@ -68,6 +68,7 @@ MAP_TYPE(String)
 MAP_TYPE(JSON)
 MAP_TYPE(Datetime)
 MAP_TYPE(Date)
+MAP_TYPE(Time)
 MAP_TYPE(Enum)
 MAP_TYPE(Float)
 
