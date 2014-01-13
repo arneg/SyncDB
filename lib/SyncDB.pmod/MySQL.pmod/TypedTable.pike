@@ -194,7 +194,7 @@ void destroy() {
 
     map(indices(_requests), invalidate_requests);
 
-    if (database)
+    if (database && arrayp(fields))
         foreach (fields;; object field) {
             if (field->remove_dependencies)
                 field->remove_dependencies(this, database);
