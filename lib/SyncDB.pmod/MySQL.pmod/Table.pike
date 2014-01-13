@@ -720,7 +720,11 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb, mixed ... e
 
 	.Query where = select_sql + get_where(row);
 	rows = where(sql);
-	if (sizeof(rows) != 1) error("Got more than one row: %O\n", rows);
+	if (sizeof(rows) != 1) {
+            if (!sizeof(rows)) {
+                error("Trigger on insert not working on table %s\n", table_name());
+            } else error("Got more than one row: %O\n", rows);
+        }
         signal_update(schema["version"]->decode_sql(table, rows[0]), rows);
     });
 
