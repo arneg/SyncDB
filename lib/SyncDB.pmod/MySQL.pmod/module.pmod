@@ -25,7 +25,7 @@ void create_table(Sql.Sql sql, string name, object schema) {
 	if (mi[field->name]) continue;
 
 	int(0..1) uniq = field->is_unique;
-	string q = sprintf("CREATE %s INDEX `%s` ON `%s` (%s)",
+	string q = sprintf("CREATE %s INDEX `%s` ON `%s` (`%s`)",
 			   (uniq ? " UNIQUE " : ""), field->name, name, field->name);
 
         .Query(q)(sql);
