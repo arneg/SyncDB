@@ -653,7 +653,6 @@ void delete(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
 
 void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb, mixed ... extra) {
     mixed err;
-    int(0..1) noerr;
     array rows;
     object sql = this_program::sql;
 
