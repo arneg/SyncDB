@@ -1,12 +1,20 @@
 inherit .TableManager;
 
 function sqlcb;
+string name;
+
 
 // list of tables keeping references to table 'trigger'+'name'
 mapping(string:mapping(string:array(function))) dependencies = ([]);
 
-void create(function sqlcb) {
+void create(function sqlcb, void|string name) {
     this_program::sqlcb = sqlcb;
+    this_program::name = name;
+    if (name) .register_database(name, this);
+}
+
+void destroy() {
+    if (name) .unregister_database(name, this);
 }
 
 //! register a trigger from a remote table
@@ -37,11 +45,17 @@ object register_view(string name, program type) {
     return table;
 }
 
-void signal_update(object table, object version, void|array(mapping) rows) {
+void signal_update(string|object table, object version, void|array(mapping) rows) {
     mapping t = all_tables();
-    string name = table->table_name();
 
-    if (has_index(t, name)) (t[name] - ({ table }))->handle_update(version, rows);
+    if (objectp(table)) {
+        // local update, propagate to all tables globally
+        string name = table->table_name();
+        if (has_index(t, name)) (t[name] - ({ table }))->handle_update(version, rows);
+        if (this_program::name) .signal_update(this, name, version, rows);
+    } else {
+        if (has_index(t, table)) t[table]->handle_update(version, rows);
+    }
 }
 
 void unregister_table(object table) {

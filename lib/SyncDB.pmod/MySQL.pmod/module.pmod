@@ -50,3 +50,20 @@ array(object) get_fields(program type) {
 void set_fields(program type, array(object) fields) {
     type_to_fields[type] = fields;
 }
+
+mapping(string:array(object)) all_databases = ([]);
+
+void register_database(string name, object db) {
+    if (!has_index(all_databases, name)) all_databases[name] = ({});
+    all_databases[name] += ({ db });
+}
+
+void unregister_database(string name, object db) {
+    if (has_index(all_databases, name))
+        all_databases[name] -= ({ db });
+}
+
+void signal_update(object db, string table, object version, void|array rows) {
+    string name = db->name;
+    (all_databases[name] - ({ db }))->signal_update(table, version, rows);
+}
