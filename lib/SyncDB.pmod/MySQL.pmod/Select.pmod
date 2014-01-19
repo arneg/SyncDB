@@ -1,12 +1,14 @@
 class ASC(object type) {
     object encode_sql(object table) {
-        return SyncDB.MySQL.Query(type->sql_name(table->table) + " ASC");
+        array(string) names = type->escaped_sql_names(table->table);
+        return SyncDB.MySQL.Query(names * " ASC," + " ASC");
     }
 }
 
 class DESC(object type) {
     object encode_sql(object table) {
-        return SyncDB.MySQL.Query(type->sql_name(table->table) + " DESC");
+        array(string) names = type->escaped_sql_names(table->table);
+        return SyncDB.MySQL.Query(names * " DESC," + " DESC");
     }
 }
 
