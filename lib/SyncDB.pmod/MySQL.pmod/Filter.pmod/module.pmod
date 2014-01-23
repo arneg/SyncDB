@@ -99,7 +99,7 @@ class Equal {
 	if (objectp(value) && Program.inherits(object_program(value), Serialization.Atom)) 
 	    value = type->parser()->decode(value);
 #endif
-	type->encode_sql(table->table, row, new);
+	type->encode_sql(table->table_name(), row, new);
 	return SyncDB.MySQL.Query("(", new, " = ", " AND ") + ")";
     }
 
@@ -124,7 +124,7 @@ class Ne {
 	if (objectp(value) && Program.inherits(object_program(value), Serialization.Atom)) 
 	    value = type->parser()->decode(value);
 #endif
-	type->encode_sql(table->table, row, new);
+	type->encode_sql(table->table_name(), row, new);
 	return SyncDB.MySQL.Query("(", new, " != ", " OR ") + ")";
     }
 
@@ -146,7 +146,7 @@ class _In {
 
     object encode_sql(object table) {
         string l = "%s" + ",%s" * (sizeof(value) - 1);
-        string fmt = sprintf("(%s in (%s))", type->sql_name(table->table), l);
+        string fmt = sprintf("(%s in (%s))", type->sql_name(table->table_name()), l);
 
 	return SyncDB.MySQL.Query(fmt, @map(value, type->encode_sql_value));
     }
@@ -177,7 +177,7 @@ class Match {
 
     object encode_sql(object table) {
 	mapping new = ([]);
-	type->encode_sql(table->table, row, new);
+	type->encode_sql(table->table_name(), row, new);
 	return SyncDB.MySQL.Query("(", new, " like ", " AND ") + ")";
     }
 }
@@ -190,7 +190,7 @@ class Unary(object type, string op) {
     }
 
     object encode_sql(object table, function quote) {
-	array a = type->sql_names(table->table);
+	array a = type->sql_names(table->table_name());
 
 	foreach (a; int i; mixed v) {
 	    a[i] = sprintf("%s %s", v, op);
@@ -278,9 +278,9 @@ class Overlaps {
 	werror("Range: %O %O", object_program(range), range);
 
 	return sprintf("(%s <= %s AND %s >= %s)",
-		       start(table)->sql_name(table->table),
+		       start(table)->sql_name(table->table_name()),
 		       start(table)->encode_sql_value(range->stop, quote),
-		       stop(table)->sql_name(table->table),
+		       stop(table)->sql_name(table->table_name()),
 		       stop(table)->encode_sql_value(range->start, quote));
     }
     string _sprintf(int type) {
@@ -298,9 +298,9 @@ class Contains {
 	werror("Range: %O %O", object_program(range), range);
 
 	return sprintf("(%s >= %s AND %s <= %s)",
-		       start(table)->sql_name(table->table),
+		       start(table)->sql_name(table->table_name()),
 		       start(table)->encode_sql_value(range->start, quote),
-		       stop(table)->sql_name(table->table),
+		       stop(table)->sql_name(table->table_name()),
 		       stop(table)->encode_sql_value(range->stop, quote));
     }
     string _sprintf(int type) {
