@@ -13,7 +13,7 @@ string encode_sql_value(mixed val) {
 }
 
 mixed decode_sql_value(string s) {
-    return Standards.JSON.decode_utf8(s);
+    return Standards.JSON.decode(s);
 }
 
 string encode_json(string|void type) {
@@ -21,5 +21,5 @@ string encode_json(string|void type) {
 }
 
 string sql_type(Sql.Sql sql) {
-    return ::sql_type(sql, "LONGBLOB");
+    return ::sql_type(sql, "LONGTEXT");
 }
