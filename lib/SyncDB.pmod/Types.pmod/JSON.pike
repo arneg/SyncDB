@@ -8,7 +8,8 @@ object get_parser() {
 
 string encode_sql_value(mixed val) {
     // TODO:: reencode JSON to canonical format?
-    return string_to_utf8(Standards.JSON.encode(val));
+    // we are using unicode mode, so in fact this needs to remain unencoded!
+    return (Standards.JSON.encode(val));
 }
 
 mixed decode_sql_value(string s) {
