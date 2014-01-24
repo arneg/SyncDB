@@ -8,10 +8,18 @@ array requests = ({ });
 void register_request(object id) {
     id->misc->cachekey->add_activation_cb(table->register_request, unique_identifier());
 }
+
+void invalidate_requests() {
+    table->invalidate_requests(unique_identifier());
+}
 #endif
 
 private mapping _data = ([]);
 object table;
+
+int(0..1) is_dummy() {
+    return !sizeof(_data);
+}
 
 object get_remote_table(string name, void|program type) {
     return table->update_manager && table->update_manager->get_table(name, type);
