@@ -579,7 +579,7 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
 	if (affected_rows == 1 || oversion >= nversion) {
             mapping new = sanitize_result(rows[0]);
             trigger("after_update", new, keys);
-            signal_update(nversion, new);
+            signal_update(nversion, ({ new }));
 	    cb(0, new, @extra);
 	} else {
 	    cb(1, SyncDB.Error.Collision(this, nversion, oversion), @extra);
