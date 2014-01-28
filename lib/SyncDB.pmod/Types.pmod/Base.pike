@@ -147,5 +147,5 @@ string sql_type(Sql.Sql sql, void|string type) {
 }
 
 string _sprintf(int t) {
-    return sprintf("%O(%O)", this_program, name);
+    return sprintf("%O(%O, %s)", this_program, name, map(flags, Function.curry(sprintf)("%O")) * ", ");
 }

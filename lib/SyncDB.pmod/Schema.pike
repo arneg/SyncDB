@@ -8,6 +8,10 @@ object restriction;
 
 mapping default_row = ([]);
 
+string _sprintf(int t) {
+    return sprintf("%O(%O)", this_program, fields);
+}
+
 void create(object ... m) {
     fields = m;
     this_program::m = mkmapping(m->name, m);
