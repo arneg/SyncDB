@@ -723,13 +723,13 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb, mixed ... e
                 error("Trigger on insert not working on table %s\n", table_name());
             } else error("Got more than one row: %O\n", rows);
         }
-        signal_update(schema["version"]->decode_sql(table, rows[0]), sanitize_result(rows));
+        rows = sanitize_result(rows);
+        signal_update(rows[0]->version, rows);
     });
 
     unlock_tables(sql);
 
     if (!err) {
-        row = sanitize_result(rows[0]);
         trigger("after_insert", row);
 	cb(0, row, @extra);
     } else {
