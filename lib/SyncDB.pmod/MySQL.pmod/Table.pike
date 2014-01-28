@@ -579,7 +579,7 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
 	if (affected_rows == 1 || oversion >= nversion) {
             mapping new = sanitize_result(rows[0]);
             trigger("after_update", new, keys);
-            signal_update(nversion, rows);
+            signal_update(nversion, new);
 	    cb(0, new, @extra);
 	} else {
 	    cb(1, SyncDB.Error.Collision(this, nversion, oversion), @extra);
@@ -723,7 +723,7 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb, mixed ... e
                 error("Trigger on insert not working on table %s\n", table_name());
             } else error("Got more than one row: %O\n", rows);
         }
-        signal_update(schema["version"]->decode_sql(table, rows[0]), rows);
+        signal_update(schema["version"]->decode_sql(table, rows[0]), sanitize_result(rows));
     });
 
     unlock_tables(sql);
