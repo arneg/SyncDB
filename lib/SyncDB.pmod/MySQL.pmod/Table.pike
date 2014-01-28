@@ -173,7 +173,7 @@ class Table {
     mapping insert(mapping row) {
 	mapping new = ([]);
 	foreach (writable();; object type) {
-	    if (type == schema->id) continue;
+	    if (type->is_automatic) continue;
 	    type->encode_sql(name, row, new);
 	}
 	return sizeof(new) ? new : 0;
