@@ -44,8 +44,8 @@ function(void:Sql.Sql) _sql_cb;
 Sql.Sql _sql;
 
 Sql.Sql `sql() {
-    if (_sql_cb && (!_sql || !_sql->is_open() || _sql->ping() == -1)) {
-	_sql = _sql_cb();
+    if (_sql_cb) {
+        return _sql_cb();
     }
 
     return _sql;
@@ -54,7 +54,6 @@ Sql.Sql `sql() {
 Sql.Sql `sql=(Sql.Sql|function(void:Sql.Sql) o) {
     if (functionp(o)) {
 	_sql_cb = o;
-	_sql = o();
     } else {
 	_sql = o;
     }
@@ -743,6 +742,7 @@ array last_modified;
 void request_update(void|function cb, mixed ... args) {
     array t = table_objects();
     array(mapping) rows = ({});
+    object sql = this_program::sql;
     array mod = t->modified_sql(sql);
 
     if (!equal(mod, last_modified)) {
