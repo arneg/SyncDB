@@ -207,6 +207,8 @@ void destroy() {
 void handle_update(SyncDB.Version version, void|array(mapping) rows) {
     ::handle_update(version, rows);
 
+    trigger("change");
+
     foreach (rows;; mapping row) {
         mixed id = get_unique_identifier(row);
 #if constant(Roxen)
