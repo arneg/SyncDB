@@ -315,7 +315,7 @@ object restrict(object filter) {
 }
 
 mapping tables = ([ ]);
-.Query select_sql, _update_sql;
+.Query select_sql, _update_sql, delete_sql;
 object restriction;
 
 .Query update_sql(array(string) fields, array(mixed) values) {
@@ -445,6 +445,7 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
     // TODO: if this is very slow, we should be using a seperate one for limit queries
     select_sql = .Query(sprintf("SELECT SQL_CALC_FOUND_ROWS %s FROM `%s`", t*",", table));
     _update_sql = .Query(sprintf("UPDATE `%s` SET ", table_names()*"`,`"));
+    delete_sql = .Query(sprintf("DELETE FROM `%s` WHERE ", table));
 
     t = ({});
     install_triggers(table);
@@ -595,6 +596,7 @@ void delete(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
     mixed err;
     object sql = this_program::sql;
 
+    int locked = 0;
     object where = get_where(keys);
     mapping t = ([]);
 
@@ -606,25 +608,34 @@ void delete(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
         uwhere += " AND " + restriction->encode_sql(this);
     }
 
-    schema["version"]->encode_sql(table, ([ "version" : -version ]), t);
+    // if the primary key is not automatic, we do a real delete
+    if (schema->automatic) {
+        schema["version"]->encode_sql(table, ([ "version" : -version ]), t);
 
-    int locked = 0;
+        trigger("before_delete", keys);
 
-    trigger("before_delete", keys);
-
-    err = sql_error(sql, catch {
-	lock_tables(sql);
-	locked = 1;
-	.Query q = update_sql(indices(t), values(t)) + uwhere;
-	q(sql);
-	if (sql->master_sql->info) {
-	    string info = sql->master_sql->info();
-	    if (!info || -1 != search(info, "Changed: 0")) {
-		error("Collision: %O\n", info);
-	    }
-	}
-	noerr = 1;
-    });
+        err = sql_error(sql, catch {
+            lock_tables(sql);
+            locked = 1;
+            .Query q = update_sql(indices(t), values(t)) + uwhere;
+            q(sql);
+            if (sql->master_sql->info) {
+                string info = sql->master_sql->info();
+                if (!info || -1 != search(info, "Changed: 0")) {
+                    error("Collision: %O\n", info);
+                }
+            }
+            noerr = 1;
+        });
+    } else {
+        err = sql_error(sql, catch {
+            lock_tables(sql);
+            locked = 1;
+            .Query q = delete_sql + uwhere;
+            q(sql);
+            noerr = 1;
+        });
+    }
 
     if (locked) unlock_tables(sql);
 

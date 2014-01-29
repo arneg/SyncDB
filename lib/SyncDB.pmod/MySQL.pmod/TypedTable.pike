@@ -104,7 +104,7 @@ array(object) fetch(void|object filter, void|object order, void|object limit) {
     mixed ret;
     void cb(int err, mixed v) {
         if (!err) ret = v;
-        else throw(v);
+        else error("fetch failed: %O\n", v);
     };
     select_complex(filter||SyncDB.MySQL.Filter.TRUE, order, limit, cb);
     return ret;
@@ -114,7 +114,7 @@ object put(mapping row) {
     object ret;
     void cb(int err, mixed v) {
         if (!err) ret = v;
-        else throw(v);
+        else error("insert failed: %O\n", v);
     };
     insert(row, cb);
     return ret;
@@ -182,6 +182,8 @@ void invalidate_requests(mixed id) {
 
 void signal_update(SyncDB.Version version, void|array(mapping) rows) {
     ::signal_update(version, rows);
+
+    trigger("change");
 
     foreach (rows;; mapping row) {
         mixed id = get_unique_identifier(row);
