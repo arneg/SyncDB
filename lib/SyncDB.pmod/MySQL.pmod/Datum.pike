@@ -66,6 +66,7 @@ void generic_cb(int err, mixed v) {
 
 void update(mapping _data) {
     if (_data->version != this_program::_data->version) {
+        if (!_data->version) error("version set to zero!\n");
         this_program::_data = _data;
         call_out(onchange, 0);
     }
@@ -126,6 +127,7 @@ protected void save_unlocked(function(int, mixed...:void)|void cb, mixed ... ext
             // this is an explicit update, and it should bypass the update() method which is supposed
             // to be overloaded to handle change events.
             call_out(onchange, 0);
+            if (!v->version) error("version set to zero.\n");
             _data = v;
             _modified = ([]);
             //werror("updated %O to %O\n", this, _data);
