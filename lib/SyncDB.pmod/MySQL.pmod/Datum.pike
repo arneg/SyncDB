@@ -144,15 +144,19 @@ protected void save_unlocked(function(int, mixed...:void)|void cb, mixed ... ext
 
 int(0..1) drop() {
     int(0..1) ret;
+    mixed v;
     void cb(int(0..1) err, mixed b) {
         ret = err;
+        v = b;
     };
     delete(cb);
     if (!ret) {
         save_id && remove_call_out(save_id);
         return 1;
-    } else
+    } else {
+        werror("delete failed: %O\n", v);
         return 0;
+    }
 }
 
 void delete(function(int, mixed...:void)|void cb, mixed ... extra) {
