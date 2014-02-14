@@ -34,7 +34,6 @@ mixed unique_identifier() {
 void init(mapping _data, object table) {
     this_program::_data = _data;
     this_program::table = table;
-    if (!_data->version) error("version set to zero!\n");
 }
 
 mixed `->(string name) {
