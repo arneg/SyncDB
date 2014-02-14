@@ -735,7 +735,8 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb, mixed ... e
             } else error("Got more than one row: %O\n", rows);
         }
         rows = sanitize_result(rows);
-        signal_update(rows[0]->version, rows);
+        row = rows[0];
+        signal_update(row->version, rows);
     });
 
     unlock_tables(sql);
