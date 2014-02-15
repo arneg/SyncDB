@@ -46,3 +46,8 @@ void destroy() {
 SyncDB.Version table_version() {
     return version;
 }
+
+object remote_table(string name, void|program prog) {
+    if (!database) error("Cannot access remote tables without database.\n");
+    return database->get_table(name, prog);
+}

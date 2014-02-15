@@ -194,3 +194,7 @@ object get_table(function(void:Sql.Sql) get_sql, string name, void|function|prog
 void create_table(function(void:Sql.Sql) get_sql, string name) {
     .create_table(get_sql(), name, schema);
 }
+
+object remote_table(string name, void|program type) {
+    return table->remote_table(name, type);
+}
