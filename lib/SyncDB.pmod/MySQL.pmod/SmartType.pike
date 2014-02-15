@@ -4,6 +4,10 @@ array `fields() {
     return .get_fields(this_program);
 }
 
+mapping `nfields() {
+    return .get_nfields(this_program);
+}
+
 object `schema() {
     // TODO: accessing .type_to_fields here directly seems to be a problem
     return .get_schema(this_program);
