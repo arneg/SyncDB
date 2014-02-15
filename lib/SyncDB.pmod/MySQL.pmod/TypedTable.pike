@@ -124,7 +124,11 @@ mixed `->(string index) {
     if (has_prefix(index, "fetch_by_")) {
         string field = index[sizeof("fetch_by_")..];
         array(object) cb(mixed v, void|object order, void|object limit) {
-            return fetch(schema[field]->Equal(v), order, limit);
+            if (arrayp(v)) {
+                return fetch(schema[field]->In(v), order, limit);
+            } else {
+                return fetch(schema[field]->Equal(v), order, limit);
+            }
         };
         return cb;
     }
