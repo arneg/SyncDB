@@ -22,7 +22,11 @@ mixed `->(string name) {
     if (has_prefix(name, "fetch_by_")) {
         string field = name[sizeof("fetch_by_")..];
         array(object) cb(mixed v, void|object order, void|object limit) {
-            return fetch(table->schema[field]->Equal(v), order, limit);
+            if (arrayp(v)) {
+                return fetch(table->schema[field]->In(v), order, limit);
+            } else {
+                return fetch(table->schema[field]->Equal(v), order, limit);
+            }
         };
         return cb;
     }
