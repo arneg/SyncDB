@@ -48,6 +48,10 @@ mixed `[](string name) {
     return UNDEFINED;
 }
 
+void set_dirty(string name) {
+    _modified[name] = _data[name];
+}
+
 mixed `->=(string name, mixed value) {
     if (has_index(_data, name)) {
         check_value(name, value);
