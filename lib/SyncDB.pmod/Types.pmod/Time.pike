@@ -18,7 +18,7 @@ string encode_sql_value(object time) {
 }
 
 object decode_sql_value(string s) {
-    object time = Calendar.dwim_time(s);
+    object time = Calendar.parse("%Y-%M-%D %h:%m:%s %z", Calendar.now()->format_ymd() + " " + s + " UTC");
     return prog ? prog(time->ux) : time;
 }
 
