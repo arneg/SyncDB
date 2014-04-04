@@ -430,20 +430,25 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
 	}
     }
 
+    array table_fields = sql->list_fields(table);
+
     foreach (schema;; object type) {
-	if (type->is_foreign) {
-	    string t2 = type->f_foreign->table;
-	    if (!has_index(tables, t2))
-		tables[t2] = Table(t2);
-	    tables[t2]->add_field(type);
-	} else {
-	    table_o->add_field(type);
-	}
-	t += type->escaped_sql_names(table);
+        if (type->is_foreign) {
+            string t2 = type->f_foreign->table;
+            if (!has_index(tables, t2))
+                tables[t2] = Table(t2);
+            tables[t2]->add_field(type);
+        } else {
+            table_o->add_field(type);
+        }
     }
 
+    if (sizeof(table_fields) != sizeof(table_o->fields))
+        t = `+(@table_o->fields->escaped_sql_names(table));
+
     // TODO: if this is very slow, we should be using a seperate one for limit queries
-    select_sql = .Query(sprintf("SELECT SQL_CALC_FOUND_ROWS %s FROM `%s`", t*",", table));
+    select_sql = .Query(sprintf("SELECT SQL_CALC_FOUND_ROWS %s FROM `%s`",
+                        sizeof(t) ? t*"," : "*", table));
     _update_sql = .Query(sprintf("UPDATE `%s` SET ", table_names()*"`,`"));
     delete_sql = .Query(sprintf("DELETE FROM `%s` WHERE ", table));
 
