@@ -4,10 +4,10 @@ array(object) fetch(void|object filter, void|object order, void|object limit) {
     return table->fetch(filter ? filter & restriction : restriction, order, limit);
 }
 
-object put(mapping row) {
+object put(mapping row, mixed ... args) {
     row += ([]);
     restriction->insert(row);
-    return table->put(row);
+    return table->put(row, @args);
 }
 
 void register_request(mixed cachekey, void|mixed id) {
