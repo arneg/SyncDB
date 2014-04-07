@@ -384,6 +384,9 @@ object get_where(mapping keys) {
 
 string get_unique_identifier(mapping row) {
     function quote = sql->quote;
+    if (!schema->id) {
+        error("Key field missing. Cannot generate unique identifier for row.\n");
+    }
     // OMFG!!
     return schema->id->Equal(row[schema->key])->encode_sql(this, quote)->render(quote);
 }
