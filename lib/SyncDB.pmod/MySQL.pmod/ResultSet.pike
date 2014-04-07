@@ -21,3 +21,7 @@ int _sizeof() {
 object _get_iterator() {
     return get_iterator(a);
 }
+
+void sort(function cmp, mixed ... args) {
+    a = Array.sort_array(a, cmp, @args);
+}
