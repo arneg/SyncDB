@@ -5,6 +5,9 @@ void create(object table, object filter) {
     this_program::restriction = filter;
 }
 
+object restrict(object filter) {
+    return this_program(table, this_program::restriction & filter);
+}
 
 void select_complex(object filter, object order, object limit, mixed cb, mixed ... extra) {
     table->select_complex(filter & restriction, order, limit, cb, @extra);
