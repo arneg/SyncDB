@@ -1,19 +1,19 @@
-private mapping(string:array(object)) tables = ([]);
+private mapping(string:array(object)) local_tables = ([]);
 
 void unregister_view(string name, program type, object table) {
-    if (!tables[name]) return;
-    tables[name] -= ({ table });
+    if (!local_tables[name]) return;
+    local_tables[name] -= ({ table });
 }
 
 void register_table(string name, program type, object table) {
-    if (!tables[name]) {
-        tables[name] = ({ });
+    if (!local_tables[name]) {
+        local_tables[name] = ({ });
     }
-    tables[name] += ({ table });
+    local_tables[name] += ({ table });
 }
 
 mapping(string:array(object)) all_tables() {
-    return tables;
+    return local_tables;
 }
 
 class RemoteTable(string name, void|program type) {
@@ -41,12 +41,12 @@ class RemoteTable(string name, void|program type) {
 };
 
 object low_get_table(string name, void|program type) {
-    if (!tables[name] || !sizeof(tables[name]))
+    if (!local_tables[name] || !sizeof(local_tables[name]))
         return 0;
 
-    if (!type) return tables[name][0];
+    if (!type) return local_tables[name][0];
 
-    foreach (tables[name];; object table) {
+    foreach (local_tables[name];; object table) {
         if (table->prog == type) return table;
     }
 
@@ -61,3 +61,6 @@ function table_cb(string name, void|program type) {
     return Function.curry(get_table)(name, type);
 }
 
+void remove_all_tables() {
+    local_tables = ([]);
+}
