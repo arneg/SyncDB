@@ -7,14 +7,14 @@ class Base(object type) {
 class ASC {
     inherit Base;
     string encode_sql(object table, function quote) {
-	return sprintf("%s ASC", type->sql_name(table->table));
+	return sprintf("%s ASC", type->sql_name(table->table_name()));
     }
 }
 
 class DESC {
     inherit Base;
     string encode_sql(object table, function quote) {
-	return sprintf("%s DESC", type->sql_name(table->table));
+	return sprintf("%s DESC", type->sql_name(table->table_name()));
     }
 }
 
