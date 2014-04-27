@@ -91,6 +91,7 @@ void insert(object|mapping row, function cb, mixed ... extra) {
                 cache[id] = o = prog();
                 o->init(v, this);
             }
+            call_out(cache[id]->onchange, 0);
             cb(err, o, @extra);
         }
     };
