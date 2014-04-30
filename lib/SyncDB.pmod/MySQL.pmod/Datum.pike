@@ -70,7 +70,6 @@ void generic_cb(int err, mixed v) {
 
 void update(mapping _data) {
     if (_data->version != this_program::_data->version) {
-        if (!_data->version) error("version set to zero!\n");
         this_program::_data = _data;
         call_out(onchange, 0);
     }

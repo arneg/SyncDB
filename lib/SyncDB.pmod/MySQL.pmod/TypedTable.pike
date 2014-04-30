@@ -225,6 +225,9 @@ void handle_update(SyncDB.Version version, void|array(mapping) rows) {
         if (cache[id]) {
             // we make sure to copy it here, since complex types could be shared otherwise
             cache[id]->update(copy_value(row));
+            if (!row->version) {
+                m_delete(cache, id);
+            }
         }
     }
 }
