@@ -193,6 +193,8 @@ void signal_update(SyncDB.Version version, void|array(mapping) rows) {
     foreach (rows;; mapping row) {
         mixed id = get_unique_identifier(row);
         invalidate_requests(id);
+        // this is the local trigger, we dont need to notify the data
+        // themselves, since they were the source of the change event.
     }
 }
 
@@ -224,6 +226,7 @@ void handle_update(SyncDB.Version version, void|array(mapping) rows) {
 
         if (cache[id]) {
             // we make sure to copy it here, since complex types could be shared otherwise
+            // ->update will call onchange!
             cache[id]->update(copy_value(row));
             if (!row->version) {
                 m_delete(cache, id);
