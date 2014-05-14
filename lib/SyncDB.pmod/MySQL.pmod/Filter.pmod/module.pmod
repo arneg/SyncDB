@@ -12,11 +12,23 @@ class Base {
     }
 
     mixed `&(mixed o) {
-        return And(o);
+        if (o) return And(o);
+        return this;
+    }
+
+    mixed ``&(mixed o) {
+        if (o) return And(o);
+        return this;
     }
 
     mixed `|(mixed o) {
-        return Or(o);
+        if (o) return Or(o);
+        return this;
+    }
+
+    mixed ``|(mixed o) {
+        if (o) return Or(o);
+        return this;
     }
 
     void insert(mapping row) {
@@ -87,8 +99,10 @@ class FieldFilter {
     }
 }
 
-class Equal {
+class BinaryFilter {
     inherit FieldFilter;
+
+    string operator;
 
     object encode_sql(object table) {
 	mapping new = ([]);
@@ -100,8 +114,14 @@ class Equal {
 	    value = type->parser()->decode(value);
 #endif
 	type->encode_sql(table->table_name(), row, new);
-	return SyncDB.MySQL.Query("(", new, " = ", " AND ") + ")";
+	return SyncDB.MySQL.Query("(", new, operator, " AND ") + ")";
     }
+}
+
+class Equal {
+    inherit BinaryFilter;
+
+    string operator = " = ";
 
     string _sprintf(int type) {
 	return sprintf("Equal(%O, %O)", field, value);
@@ -245,114 +265,42 @@ class False {
     }
 }
 
-// TODO: these should get the decoded value passed, instead of relying on 
-// parser creation
-#if constant(Serialization)
-class RangeLookup(string field, Serialization.Atom value) {
+class Gt {
+    inherit BinaryFilter;
 
-    object parser(object table) {
-	return master()->resolv("SyncDB.Serialization.Range")(start(table)->parser(), stop(table)->parser());
-    }
+    string operator = " > ";
 
-    object start(object table) {
-	object type = table->schema[field];
-	if (type->fields && arrayp(type->fields)) {
-	    return type->fields[0];
-	} else return type;
-    }
-
-    object stop(object table) {
-	object type = table->schema[field];
-	if (type->fields && arrayp(type->fields)) {
-	    return type->fields[1];
-	} else return type;
-    }
-}
-
-class Overlaps {
-    inherit RangeLookup;
-
-    string encode_sql(object table, function quote) {
-	object range;
-	range = parser(table)->decode(value);
-	werror("Range: %O %O", object_program(range), range);
-
-	return sprintf("(%s <= %s AND %s >= %s)",
-		       start(table)->sql_name(table->table_name()),
-		       start(table)->encode_sql_value(range->stop, quote),
-		       stop(table)->sql_name(table->table_name()),
-		       stop(table)->encode_sql_value(range->start, quote));
-    }
     string _sprintf(int type) {
-	return sprintf("Overlaps(%O)", field);
+	return sprintf("Gt(%O, %O)", field, value);
     }
 }
 
-class Contains {
-    inherit RangeLookup;
+class Ge {
+    inherit BinaryFilter;
 
-    string encode_sql(object table, function quote) {
-	object range;
-	range = parser(table)->decode(value);
+    string operator = " >= ";
 
-	werror("Range: %O %O", object_program(range), range);
-
-	return sprintf("(%s >= %s AND %s <= %s)",
-		       start(table)->sql_name(table->table_name()),
-		       start(table)->encode_sql_value(range->start, quote),
-		       stop(table)->sql_name(table->table_name()),
-		       stop(table)->encode_sql_value(range->stop, quote));
-    }
     string _sprintf(int type) {
-	return sprintf("Overlaps(%O)", field);
+	return sprintf("Ge(%O, %O)", field, value);
     }
 }
 
-class Lt(string field, Serialization.Atom value) {
-    string encode_sql(object table, function quote) {
-	object type = table->schema[field];
-	return sprintf("%s < %s", table->get_sql_name(field),
-		       type->encode_sql_value(type->parser()->decode(value),
-					      quote));
-    }
-    string _sprint(int type) {
-	return sprintf("Lt(%O)", field);
-    }
-}
+class Lt {
+    inherit BinaryFilter;
 
-class Le(string field, Serialization.Atom value) {
-    string encode_sql(object table, function quote) {
-	object type = table->schema[field];
-	return sprintf("%s <= %s", table->get_sql_name(field),
-		       type->encode_sql_value(type->parser()->decode(value),
-					      quote));
-    }
+    string operator = " < ";
+
     string _sprintf(int type) {
-	return sprintf("Le(%O)", field);
+	return sprintf("Lt(%O, %O)", field, value);
     }
 }
 
-class Gt(string field, Serialization.Atom value) {
-    string encode_sql(object table, function quote) {
-	object type = table->schema[field];
-	return sprintf("%s > %s", table->get_sql_name(field),
-		       type->encode_sql_value(type->parser()->decode(value),
-					      quote));
-    }
-    string _sprintf(int type) {
-	return sprintf("Gt(%O)", field);
-    }
-}
+class Le {
+    inherit BinaryFilter;
 
-class Ge(string field, Serialization.Atom value) {
-    string encode_sql(object table, function quote) {
-	object type = table->schema[field];
-	return sprintf("%s >= %s", table->get_sql_name(field),
-		       type->encode_sql_value(type->parser()->decode(value),
-					      quote));
-    }
+    string operator = " <= ";
+
     string _sprintf(int type) {
-	return sprintf("Ge(%O)", field);
+	return sprintf("Le(%O, %O)", field, value);
     }
 }
-#endif
