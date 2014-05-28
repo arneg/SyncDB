@@ -33,3 +33,11 @@ mixed `->(string name) {
 
     return ::`->(name);
 }
+
+array(object) get_fields() {
+    return table->get_fields();
+}
+
+mapping(string:object) get_nfields() {
+    return table->get_nfields();
+}

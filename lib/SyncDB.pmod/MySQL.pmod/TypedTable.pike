@@ -10,6 +10,14 @@ void create(string dbname, function(void:Sql.Sql) cb, SyncDB.Schema schema, stri
     ::create(dbname, cb, schema, table);
 }
 
+array(object) get_fields() {
+    return .get_fields(prog);
+}
+
+mapping(string:object) get_nfields() {
+    return .get_nfields(prog);
+}
+
 void set_database(object o) {
     ::set_database(o);
     array(object) fields = .get_fields(prog);
