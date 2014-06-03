@@ -36,9 +36,9 @@ void select(object filter, function(int, mixed...:void) cb, mixed ... extra) {
     select_complex(filter, 0, 0, cb, extra);
 }
 
-object dummy() {
+object dummy(void|mapping data) {
     object o = prog();
-    o->init(([]), this);
+    o->init(data||([]), this);
     return o;
 }
 
