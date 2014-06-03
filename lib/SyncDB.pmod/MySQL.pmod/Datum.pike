@@ -18,7 +18,7 @@ private mapping _data = ([]);
 object table;
 
 int(0..1) is_dummy() {
-    return !sizeof(_data);
+    return !this->id;
 }
 
 object get_remote_table(string name, void|program type) {
