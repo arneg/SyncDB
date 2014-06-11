@@ -190,6 +190,10 @@ mixed cast(string type) {
     error("Cannot cast %O to %s\n", this, type);
 }
 
+mapping clone() {
+    return (mapping)this - filter(schema->fields, schema->fields->is_unique)->name;
+}
+
 void destroy() {
     // save();
 }
