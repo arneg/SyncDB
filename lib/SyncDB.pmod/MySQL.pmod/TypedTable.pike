@@ -113,7 +113,10 @@ array(object) fetch(void|object filter, void|object order, void|object limit) {
     mixed ret;
     void cb(int err, mixed v) {
         if (!err) ret = v;
-        else error("fetch failed: %O\n", v);
+        else {
+            werror("fetch failed:\n");
+            master()->handle_error(v);
+        }
     };
     select_complex(filter||SyncDB.MySQL.Filter.TRUE, order, limit, cb);
     return ret;
@@ -123,7 +126,10 @@ object put(mapping row) {
     object ret;
     void cb(int err, mixed v) {
         if (!err) ret = v;
-        else error("insert failed: %O\n", v);
+        else {
+            werror("insert failed:\n");
+            master()->handle_error(v);
+        }
     };
     insert(row, cb);
     return ret;
