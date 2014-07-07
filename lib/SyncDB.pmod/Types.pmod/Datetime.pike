@@ -2,14 +2,6 @@ inherit .Base;
 
 function(int:object)|program prog;
 
-constant _types = ::_types + ([
-    "prog" : -1
-]);
-
-void create(string name, SyncDB.Flags.Base ... flags) {
-    ::create(name, @flags);
-}
-
 #if constant(ADT.CritBit)
 program get_critbit() {
     return ADT.CritBit.DateTree;

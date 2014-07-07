@@ -1,4 +1,4 @@
-protected array(Field) _fields = ({});
+final protected array(Field) _fields = ({});
 
 array `fields() {
     return .get_fields(this_program);
@@ -8,9 +8,11 @@ mapping `nfields() {
     return .get_nfields(this_program);
 }
 
+private object _schema;
+
 object `schema() {
-    // TODO: accessing .type_to_fields here directly seems to be a problem
-    return .get_schema(this_program);
+    if (!_schema) _schema = .get_schema(this_program);
+    return _schema;
 }
 
 protected class Field {
@@ -30,36 +32,31 @@ protected class Field {
 };
 
 void create() {
-    if (!.get_schema(this_program)) {
-        array(object) syncdb_types;
-        int i = 0;
-        array(string) ind = call_function(::_indices, 3);
+    array fields = _fields;
+    _fields = 0;
+    if (schema) return;
 
-        foreach (ind;; string name) {
-            if (has_prefix(name, "`")) {
-                ind -= ({ name, name[1..] });
-            }
+    int i = 0;
+    array(string) ind = call_function(::_indices, 3);
+
+    foreach (ind;; string name) {
+        if (has_prefix(name, "`")) {
+            ind -= ({ name, name[1..] });
         }
-
-        foreach (ind;; string name) {
-            mixed val = call_function(::`->, name, this);
-            if (objectp(val) && Program.inherits(object_program(val), Field)) {
-                val->name = name;
-            }
-        }
-
-        // remove overloaded ones
-        _fields = filter(_fields, _fields->name);
-
-        syncdb_types = _fields->syncdb_type();
-        object schema = SyncDB.Schema(@syncdb_types);
-        .set_schema(this_program, schema);
-        .set_fields(this_program, _fields);
-        _fields = 0;
-        //werror("created schema %O for type %O.\n", schema, this_program);
-    } else {
-        //werror("schema %O for type %O already created.\n", .get_schema(this_program), this_program);
     }
+
+    foreach (ind;; string name) {
+        mixed val = call_function(::`->, name, this);
+        if (objectp(val) && Program.inherits(object_program(val), Field)) {
+            val->name = name;
+        }
+    }
+
+    // remove overloaded ones
+    fields = filter(fields, fields->name);
+
+    .set_schema(this_program, SyncDB.Schema(@fields->syncdb_type()));
+    .set_fields(this_program, fields);
 }
 
 #define MAP_TYPE(name)    object name (mixed ... flags) {       \
