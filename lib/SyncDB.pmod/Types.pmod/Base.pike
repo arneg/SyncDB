@@ -1,46 +1,48 @@
 constant is_readable = 1;
 constant is_writable = 1;
 
-array(SyncDB.Flags.Base) flags;
-int priority = 50;
+private array(SyncDB.Flags.Base) _flags;
+mapping(string:SyncDB.Flags.Base) flags = ([]);
 string name;
-string table;
-
-constant _types = ([
-    "name" : "string",
-    "table" : -1,
-    "priority" : -1,
-    "_parser" : -1
-]);
 
 mixed `->(string index) {
-    if (has_prefix(index, "is_")) {
-	array(int(0..1)) is = filter(flags[index], lambda(mixed m) { return !zero_type(m); });
-	if (sizeof(is)) return max(@is);
-	return this[index];
-    } else if (has_prefix(index, "f_")) {
-	array t = filter(flags + ({ this }), lambda(object o) { return o["is_"+index[2..]]; });
-	if (!sizeof(t)) {
-	    return UNDEFINED;
-	}
-	return t[0];
-    } else if (has_index(SyncDB.MySQL.Filter, index)) {
+    mixed v = call_function(::`->, index, this);
+    
+    if (v) return v;
+
+    if (has_index(SyncDB.MySQL.Filter, index)) {
 	return Function.curry(SyncDB.MySQL.Filter[index])(this);
     }
-    return call_function(::`->, index, this);
+
+    if (has_prefix(index, "is_")) {
+        object f = flags[index[3..]];
+        return f && f[index];
+    } else if (has_prefix(index, "f_")) {
+        return flags[index[2..]];
+    } 
+
+    return UNDEFINED;
 }
 
 void get_default(mapping def) {
-    object f = this->f_default;
+    object f = flags["default"];
 
     if (f) {
 	def[name] = f->default_value;
     }
 }
 
-void create(string name, SyncDB.Flags.Base ... flags) {
+void create(string name, SyncDB.Flags.Base ... _flags) {
     this_program::name = name;
-    this_program::flags = flags;
+    this_program::_flags = _flags;
+
+    foreach (_flags;; object f) {
+        foreach (indices(f);; string s) {
+            if (has_prefix(s, "is_")) {
+                flags[s[3..]] = f;
+            }
+        }
+    }
 }
 
 mixed decode_sql_value(string s) {
@@ -75,24 +77,23 @@ mapping encode_sql(string table, mapping row, mapping|void new) {
     return new;
 }
 
-// TODO: this can be cached
 string sql_name(string table) {
-    object f = this->f_foreign;
+    object f = flags->foreign;
     if (f) {
-	return sprintf("%s.%s", f->table||table, f->field||name);
+	return f->table||table + "." + f->field||name;
     }
-    return sprintf("%s.%s", table, name);
+    return table + "." + name;
 }
 
 string escaped_sql_name(void|string table) {
     if (table) {
-        object f = this->f_foreign;
+        object f = flags->foreign;
         if (f) {
             return sprintf("`%s`.`%s`", f->table||table, f->field||name);
         }
-        return sprintf("`%s`.`%s`", table, name);
+        return "`" + table + "`.`" + name + "`";
     } else {
-        return sprintf("`%s`", name);
+        return "`" + name + "`";
     }
 }
 
@@ -107,7 +108,7 @@ array(string) sql_names(string table) {
 string encode_json(string p, void|array extra) {
     if (this->is_hidden) return "";
     if (!extra) extra = ({});
-    extra = ({ Standards.JSON.encode(name) }) + extra + filter(map(flags, Standards.JSON.encode), sizeof);
+    extra = ({ Standards.JSON.encode(name) }) + extra + filter(map(_flags, Standards.JSON.encode), sizeof);
     return sprintf("(new %s(%s))", p, extra * (",\n"+" "*8));
 }
 
@@ -142,10 +143,10 @@ object get_filter_parser() {
 
 string sql_type(Sql.Sql sql, void|string type) {
     if (type) 
-	return sprintf("`%s` %s %s", name, type, flags->sql_type(encode_sql_value) * " ");
+	return sprintf("`%s` %s %s", name, type, _flags->sql_type(encode_sql_value) * " ");
     else return 0;
 }
 
 string _sprintf(int t) {
-    return sprintf("%O(%O, %s)", this_program, name, map(flags, Function.curry(sprintf)("%O")) * ", ");
+    return sprintf("%O(%O, %s)", this_program, name, map(_flags, Function.curry(sprintf)("%O")) * ", ");
 }

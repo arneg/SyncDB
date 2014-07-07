@@ -2,14 +2,6 @@ inherit .Base;
 
 function(int:object)|program prog;
 
-constant _types = ::_types + ([
-    "prog" : -1
-]);
-
-void create(string name, SyncDB.Flags.Base ... flags) {
-    ::create(name, @flags);
-}
-
 string encode_sql_value(object time) {
     // TODO:: mysql-FROM_UNIXTIME is not an option, use ints?
     if (!(objectp(time) || (!prog || Program.inherits(object_program(time), prog))))
