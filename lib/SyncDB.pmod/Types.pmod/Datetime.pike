@@ -16,8 +16,16 @@ string encode_sql_value(object datetime) {
 }
 
 object decode_sql_value(string s) {
+#if 0 && constant(System.TM)
+    object tm = System.TM();
+    if (!tm->strptime("%Y-%m-%d %H:%M:%S", s)) {
+        error("Could not Parse %O\n", s);
+    }
+    return Calendar.Second("unix", tm->unix_time() - System.TM(1970, 0, 1, 0, 0, 0)->unix_time());
+#else
     object datetime = Calendar.parse("%Y-%M-%D %h:%m:%s %z", s + " UTC");
     return prog ? prog(datetime->ux) : datetime;
+#endif
 }
 
 #if constant(Serialization)

@@ -3,10 +3,15 @@ constant is_writable = 1;
 
 private array(SyncDB.Flags.Base) _flags;
 mapping(string:SyncDB.Flags.Base) flags = ([]);
+mapping(string:int(0..1)) is = ([
+    "readable" : 1,
+    "writable" : 1,
+]);
 string name;
 
 mixed `->(string index) {
-    mixed v = call_function(::`->, index, this);
+    mixed v = ::`->(index, this);
+    //mixed v = call_function(::`->, index, this);
     
     if (v) return v;
 
@@ -15,8 +20,7 @@ mixed `->(string index) {
     }
 
     if (has_prefix(index, "is_")) {
-        object f = flags[index[3..]];
-        return f && f[index];
+        return is[index[3..]];
     } else if (has_prefix(index, "f_")) {
         return flags[index[2..]];
     } 
@@ -39,7 +43,9 @@ void create(string name, SyncDB.Flags.Base ... _flags) {
     foreach (_flags;; object f) {
         foreach (indices(f);; string s) {
             if (has_prefix(s, "is_")) {
-                flags[s[3..]] = f;
+                string n = s[3..];
+                flags[n] = f;
+                is[n] = f[s];
             }
         }
     }
