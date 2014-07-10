@@ -118,3 +118,15 @@ array(string) tables() {
     }
     return sort(indices(t));
 }
+
+mapping decode_sql(string table, mapping row) {
+    mapping new = ([]);
+    fields->decode_sql(table, row, new);
+    return new;
+}
+
+mapping encode_sql(string table, mapping row) {
+    mapping new = ([]);
+    fields->encode_sql(table, row, new);
+    return new;
+}

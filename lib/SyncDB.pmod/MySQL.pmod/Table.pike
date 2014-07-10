@@ -784,7 +784,7 @@ void request_update(void|function cb, mixed ... args) {
             restriction += " AND " + restriction->encode_sql(this);
         }
 
-        rows = map(_low_update_sql(sql), sanitize_result);
+        rows = sanitize_result(_low_update_sql(sql));
 
         if (sizeof(rows)) {
             array aa = Array.columns(rows->version->a, enumerate(sizeof(version)));
@@ -802,17 +802,9 @@ void request_update(void|function cb, mixed ... args) {
 
 mixed sanitize_result(mixed rows) {
     if (mappingp(rows)) {
-	mapping new = ([ ]);
-
-	schema->fields->decode_sql(table, rows, new);
-
-	//return rows->deleted ? SyncDB.DeletedRow(new) : new;;
-        return new;
+	return schema->decode_sql(table, rows);
     } else {
-        foreach (rows; int i; mapping m) {
-            rows[i] = sanitize_result(m);
-        }
-	return rows;
+        return map(rows, Function.curry(schema->decode_sql)(table));
     }
 
 }

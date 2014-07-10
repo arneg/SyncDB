@@ -73,7 +73,7 @@ mixed decode_sql(string table, mapping row, mapping|void new) {
     return UNDEFINED;
 }
 
-mapping encode_sql(string table, mapping row, mapping|void new) {
+mapping encode_sql(string table, mapping row, mapping new) {
     if (!new) new = ([]);
     if (has_index(row, name)) {
 	new[escaped_sql_name(table)] = (row[name] == Val.null)
