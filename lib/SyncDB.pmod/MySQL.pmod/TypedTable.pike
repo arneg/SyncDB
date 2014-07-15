@@ -209,6 +209,10 @@ void signal_update(SyncDB.Version version, void|array(mapping) rows) {
         invalidate_requests(id);
         // this is the local trigger, we dont need to notify the data
         // themselves, since they were the source of the change event.
+
+        if (!row->version && cache[id]) {
+            m_delete(cache, id);
+        }
     }
 }
 
