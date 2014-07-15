@@ -32,7 +32,8 @@ object decode_sql_value(string s) {
 #if constant(System.TM)
     object tm = System.TM();
     if (!tm->strptime("%Y-%m-%d %H:%M:%S", s)) {
-        error("Could not Parse %O\n", s);
+        werror("Parsing %O as NULL\n", s);
+        return Val.null;
     }
     return Calendar.Second("unix", tm->unix_time() + tm->gmtoff);
 #else
