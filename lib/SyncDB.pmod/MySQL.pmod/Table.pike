@@ -521,6 +521,9 @@ void select_complex(object filter, object order, object limit, mixed cb, mixed .
             index += limit->encode_sql(this);
 
 	rows = (select_sql + index)(sql);
+
+        rows = sanitize_result(rows);
+
         if (limit) {
             rows = SyncDB.MySQL.ResultSet(rows);
             rows->num_rows = (int)sql->query("SELECT FOUND_ROWS() as num;")[0]->num;
@@ -528,7 +531,7 @@ void select_complex(object filter, object order, object limit, mixed cb, mixed .
     });
 
     if (!err) {
-        cb(0, sanitize_result(rows), @extra);
+        cb(0, rows, @extra);
     } else {
 	cb(1, err, @extra);
     }
