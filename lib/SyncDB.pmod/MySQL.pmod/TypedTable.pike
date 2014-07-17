@@ -1,26 +1,31 @@
 inherit SyncDB.MySQL.Table;
 mapping cache = set_weak_flag(([]), Pike.WEAK_VALUES);
 Thread.Mutex mutex = Thread.Mutex();
-function|program prog;
+function|program|object prog;
+object smart_type;
 
 void create(string dbname, function(void:Sql.Sql) cb, SyncDB.Schema schema, string table,
-            void|function|program prog) {
-    
-    this_program::prog = prog||.Datum;
+            object smart_type) {
+    this_program::smart_type = smart_type;
+    this_program::prog = smart_type->get_datum();
     ::create(dbname, cb, schema, table);
 }
 
-array(object) get_fields() {
-    return .get_fields(prog);
+array(object) `fields() {
+    return .get_fields(object_program(smart_type));
 }
 
-mapping(string:object) get_nfields() {
-    return .get_nfields(prog);
+mapping(string:object) `nfields() {
+    return .get_nfields(object_program(smart_type));
 }
 
 void set_database(object o) {
     ::set_database(o);
-    array(object) fields = .get_fields(prog);
+    array(object) fields = .get_fields(object_program(smart_type));
+
+    if (!fields) {
+        error("cannot find fields for %O in %O\n", smart_type, .type_to_fields);
+    }
 
     foreach (fields;; object field) {
         if (field->create_dependencies)

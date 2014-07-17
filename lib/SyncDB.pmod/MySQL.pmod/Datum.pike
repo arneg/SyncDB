@@ -1,9 +1,3 @@
-inherit .SmartType;
-
-mapping _modified = ([]);
-
-array requests = ({ });
-
 #if constant(Roxen)
 void register_request(object id) {
     id->misc->cachekey->add_activation_cb(table->register_request, unique_identifier());
@@ -13,19 +7,31 @@ void invalidate_requests() {
     table->invalidate_requests(unique_identifier());
 }
 #endif
+Thread.Mutex mutex = Thread.Mutex();
 
-private mapping _data = ([]);
+protected mapping _modified = ([]);
+protected mapping _data = ([]);
 object table;
+
+array `fields() {
+    return table->fields;
+}
+
+mapping `nfields() {
+    return table->nfields;
+}
+
+object `smart_type() {
+    return table->smart_type;
+}
+
 
 int(0..1) is_dummy() {
     return !this->id;
 }
 
-object get_remote_table(string name, void|program type) {
-    return table->update_manager && table->update_manager->get_table(name, type);
-}
-
 void check_value(string name, mixed key) { }
+void onchange() { }
 
 mixed unique_identifier() {
     return table->get_unique_identifier(_data);
@@ -36,13 +42,13 @@ void init(mapping _data, object table) {
     this_program::table = table;
 }
 
-mixed `->(string name) {
+protected mixed `->(string name) {
     if (has_index(_modified, name)) return _modified[name];
     if (has_index(_data, name)) return _data[name];
     return call_function(::`->, name, this);
 }
 
-mixed `[](string name) {
+protected mixed `[](string name) {
     if (has_index(_modified, name)) return _modified[name];
     if (has_index(_data, name)) return _data[name];
     return UNDEFINED;
@@ -60,7 +66,7 @@ void set_dirty(string name) {
     _modified[name] = _data[name];
 }
 
-mixed `->=(string name, mixed value) {
+protected mixed `->=(string name, mixed value) {
     if (has_index(_data, name)) {
         check_value(name, value);
         _modified[name] = value;
@@ -70,7 +76,7 @@ mixed `->=(string name, mixed value) {
     return call_function(::`->=, name, value, this);
 }
 
-void generic_cb(int err, mixed v) {
+protected void generic_cb(int err, mixed v) {
     if (err) {
         werror("%O->save() failed: %O\n", this, v);
     }
@@ -82,8 +88,6 @@ void update(mapping _data) {
         call_out(onchange, 0);
     }
 }
-
-void onchange() { }
 
 string describe() {
     // this will always be there
@@ -109,8 +113,6 @@ void modify(mapping diff) {
     foreach (diff; string name; mixed value) check_value(name, value);
     _modified += diff - ({ "version" });
 }
-
-Thread.Mutex mutex = Thread.Mutex();
 
 protected mapping id_data() {
     mapping m = ([]);
@@ -149,6 +151,8 @@ protected void save_unlocked(function(int, mixed...:void)|void cb, mixed ... ext
     table->update(_modified + id_data(), _data->version, _cb);
 }
 
+protected mixed save_id;
+
 int(0..1) drop() {
     int(0..1) ret;
     mixed v;
@@ -167,6 +171,7 @@ int(0..1) drop() {
 }
 
 void delete(function(int, mixed...:void)|void cb, mixed ... extra) {
+    object key = mutex->lock();
     table->delete(id_data(), _data->version, cb||generic_cb);
 }
 
@@ -178,8 +183,6 @@ void save(function(int, mixed...:void)|void cb, mixed ... extra) {
     }
     save_unlocked(cb, @extra);
 }
-
-mixed save_id;
 
 void save_later(void|int s) {
     object key = mutex->lock();
@@ -199,20 +202,14 @@ mixed cast(string type) {
 }
 
 mapping clone() {
+    object schema = table->schema;
     return (mapping)this - filter(schema->fields, schema->fields->is_unique)->name;
 }
 
-void destroy() {
-    // save();
+object get_remote_table(string name, void|program type) {
+    return table->update_manager && table->update_manager->get_table(name, type);
 }
 
-object get_table(function(void:Sql.Sql) get_sql, string name, void|function|program prog) {
-    return .TypedTable(name, get_sql, schema, name, prog||this_program);
-}
-
-void create_table(function(void:Sql.Sql) get_sql, string name) {
-    .create_table(get_sql(), name, schema);
-}
 
 object remote_table(string name, void|program type) {
     return table->remote_table(name, type);
