@@ -60,8 +60,13 @@ string encode_sql_value(mixed v) {
     return v;
 }
 
+private string last_table;
+private string last_sql_name;
+
+#define SQL_NAME(table) ((last_table == table) ? last_sql_name : (last_sql_name = sql_name(last_table = table)))
+
 mixed decode_sql(string table, mapping row, mapping|void new) {
-    string n = sql_name(table);
+    string n = SQL_NAME(table);
     mixed v;
     if (has_index(row, n)) {
 	v = row[n];
@@ -109,7 +114,7 @@ array(string) escaped_sql_names(string table) {
 }
 
 array(string) sql_names(string table) {
-    return ({ sql_name(table) });
+    return ({ SQL_NAME(table) });
 }
 
 string encode_json(string p, void|array extra) {
