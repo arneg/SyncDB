@@ -583,7 +583,7 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
                     sql->query("SELECT MAX(ABS(version)) FROM "+table_name())
             );
         }
-	if (affected_rows == 1 || oversion >= nversion) {
+	if (affected_rows == 1) {
             mapping new = sanitize_result(rows[0]);
             trigger("after_update", new, keys);
             signal_update(nversion, ({ new }));
