@@ -34,7 +34,7 @@ void check_value(string name, mixed key) { }
 void onchange() { }
 
 mixed unique_identifier() {
-    return table->get_unique_identifier(_data);
+    return smart_type->unique_identifier(this);
 }
 
 void init(mapping _data, object table) {

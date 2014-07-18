@@ -74,16 +74,17 @@ void select_complex(object filter, object order, object limit,
 
         cb(0, v, @extra);
     };
-    if (object_program(filter) == SyncDB.MySQL.Filter.Equal) {
+    if (object_program(filter) == SyncDB.MySQL.Filter.Equal && filter->type->is->key) {
         object key = mutex->lock();
-        function quote = sql->quote;
-        string id = filter->encode_sql(this, quote)->render(quote);
+        mixed id = filter->value;
+
         if (has_index(cache, id)) {
             object o = cache[id];
             destruct(key);
             cb(0, ({ o }));
             return;
         }
+
         destruct(key);
     }
     ::select_complex(filter, order, limit, _cb);

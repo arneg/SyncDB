@@ -46,6 +46,10 @@ protected class Field {
     }
 };
 
+mixed unique_identifier(mapping|object row) {
+    return row[schema->key];
+}
+
 void create() {
     if (schema) return;
 
