@@ -117,7 +117,7 @@ class Table {
     .Query modified_sql;
 
     int(0..1) `is_automatic() {
-	return schema->id->is_automatic;
+	return schema->id->is->automatic;
     }
 
     void create(string name) {
@@ -172,7 +172,7 @@ class Table {
     mapping insert(mapping row) {
 	mapping new = ([]);
 	foreach (writable();; object type) {
-	    if (type->is_automatic) continue;
+	    if (type->is->automatic) continue;
 	    type->encode_sql(name, row, new);
 	}
 	return sizeof(new) ? new : 0;
@@ -412,8 +412,8 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
 #define CASE(x) if (Program.inherits(object_program(type), (x)))
     foreach (schema;; object type) {
 	string field = type->name;
-	if (type->is_link) {
-	    mapping type = type->f_link;
+	if (type->is->link) {
+	    mapping type = type->flags->link;
 	    foreach (type->tables; string name; string fid) {
 		program p;
 		CASE(SyncDB.Flags.Join) {
@@ -426,7 +426,7 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
 		    error("Unsupported link flag.\n");
 		}
 		tables[name] = p(name, field, fid);
-		if (table_o->sql_schema[field]->flags->is_automatic && tables[name]->is_automatic && schema[fid]->is_writable) {
+		if (table_o->sql_schema[field]->is->automatic && tables[name]->is->automatic && schema[fid]->is->writable) {
 		    error("Link fields cannot be both automatic in %s and %s (%O, %O).\n", table, name, fid, schema[fid]->flags);
 		}
 	    }
@@ -436,8 +436,8 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
     array table_fields = sql->list_fields(table);
 
     foreach (schema;; object type) {
-        if (type->is_foreign) {
-            string t2 = type->f_foreign->table;
+        if (type->is->foreign) {
+            string t2 = type->flags->foreign->table;
             if (!has_index(tables, t2))
                 tables[t2] = Table(t2);
             tables[t2]->add_field(type);
@@ -713,7 +713,7 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb, mixed ... e
 	foreach (table_objects(); ; Table t) {
 	    mapping new = t->insert(row);
 	    if (!new) {
-		if (t->is_automatic && sizeof(t->writable())) {
+		if (t->is->automatic && sizeof(t->writable())) {
 		    new = ([]);
 		    // DEAD
 		}
@@ -731,7 +731,7 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb, mixed ... e
 		row[t->id] = (int)last[t->fid];
 	    }
 	    
-	    if (t == table_o && schema[schema->key]->is_automatic) {
+	    if (t == table_o && schema[schema->key]->is->automatic) {
 		mixed last = sql->query("SELECT LAST_INSERT_ID() as id;");
 		if (sizeof(last)) last = last[0];
 		row[schema->key] = (int)last->id;

@@ -29,13 +29,13 @@ void create(object ... m) {
 	    restriction = type;
 	    continue;
 	}
-	if (type->is_index) index += ({ type->name });
-	if (type->is_key) {
+	if (type->is->index) index += ({ type->name });
+	if (type->is->key) {
 	    if (key) error("Defined two different keys in one schema.\n");
 	    key = type->name;
 	    id = type;
 	}
-	if (type->is_automatic) {
+	if (type->is->automatic) {
 	    if (automatic) error("Defined two different auto-increment values in one schema\n");
 	    automatic = type->name;
 	}
@@ -63,7 +63,7 @@ mixed `[](mixed in) {
 }
 
 array(SyncDB.Types.Base) index_fields() {
-    return filter(fields, fields->is_index);
+    return filter(fields, fields->is->index);
 }
 
 void add_type(object type) {
@@ -91,13 +91,13 @@ object parser(function|void filter) {
 
 object parser_in() {
     return parser(lambda(string field, SyncDB.Types.Base type) {
-	return type->is_writable && !type->is_automatic || field == "version" || type->is_key;
+	return type->is->writable && !type->is->automatic || field == "version" || type->is->key;
     });
 }
 
 object parser_out() {
     return parser(lambda(string field, SyncDB.Types.Base type) {
-	  return type->is_readable && !type->is_hidden; 
+	  return type->is->readable && !type->is->hidden; 
     });
 }
 #endif
@@ -113,7 +113,7 @@ Iterator _get_iterator() {
 array(string) tables() {
     mapping t = ([ ]);
     foreach (m; string name; object type) {
-	if (!type->is_link) continue;
+	if (!type->is->link) continue;
 	t += type->f_link->tables;
     }
     return sort(indices(t));
