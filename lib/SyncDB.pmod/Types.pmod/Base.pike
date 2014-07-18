@@ -9,24 +9,25 @@ mapping(string:int(0..1)) is = ([
 ]);
 string name;
 
-mixed `->(string index) {
-    mixed v = ::`->(index, this);
-    //mixed v = call_function(::`->, index, this);
-    
-    if (v) return v;
-
-    if (has_index(SyncDB.MySQL.Filter, index)) {
-	return Function.curry(SyncDB.MySQL.Filter[index])(this);
-    }
-
-    if (has_prefix(index, "is_")) {
-        return is[index[3..]];
-    } else if (has_prefix(index, "f_")) {
-        return flags[index[2..]];
-    } 
-
-    return UNDEFINED;
+#define MAP(name)     mixed ` ## name ( ) {                           \
+    return Function.curry(SyncDB.MySQL.Filter.## name)(this);   \
 }
+
+MAP(Or)
+MAP(And)
+MAP(Equal)
+MAP(Ne)
+MAP(In)
+MAP(Match)
+MAP(True)
+MAP(False)
+MAP(Gt)
+MAP(Ge)
+MAP(Lt)
+MAP(Le)
+
+#undef MAP
+
 
 void get_default(mapping def) {
     object f = flags["default"];
