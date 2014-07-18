@@ -38,19 +38,12 @@ mixed unique_identifier() {
 }
 
 void init(mapping _data, object table) {
-    this_program::_data = _data;
+    this_program::_data += _data;
     this_program::table = table;
 }
 
-protected mixed `->(string name) {
-    if (has_index(_modified, name)) return _modified[name];
-    if (has_index(_data, name)) return _data[name];
-    return call_function(::`->, name, this);
-}
-
 protected mixed `[](string name) {
-    if (has_index(_modified, name)) return _modified[name];
-    if (has_index(_data, name)) return _data[name];
+    if (has_index(_data, name)) return _modified[name] || _data[name];
     return UNDEFINED;
 }
 
@@ -64,6 +57,11 @@ mixed `[]=(string name, mixed value) {
 
 void set_dirty(string name) {
     _modified[name] = _data[name];
+}
+
+protected mixed `->(string name) {
+    if (has_index(_data, name)) return _modified[name] || _data[name];
+    return call_function(::`->, name, this);
 }
 
 protected mixed `->=(string name, mixed value) {
