@@ -1,4 +1,4 @@
-inherit .Base;
+inherit .Simple;
 
 #if constant(Serialization)
 object get_parser() {
@@ -22,4 +22,12 @@ string encode_json(string|void type) {
 
 string sql_type(Sql.Sql sql) {
     return ::sql_type(sql, "LONGTEXT");
+}
+
+void generate_decode_value(object buf, string val) {
+    buf->add("%H(%s)", Standards.JSON.decode, val);
+}
+
+void generate_encode_value(object buf, string val) {
+    buf->add("%H(%s)", Standards.JSON.encode, val);
 }

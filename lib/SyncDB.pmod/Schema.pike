@@ -119,14 +119,49 @@ array(string) tables() {
     return sort(indices(t));
 }
 
+private mapping(string:object) coders = ([]);
+
+object generate_coder(string table) {
+    object buf = SyncDB.CodeGen();
+
+    buf->add("mapping decode_sql(mapping row) {\n"
+             "mapping new = mkmapping(%c, allocate(%d, Val.null));\n"
+             "mixed v;\n", fields->name, sizeof(fields));
+    foreach (fields;; object f) {
+        if (f->generate_decode) f->generate_decode(buf, table);
+        else buf->add("%H(%c, row, new);\n", f->decode_sql, table);
+    }
+    buf->add(" return new;\n }");
+
+    buf->add("mapping encode_sql(mapping row) {\n"
+             "mapping new = ([]);\n"
+             "mixed v;\n", fields->name, sizeof(fields));
+    foreach (fields;; object f) {
+        if (f->generate_encode) f->generate_encode(buf, table);
+        else buf->add("%H(%c, row, new);", f->encode_sql, table);
+    }
+    buf->add(" return new;\n }");
+
+    program p = buf->compile(sprintf("Coder<%s>", table));
+    return p();
+}
+
 mapping decode_sql(string table, mapping row) {
-    mapping new = ([]);
-    fields->decode_sql(table, row, new);
-    return new;
+    object coder;
+
+    if (!has_index(coders, table)) {
+        coders[table] = coder = generate_coder(table);
+    } else coder = coders[table];
+
+    return coder->decode_sql(row);
 }
 
 mapping encode_sql(string table, mapping row) {
-    mapping new = ([]);
-    fields->encode_sql(table, row, new);
-    return new;
+    object coder;
+
+    if (!has_index(coders, table)) {
+        coders[table] = coder = generate_coder(table);
+    } else coder = coders[table];
+
+    return coder->encode_sql(row);
 }

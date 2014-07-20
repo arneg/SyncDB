@@ -1,4 +1,4 @@
-inherit .Base;
+inherit .Simple;
 
 #ifdef constant(Serialization)
 object get_parser() {
@@ -18,6 +18,14 @@ string encode_sql_value(mixed val) {
 
 mixed decode_sql_value(string s) {
     return (int)s;
+}
+
+void generate_encode_value(object buf, string val) {
+    buf->add("((string)v)");
+}
+
+void generate_decode_value(object buf, string val) {
+    buf->add("((int)v)");
 }
 
 string encode_json() {

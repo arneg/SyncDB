@@ -1,4 +1,4 @@
-inherit .Base;
+inherit .Simple;
 
 function(int:object)|program prog;
 
