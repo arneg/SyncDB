@@ -39,3 +39,22 @@ SyncDB.Version|mapping decode_sql(string table, mapping row, void|mapping new) {
 	return new;
     } else return SyncDB.Version(::decode_sql(table, row));
 }
+
+void generate_encode(object buf, string table) {
+    array t = escaped_sql_names(table);
+    if (sizeof(t) == 1) {
+        buf->add("new[%c] = row[%c]->a[0];\n", t[0], name);
+    } else {
+        buf->add("new += mkmapping(%c, row[%c]->a);\n", t, name);
+    }
+}
+
+void generate_decode(object buf, string table) {
+    array t = sql_names(table);
+    if (sizeof(t) == 1) {
+        buf->add("new[%c] = SyncDB.Version(({ (int)row[%c] }));\n", name, t[0]);
+    } else {
+        buf->add("new[%c] = SyncDB.Version((array(int))map(%O, row));\n", name, t);
+    }
+}
+

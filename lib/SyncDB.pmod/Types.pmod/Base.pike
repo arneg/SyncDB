@@ -1,7 +1,7 @@
 constant is_readable = 1;
 constant is_writable = 1;
 
-private array(SyncDB.Flags.Base) _flags;
+protected array(SyncDB.Flags.Base) _flags;
 mapping(string:SyncDB.Flags.Base) flags = ([]);
 mapping(string:int(0..1)) is = ([
     "readable" : 1,
@@ -52,42 +52,8 @@ void create(string name, SyncDB.Flags.Base ... _flags) {
     }
 }
 
-mixed decode_sql_value(string s) {
-    return s;
-}
-
-string encode_sql_value(mixed v) {
-    return v;
-}
-
-private string last_table;
-private string last_sql_name;
-
-#define SQL_NAME(table) ((last_table == table) ? last_sql_name : (last_sql_name = sql_name(last_table = table)))
-
-mixed decode_sql(string table, mapping row, mapping|void new) {
-    string n = SQL_NAME(table);
-    mixed v;
-    if (has_index(row, n)) {
-	v = row[n];
-	if (stringp(v)) {
-	    v = decode_sql_value(v);
-	} else v = Val.null;
-	if (new) new[name] = v;
-	return v;
-    }
-    return UNDEFINED;
-}
-
-mapping encode_sql(string table, mapping row, mapping new) {
-    if (!new) new = ([]);
-    if (has_index(row, name)) {
-	new[escaped_sql_name(table)] = (row[name] == Val.null)
-				? Val.null
-				: encode_sql_value(row[name]);
-    }
-    return new;
-}
+mixed decode_sql(string table, mapping row, mapping|void new);
+mapping encode_sql(string table, mapping row, mapping new);
 
 string sql_name(string table) {
     object f = flags->foreign;
@@ -114,7 +80,7 @@ array(string) escaped_sql_names(string table) {
 }
 
 array(string) sql_names(string table) {
-    return ({ SQL_NAME(table) });
+    return ({ sql_name(table) });
 }
 
 string encode_json(string p, void|array extra) {
@@ -153,11 +119,7 @@ object get_filter_parser() {
 }
 #endif
 
-string sql_type(Sql.Sql sql, void|string type) {
-    if (type) 
-	return sprintf("`%s` %s %s", name, type, _flags->sql_type(encode_sql_value) * " ");
-    else return 0;
-}
+string sql_type(Sql.Sql sql, void|string type);
 
 string _sprintf(int t) {
     return sprintf("%O(%O, %s)", this_program, name, map(_flags, Function.curry(sprintf)("%O")) * ", ");

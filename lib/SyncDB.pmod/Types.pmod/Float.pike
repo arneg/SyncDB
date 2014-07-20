@@ -1,4 +1,4 @@
-inherit .Base;
+inherit .Simple;
 
 #ifdef constant(Serialization)
 object get_parser() {
@@ -20,8 +20,16 @@ string encode_sql_value(mixed v) {
     return (string)v;
 }
 
+void generate_decode_value(object buf, string val) {
+    buf->add("(float)%s", val);
+}
+
+void generate_encode_value(object buf, string val) {
+    buf->add("(string)%s", val);
+}
+
 string encode_json() {
-    return ::encode_json("SyncDB.Types.Integer");
+    return ::encode_json("SyncDB.Types.Float");
 }
 
 #ifdef constant(Serialization)
