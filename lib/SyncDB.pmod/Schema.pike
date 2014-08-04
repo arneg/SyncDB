@@ -123,8 +123,8 @@ mapping decode_sql(string table, mapping row) {
     mapping new = ([]);
     fields->decode_sql(table, row, new);
     foreach (default_row; string s; mixed v) {
-        if (!has_index(row, s) || objectp(row[s]) && row[s]->is_val_null)
-            row[s] = v;
+        if (!has_index(new, s) || objectp(new[s]) && new[s]->is_val_null)
+            new[s] = v;
     }
     return new;
 }
