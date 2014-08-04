@@ -558,6 +558,11 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
     int locked = 0;
     int affected_rows = 0;
 
+    foreach (schema->default_row; string s; mixed v) {
+        if (has_index(keys, s) && objectp(keys[s]) && keys[s]->is_val_null)
+            keys[s] = v;
+    }
+
     err = sql_error(sql, catch {
 	lock_tables(sql);
 	locked = 1;
