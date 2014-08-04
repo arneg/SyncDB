@@ -689,7 +689,12 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb, mixed ... e
 	error("RETARDO! (%O != %O)\n", schema->key, schema->automatic);
     }
 
-    row = schema->default_row + row;
+    mapping def = schema->default_row;
+
+    foreach (def; string s; mixed v) {
+        if (!has_index(row, s) || objectp(row[s]) && row[s]->is_val_null)
+            row[s] = v;
+    }
 
     trigger("before_inseert", row);
 

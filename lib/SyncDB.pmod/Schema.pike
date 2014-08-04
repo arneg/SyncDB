@@ -122,6 +122,10 @@ array(string) tables() {
 mapping decode_sql(string table, mapping row) {
     mapping new = ([]);
     fields->decode_sql(table, row, new);
+    foreach (default_row; string s; mixed v) {
+        if (!has_index(row, s) || objectp(row[s]) && row[s]->is_val_null)
+            row[s] = v;
+    }
     return new;
 }
 
