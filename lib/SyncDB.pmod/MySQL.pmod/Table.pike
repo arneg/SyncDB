@@ -521,6 +521,9 @@ void select_complex(object filter, object order, object limit, mixed cb, mixed .
             index += limit->encode_sql(this);
 
 	rows = (select_sql + index)(sql);
+
+        rows = sanitize_result(rows);
+
         if (limit) {
             rows = SyncDB.MySQL.ResultSet(rows);
             rows->num_rows = (int)sql->query("SELECT FOUND_ROWS() as num;")[0]->num;
@@ -528,7 +531,7 @@ void select_complex(object filter, object order, object limit, mixed cb, mixed .
     });
 
     if (!err) {
-        cb(0, sanitize_result(rows), @extra);
+        cb(0, rows, @extra);
     } else {
 	cb(1, err, @extra);
     }
@@ -554,6 +557,11 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
 
     int locked = 0;
     int affected_rows = 0;
+
+    foreach (schema->default_row; string s; mixed v) {
+        if (has_index(keys, s) && objectp(keys[s]) && keys[s]->is_val_null)
+            keys[s] = v;
+    }
 
     err = sql_error(sql, catch {
 	lock_tables(sql);
@@ -686,7 +694,12 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb, mixed ... e
 	error("RETARDO! (%O != %O)\n", schema->key, schema->automatic);
     }
 
-    row = schema->default_row + row;
+    mapping def = schema->default_row;
+
+    foreach (def; string s; mixed v) {
+        if (!has_index(row, s) || objectp(row[s]) && row[s]->is_val_null)
+            row[s] = v;
+    }
 
     trigger("before_inseert", row);
 
@@ -784,7 +797,7 @@ void request_update(void|function cb, mixed ... args) {
             restriction += " AND " + restriction->encode_sql(this);
         }
 
-        rows = map(_low_update_sql(sql), sanitize_result);
+        rows = sanitize_result(_low_update_sql(sql));
 
         if (sizeof(rows)) {
             array aa = Array.columns(rows->version->a, enumerate(sizeof(version)));
@@ -802,17 +815,9 @@ void request_update(void|function cb, mixed ... args) {
 
 mixed sanitize_result(mixed rows) {
     if (mappingp(rows)) {
-	mapping new = ([ ]);
-
-	schema->fields->decode_sql(table, rows, new);
-
-	//return rows->deleted ? SyncDB.DeletedRow(new) : new;;
-        return new;
+	return schema->decode_sql(table, rows);
     } else {
-        foreach (rows; int i; mapping m) {
-            rows[i] = sanitize_result(m);
-        }
-	return rows;
+        return map(rows, Function.curry(schema->decode_sql)(table));
     }
 
 }

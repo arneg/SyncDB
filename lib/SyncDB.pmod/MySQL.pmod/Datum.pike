@@ -48,6 +48,14 @@ mixed `[](string name) {
     return UNDEFINED;
 }
 
+mixed `[]=(string name, mixed value) {
+    if (!has_index(_data, name)) error("No such index %O\n", name);
+
+    check_value(name, value);
+    _modified[name] = value;
+    return value;
+}
+
 void set_dirty(string name) {
     _modified[name] = _data[name];
 }

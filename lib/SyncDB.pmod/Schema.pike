@@ -118,3 +118,19 @@ array(string) tables() {
     }
     return sort(indices(t));
 }
+
+mapping decode_sql(string table, mapping row) {
+    mapping new = ([]);
+    fields->decode_sql(table, row, new);
+    foreach (default_row; string s; mixed v) {
+        if (!has_index(new, s) || objectp(new[s]) && new[s]->is_val_null)
+            new[s] = v;
+    }
+    return new;
+}
+
+mapping encode_sql(string table, mapping row) {
+    mapping new = ([]);
+    fields->encode_sql(table, row, new);
+    return new;
+}
