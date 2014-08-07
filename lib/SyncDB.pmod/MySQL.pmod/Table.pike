@@ -626,7 +626,12 @@ void delete(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
 
     // if the primary key is not automatic, we do a real delete
     if (schema->automatic) {
-        schema["version"]->encode_sql(table, ([ "version" : -version ]), t);
+        mapping d = ([ ]);
+        foreach (schema->unique_fields();; object f) if (!f->is->automatic) {
+            d[f->name] = Val.null;
+        }
+        d["version"] = -version;
+        t = schema->encode_sql(table, d);
 
         trigger("before_delete", keys);
 
