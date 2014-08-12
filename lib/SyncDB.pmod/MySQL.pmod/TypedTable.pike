@@ -165,14 +165,19 @@ object restrict(object filter) {
 mapping(mixed:array) _requests = ([]);
 array(mixed) _table_requests = ({ });
 
-void register_request(mixed cachekey, void|mixed id) {
-    if (id) {
+void register_request(mixed ... args) {
+    if (sizeof(args) == 2) {
+        object cachekey;
+        mixed id;
+        cachekey = args[0];
+        id = args[1];
         if (!has_index(_requests, id)) {
             _requests[id] = ({ });
         }
         _requests[id] += ({ cachekey });
     } else {
-        id = cachekey;
+        object id;
+        id = args[0];
         id->misc->cachekey->add_activation_cb(low_register_cachekey);
     }
 }
