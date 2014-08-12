@@ -13,7 +13,8 @@ string encode_sql_value(mixed val) {
 }
 
 mixed decode_sql_value(string s) {
-    return Standards.JSON.decode(s);
+    if (sizeof(s)) return Standards.JSON.decode(s);
+    else return Val.null;
 }
 
 string encode_json(string|void type) {

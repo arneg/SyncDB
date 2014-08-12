@@ -77,7 +77,7 @@ void create() {
 }
 
 #define MAP_TYPE(name)    object name (mixed ... flags) {       \
-    if (schema) return 0;  \
+    if (!_fields) return 0;  \
     return Field(SyncDB.Types. ## name, @flags);            \
 }
 
@@ -91,7 +91,7 @@ MAP_TYPE(Enum)
 MAP_TYPE(Float)
 
 #define MAP_FLAG(name, rname)   object name (mixed ... args) {  \
-    if (schema) return 0;  \
+    if (!_fields) return 0;  \
     return SyncDB.Flags. ## rname (@args);                  \
 }
 
@@ -99,7 +99,7 @@ MAP_FLAG(MAX_LENGTH, MaxLength)
 MAP_FLAG(DEFAULT, Default)
 
 #define MAP_CFLAG(name, rname)   object ` ## name ( ) {     \
-    if (schema) return 0;  \
+    if (!_fields) return 0;  \
     return SyncDB.Flags. ## rname ( );                  \
 }
 

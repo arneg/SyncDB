@@ -153,7 +153,13 @@ mapping decode_sql(string table, mapping row) {
         coders[table] = coder = generate_coder(table);
     } else coder = coders[table];
 
-    return coder->decode_sql(row);
+    mapping new = coder->decode_sql(row);
+
+    foreach (default_row; string s; mixed v) {
+        if (!has_index(new, s) || objectp(new[s]) && new[s]->is_val_null)
+            new[s] = v;
+    }
+    return new;
 }
 
 mapping encode_sql(string table, mapping row) {
