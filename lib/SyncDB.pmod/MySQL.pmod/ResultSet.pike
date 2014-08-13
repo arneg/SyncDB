@@ -2,8 +2,9 @@ array a;
 
 int num_rows;
 
-void create(array a) {
+void create(array a, void|int num_rows) {
     this_program::a = a;
+    this_program::num_rows = num_rows;
 }
 
 mixed `[](int i) {

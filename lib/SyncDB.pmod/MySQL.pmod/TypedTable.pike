@@ -141,6 +141,19 @@ object put(mapping row) {
     return ret;
 }
 
+int(0..) count(void|object filter) {
+    int(0..) ret;
+    void cb(int err, mixed v) {
+        if (!err) ret = v;
+        else {
+            werror("count failed:\n");
+            master()->handle_error(v);
+        }
+    };
+    count_rows(filter||SyncDB.MySQL.Filter.TRUE, cb);
+    return ret;
+}
+
 mixed `->(string index) {
     if (has_prefix(index, "fetch_by_")) {
         string field = index[sizeof("fetch_by_")..];

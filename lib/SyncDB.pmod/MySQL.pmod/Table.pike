@@ -315,7 +315,7 @@ object restrict(object filter) {
 }
 
 mapping tables = ([ ]);
-.Query select_sql, _update_sql, delete_sql;
+.Query select_sql, _update_sql, delete_sql, count_sql;
 object restriction;
 
 .Query update_sql(array(string) fields, array(mixed) values) {
@@ -450,6 +450,8 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
     _update_sql = .Query(sprintf("UPDATE `%s` SET ", table_names()*"`,`"));
     delete_sql = .Query(sprintf("DELETE FROM `%s` WHERE ", table));
 
+    count_sql = .Query(sprintf("SELECT COUNT(%s) as cnt from `%s` WHERE ", schema->id->escaped_sql_name(table), table));
+
     t = ({});
     install_triggers(table);
     foreach (tables; string foreign_table; Table t) {
@@ -464,7 +466,9 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
     t = table_names();
 
     foreach (t; int i; string name) {
-        select_sql += sprintf("`%s`.version > 0 AND ", name);
+        string vf = sprintf("`%s`.version > 0 AND ", name);
+        count_sql += vf;
+        select_sql += vf;
     }
 
     // Initialize version
@@ -529,6 +533,28 @@ void select_complex(object filter, object order, object limit, mixed cb, mixed .
         cb(0, rows, @extra);
     } else {
 	cb(1, err, @extra);
+    }
+}
+
+void count_rows(object filter, function(int(0..1),mixed,mixed...:void) cb, mixed ... extra) {
+    object sql = this_program::sql;
+    int(0..) count;
+
+    if (restriction) filter &= restriction;
+
+    mixed err = sql_error(sql, catch {
+            .Query index = filter->encode_sql(this);
+            array(mapping) rows;
+
+            rows = (count_sql + index)(sql);
+
+            count = (int)rows[0]->cnt;
+    });
+
+    if (!err) {
+        cb(0, count, @extra);
+    } else {
+        cb(1, count, @extra);
     }
 }
 
