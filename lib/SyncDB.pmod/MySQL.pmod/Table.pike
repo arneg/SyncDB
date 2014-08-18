@@ -722,7 +722,7 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb, mixed ... e
             row[s] = v;
     }
 
-    trigger("before_inseert", row);
+    trigger("before_insert", row);
 
     err = sql_error(sql, catch {
 
