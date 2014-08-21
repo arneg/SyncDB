@@ -135,8 +135,12 @@ class Table {
 	fields += ({ type });
     }
 
-    array(string) field_names() {
-	return fields->name;
+    array(string) sql_names() {
+	return predef::`+(@fields->sql_names(name));
+    }
+
+    array(string) escaped_sql_names() {
+	return predef::`+(@fields->escaped_sql_names(name));
     }
 
     array(SyncDB.Types.Base) readable() {
@@ -441,8 +445,8 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
         }
     }
 
-    if (sizeof(table_fields) != sizeof(table_o->fields))
-        t = `+(@table_o->fields->escaped_sql_names(table));
+    if (sizeof(table_fields) != sizeof(table_o->sql_names()))
+        t = table_o->escaped_sql_names();
 
     // TODO: if this is very slow, we should be using a seperate one for limit queries
     select_sql = .Query(sprintf("SELECT SQL_CALC_FOUND_ROWS %s FROM `%s`",
