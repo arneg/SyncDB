@@ -1,6 +1,7 @@
 #if constant(Roxen)
 void register_request(object id) {
-    id->misc->cachekey->add_activation_cb(table->register_request, unique_identifier());
+    if (id->misc->cachekey)
+        id->misc->cachekey->add_activation_cb(table->register_request, unique_identifier());
 }
 
 void invalidate_requests() {
