@@ -26,6 +26,13 @@ object `smart_type() {
     return table->smart_type;
 }
 
+int(0..1) inherits(program p) {
+    return Program.inherits(object_program(smart_type), p);
+}
+
+int(0..1) is_program(program p) {
+    return p == object_program(smart_type);
+}
 
 int(0..1) is_dummy() {
     return !this->id;
