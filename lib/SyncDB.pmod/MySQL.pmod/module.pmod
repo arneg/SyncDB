@@ -79,8 +79,16 @@ mapping(string:object) get_nfields(program type) {
 }
 
 void set_fields(program type, array(object) fields) {
+    mapping nf;
     type_to_fields[type] = fields;
-    type_to_nfields[type] = mkmapping(fields->name, fields);
+    type_to_nfields[type] = nf = mkmapping(fields->name, fields);
+    foreach (fields;; object f) {
+        if (f->fields) {
+            foreach (f->fields;; object subfield) {
+                nf[f->name + "." + subfield->name] = subfield;
+            }
+        }
+    }
 }
 
 mapping(string:array(object)) all_databases = ([]);
