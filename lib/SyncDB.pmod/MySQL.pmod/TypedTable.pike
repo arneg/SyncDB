@@ -1,26 +1,31 @@
 inherit SyncDB.MySQL.Table;
 mapping cache = set_weak_flag(([]), Pike.WEAK_VALUES);
 Thread.Mutex mutex = Thread.Mutex();
-function|program prog;
+function|program|object prog;
+object smart_type;
 
 void create(string dbname, function(void:Sql.Sql) cb, SyncDB.Schema schema, string table,
-            void|function|program prog) {
-    
-    this_program::prog = prog||.Datum;
+            object smart_type) {
+    this_program::smart_type = smart_type;
+    this_program::prog = smart_type->get_datum();
     ::create(dbname, cb, schema, table);
 }
 
-array(object) get_fields() {
-    return .get_fields(prog);
+array(object) `fields() {
+    return .get_fields(object_program(smart_type));
 }
 
-mapping(string:object) get_nfields() {
-    return .get_nfields(prog);
+mapping(string:object) `nfields() {
+    return .get_nfields(object_program(smart_type));
 }
 
 void set_database(object o) {
     ::set_database(o);
-    array(object) fields = .get_fields(prog);
+    array(object) fields = .get_fields(object_program(smart_type));
+
+    if (!fields) {
+        error("cannot find fields for %O in %O\n", smart_type, .type_to_fields);
+    }
 
     foreach (fields;; object field) {
         if (field->create_dependencies)
@@ -69,16 +74,17 @@ void select_complex(object filter, object order, object limit,
 
         cb(0, v, @extra);
     };
-    if (object_program(filter) == SyncDB.MySQL.Filter.Equal) {
+    if (object_program(filter) == SyncDB.MySQL.Filter.Equal && filter->type->is->key) {
         object key = mutex->lock();
-        function quote = sql->quote;
-        string id = filter->encode_sql(this, quote)->render(quote);
+        mixed id = filter->value;
+
         if (has_index(cache, id)) {
             object o = cache[id];
             destruct(key);
             cb(0, ({ o }));
             return;
         }
+
         destruct(key);
     }
     ::select_complex(filter, order, limit, _cb);
@@ -135,6 +141,19 @@ object put(mapping row) {
     return ret;
 }
 
+int(0..) count(void|object filter) {
+    int(0..) ret;
+    void cb(int err, mixed v) {
+        if (!err) ret = v;
+        else {
+            werror("count failed:\n");
+            master()->handle_error(v);
+        }
+    };
+    count_rows(filter||SyncDB.MySQL.Filter.TRUE, cb);
+    return ret;
+}
+
 mixed `->(string index) {
     if (has_prefix(index, "fetch_by_")) {
         string field = index[sizeof("fetch_by_")..];
@@ -159,14 +178,19 @@ object restrict(object filter) {
 mapping(mixed:array) _requests = ([]);
 array(mixed) _table_requests = ({ });
 
-void register_request(mixed cachekey, void|mixed id) {
-    if (id) {
+void register_request(mixed ... args) {
+    if (sizeof(args) == 2) {
+        object cachekey;
+        mixed id;
+        cachekey = args[0];
+        id = args[1];
         if (!has_index(_requests, id)) {
             _requests[id] = ({ });
         }
         _requests[id] += ({ cachekey });
     } else {
-        id = cachekey;
+        object id;
+        id = args[0];
         id->misc->cachekey->add_activation_cb(low_register_cachekey);
     }
 }

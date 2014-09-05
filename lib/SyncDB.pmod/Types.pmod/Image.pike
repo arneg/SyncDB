@@ -1,4 +1,4 @@
-inherit .Base;
+inherit .Simple;
 
 #if constant(Serialization)
 object get_parser() {

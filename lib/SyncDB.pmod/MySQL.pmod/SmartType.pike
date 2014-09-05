@@ -1,5 +1,11 @@
 final protected array(Field) _fields = ({});
 
+protected program datum = .Datum;
+
+program get_datum() {
+    return datum;
+}
+
 array `fields() {
     return .get_fields(this_program);
 }
@@ -14,6 +20,15 @@ object `schema() {
     if (!_schema) _schema = .get_schema(this_program);
     return _schema;
 }
+
+object get_table(function(void:Sql.Sql) get_sql, string name, void|function|program prog) {
+    return .TypedTable(name, get_sql, schema, name, this);
+}
+
+void create_table(function(void:Sql.Sql) get_sql, string name) {
+    .create_table(get_sql(), name, schema);
+}
+
 
 protected class Field {
     mixed syncdb_class;
@@ -31,9 +46,11 @@ protected class Field {
     }
 };
 
+mixed unique_identifier(mapping|object row) {
+    return row[schema->key];
+}
+
 void create() {
-    array fields = _fields;
-    _fields = 0;
     if (schema) return;
 
     int i = 0;
@@ -53,10 +70,10 @@ void create() {
     }
 
     // remove overloaded ones
-    fields = filter(fields, fields->name);
+    _fields = filter(_fields, _fields->name);
 
-    .set_schema(this_program, SyncDB.Schema(@fields->syncdb_type()));
-    .set_fields(this_program, fields);
+    .set_schema(this_program, SyncDB.Schema(@_fields->syncdb_type()));
+    .set_fields(this_program, _fields);
 }
 
 #define MAP_TYPE(name)    object name (mixed ... flags) {       \

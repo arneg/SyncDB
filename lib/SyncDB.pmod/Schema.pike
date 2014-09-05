@@ -29,13 +29,13 @@ void create(object ... m) {
 	    restriction = type;
 	    continue;
 	}
-	if (type->is_index) index += ({ type->name });
-	if (type->is_key) {
+	if (type->is->index) index += ({ type->name });
+	if (type->is->key) {
 	    if (key) error("Defined two different keys in one schema.\n");
 	    key = type->name;
 	    id = type;
 	}
-	if (type->is_automatic) {
+	if (type->is->automatic) {
 	    if (automatic) error("Defined two different auto-increment values in one schema\n");
 	    automatic = type->name;
 	}
@@ -63,7 +63,7 @@ mixed `[](mixed in) {
 }
 
 array(SyncDB.Types.Base) index_fields() {
-    return filter(fields, fields->is_index);
+    return filter(fields, fields->is->index);
 }
 
 array(SyncDB.Types.Base) unique_fields() {
@@ -95,13 +95,13 @@ object parser(function|void filter) {
 
 object parser_in() {
     return parser(lambda(string field, SyncDB.Types.Base type) {
-	return type->is_writable && !type->is_automatic || field == "version" || type->is_key;
+	return type->is->writable && !type->is->automatic || field == "version" || type->is->key;
     });
 }
 
 object parser_out() {
     return parser(lambda(string field, SyncDB.Types.Base type) {
-	  return type->is_readable && !type->is_hidden; 
+	  return type->is->readable && !type->is->hidden; 
     });
 }
 #endif
@@ -117,15 +117,48 @@ Iterator _get_iterator() {
 array(string) tables() {
     mapping t = ([ ]);
     foreach (m; string name; object type) {
-	if (!type->is_link) continue;
+	if (!type->is->link) continue;
 	t += type->f_link->tables;
     }
     return sort(indices(t));
 }
 
+private mapping(string:object) coders = ([]);
+
+object generate_coder(string table) {
+    object buf = SyncDB.CodeGen();
+
+    buf->add("mapping decode_sql(mapping row) {\n"
+             "mapping new = mkmapping(%c, allocate(%d, Val.null));\n"
+             "mixed v;\n", fields->name, sizeof(fields));
+    foreach (fields;; object f) {
+        if (f->generate_decode) f->generate_decode(buf, table);
+        else buf->add("%H(%c, row, new);\n", f->decode_sql, table);
+    }
+    buf->add(" return new;\n }");
+
+    buf->add("mapping encode_sql(mapping row) {\n"
+             "mapping new = ([]);\n"
+             "mixed v;\n", fields->name, sizeof(fields));
+    foreach (fields;; object f) {
+        if (f->generate_encode) f->generate_encode(buf, table);
+        else buf->add("%H(%c, row, new);", f->encode_sql, table);
+    }
+    buf->add(" return new;\n }");
+
+    program p = buf->compile(sprintf("Coder<%s>", table));
+    return p();
+}
+
 mapping decode_sql(string table, mapping row) {
-    mapping new = ([]);
-    fields->decode_sql(table, row, new);
+    object coder;
+
+    if (!has_index(coders, table)) {
+        coders[table] = coder = generate_coder(table);
+    } else coder = coders[table];
+
+    mapping new = coder->decode_sql(row);
+
     foreach (default_row; string s; mixed v) {
         if (!has_index(new, s) || objectp(new[s]) && new[s]->is_val_null)
             new[s] = v;
@@ -134,7 +167,11 @@ mapping decode_sql(string table, mapping row) {
 }
 
 mapping encode_sql(string table, mapping row) {
-    mapping new = ([]);
-    fields->encode_sql(table, row, new);
-    return new;
+    object coder;
+
+    if (!has_index(coders, table)) {
+        coders[table] = coder = generate_coder(table);
+    } else coder = coders[table];
+
+    return coder->encode_sql(row);
 }

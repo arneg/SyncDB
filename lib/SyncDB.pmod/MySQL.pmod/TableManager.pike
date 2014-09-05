@@ -36,7 +36,7 @@ class RemoteTable(string name, void|program type) {
     }
 
     string _sprintf(int t) {
-        return sprintf("%O(%s)", this_program, name);
+        return sprintf("%O(%O, %O)", this_program, name, type);
     }
 };
 
@@ -47,7 +47,7 @@ object low_get_table(string name, void|program type) {
     if (!type) return local_tables[name][0];
 
     foreach (local_tables[name];; object table) {
-        if (table->prog == type) return table;
+        if (object_program(table->smart_type) == type) return table;
     }
 
     return 0;

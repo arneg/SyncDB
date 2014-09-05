@@ -117,7 +117,7 @@ class Table {
     .Query modified_sql;
 
     int(0..1) `is_automatic() {
-	return schema->id->is_automatic;
+	return schema->id->is->automatic;
     }
 
     void create(string name) {
@@ -135,8 +135,12 @@ class Table {
 	fields += ({ type });
     }
 
-    array(string) field_names() {
-	return fields->name;
+    array(string) sql_names() {
+	return predef::`+(@fields->sql_names(name));
+    }
+
+    array(string) escaped_sql_names() {
+	return predef::`+(@fields->escaped_sql_names(name));
     }
 
     array(SyncDB.Types.Base) readable() {
@@ -172,7 +176,7 @@ class Table {
     mapping insert(mapping row) {
 	mapping new = ([]);
 	foreach (writable();; object type) {
-	    if (type->is_automatic) continue;
+	    if (type->is->automatic) continue;
 	    type->encode_sql(name, row, new);
 	}
 	return sizeof(new) ? new : 0;
@@ -315,7 +319,7 @@ object restrict(object filter) {
 }
 
 mapping tables = ([ ]);
-.Query select_sql, _update_sql, delete_sql;
+.Query select_sql, _update_sql, delete_sql, count_sql;
 object restriction;
 
 .Query update_sql(array(string) fields, array(mixed) values) {
@@ -383,12 +387,7 @@ object get_where(mapping keys) {
 }
 
 string get_unique_identifier(mapping row) {
-    function quote = sql->quote;
-    if (!schema->id) {
-        error("Key field missing. Cannot generate unique identifier for row.\n");
-    }
-    // OMFG!!
-    return schema->id->Equal(row[schema->key])->encode_sql(this, quote)->render(quote);
+    return row[schema->key];
 }
 
 string table_name() {
@@ -412,8 +411,8 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
 #define CASE(x) if (Program.inherits(object_program(type), (x)))
     foreach (schema;; object type) {
 	string field = type->name;
-	if (type->is_link) {
-	    mapping type = type->f_link;
+	if (type->is->link) {
+	    mapping type = type->flags->link;
 	    foreach (type->tables; string name; string fid) {
 		program p;
 		CASE(SyncDB.Flags.Join) {
@@ -426,7 +425,7 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
 		    error("Unsupported link flag.\n");
 		}
 		tables[name] = p(name, field, fid);
-		if (table_o->sql_schema[field]->flags->is_automatic && tables[name]->is_automatic && schema[fid]->is_writable) {
+		if (table_o->sql_schema[field]->is->automatic && tables[name]->is->automatic && schema[fid]->is->writable) {
 		    error("Link fields cannot be both automatic in %s and %s (%O, %O).\n", table, name, fid, schema[fid]->flags);
 		}
 	    }
@@ -436,8 +435,8 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
     array table_fields = sql->list_fields(table);
 
     foreach (schema;; object type) {
-        if (type->is_foreign) {
-            string t2 = type->f_foreign->table;
+        if (type->is->foreign) {
+            string t2 = type->flags->foreign->table;
             if (!has_index(tables, t2))
                 tables[t2] = Table(t2);
             tables[t2]->add_field(type);
@@ -446,14 +445,16 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
         }
     }
 
-    if (sizeof(table_fields) != sizeof(table_o->fields))
-        t = `+(@table_o->fields->escaped_sql_names(table));
+    if (sizeof(table_fields) != sizeof(table_o->sql_names()))
+        t = table_o->escaped_sql_names();
 
     // TODO: if this is very slow, we should be using a seperate one for limit queries
     select_sql = .Query(sprintf("SELECT SQL_CALC_FOUND_ROWS %s FROM `%s`",
                         sizeof(t) ? t*"," : "*", table));
     _update_sql = .Query(sprintf("UPDATE `%s` SET ", table_names()*"`,`"));
     delete_sql = .Query(sprintf("DELETE FROM `%s` WHERE ", table));
+
+    count_sql = .Query(sprintf("SELECT COUNT(%s) as cnt from `%s` WHERE ", schema->id->escaped_sql_name(table), table));
 
     t = ({});
     install_triggers(table);
@@ -469,7 +470,9 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
     t = table_names();
 
     foreach (t; int i; string name) {
-        select_sql += sprintf("`%s`.version > 0 AND ", name);
+        string vf = sprintf("`%s`.version > 0 AND ", name);
+        count_sql += vf;
+        select_sql += vf;
     }
 
     // Initialize version
@@ -537,6 +540,28 @@ void select_complex(object filter, object order, object limit, mixed cb, mixed .
     }
 }
 
+void count_rows(object filter, function(int(0..1),mixed,mixed...:void) cb, mixed ... extra) {
+    object sql = this_program::sql;
+    int(0..) count;
+
+    if (restriction) filter &= restriction;
+
+    mixed err = sql_error(sql, catch {
+            .Query index = filter->encode_sql(this);
+            array(mapping) rows;
+
+            rows = (count_sql + index)(sql);
+
+            count = (int)rows[0]->cnt;
+    });
+
+    if (!err) {
+        cb(0, count, @extra);
+    } else {
+        cb(1, count, @extra);
+    }
+}
+
 void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mixed,mixed...:void) cb,
             mixed ... extra) {
     mixed err;
@@ -593,7 +618,7 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
                     sql->query("SELECT MAX(ABS(version)) FROM "+table_name())
             );
         }
-	if (affected_rows == 1 || oversion >= nversion) {
+	if (affected_rows == 1) {
             mapping new = sanitize_result(rows[0]);
             trigger("after_update", new, keys);
             signal_update(nversion, ({ new }));
@@ -706,7 +731,7 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb, mixed ... e
             row[s] = v;
     }
 
-    trigger("before_inseert", row);
+    trigger("before_insert", row);
 
     err = sql_error(sql, catch {
 
@@ -728,7 +753,7 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb, mixed ... e
 	foreach (table_objects(); ; Table t) {
 	    mapping new = t->insert(row);
 	    if (!new) {
-		if (t->is_automatic && sizeof(t->writable())) {
+		if (t->is->automatic && sizeof(t->writable())) {
 		    new = ([]);
 		    // DEAD
 		}
@@ -746,7 +771,7 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb, mixed ... e
 		row[t->id] = (int)last[t->fid];
 	    }
 	    
-	    if (t == table_o && schema[schema->key]->is_automatic) {
+	    if (t == table_o && schema[schema->key]->is->automatic) {
 		mixed last = sql->query("SELECT LAST_INSERT_ID() as id;");
 		if (sizeof(last)) last = last[0];
 		row[schema->key] = (int)last->id;

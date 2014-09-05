@@ -2,14 +2,14 @@ void create_table(Sql.Sql sql, string name, object schema) {
     array a = ({ });
 
     int(0..1) filter_cb(object type) {
-	return !type->is_foreign;
+	return !type->is->foreign;
     };
 
     if (has_value(sql->list_tables(), name)) {
         array current_fields = sql->list_fields(name);
         mapping fields = mkmapping(current_fields->name, current_fields);
 
-        foreach (schema;; object type) if (!type->is_foreign) {
+        foreach (schema;; object type) if (!type->is->foreign) {
             string|array(string) tmp = type->sql_type(sql, filter_cb);
             array(string) names = type->sql_names("");
             names = filter(names, has_prefix, ".");
@@ -30,7 +30,7 @@ void create_table(Sql.Sql sql, string name, object schema) {
             .Query(s)(sql);
         }
     } else { /* table is completely new */
-        foreach (schema;; object type) if (!type->is_foreign) {
+        foreach (schema;; object type) if (!type->is->foreign) {
             string|array(string) tmp = type->sql_type(sql, filter_cb);
             a += arrayp(tmp) ? tmp : ({ tmp });
         }
@@ -47,10 +47,10 @@ void create_table(Sql.Sql sql, string name, object schema) {
 
     foreach (schema->index_fields();; object field) {
         // already has index
-        if (field->is_key) continue;
+        if (field->is->key) continue;
         if (mi[field->name]) continue;
 
-        int(0..1) uniq = field->is_unique;
+        int(0..1) uniq = field->is->unique;
         string q = sprintf("CREATE %s INDEX `%s` ON `%s` (`%s`)",
                            (uniq ? " UNIQUE " : ""), field->name, name, field->name);
 

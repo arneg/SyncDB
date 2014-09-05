@@ -4,6 +4,10 @@ constant is_array = 1;
 
 array(object) fields;
 
+mapping `subfields() {
+    return mkmapping(fields->name, fields);
+}
+
 void create(string name, array(object) fields, SyncDB.Flags.Base ... flags) {
     this_program::fields = fields;
     ::create(name, @flags);

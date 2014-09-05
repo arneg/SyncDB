@@ -10,6 +10,11 @@ object put(mapping row, mixed ... args) {
     return table->put(row, @args);
 }
 
+
+int(0..) count(void|object filter) {
+    return table->count(filter & restriction);
+}
+
 void register_request(mixed cachekey, void|mixed id) {
     table->register_request(cachekey, id);
 }

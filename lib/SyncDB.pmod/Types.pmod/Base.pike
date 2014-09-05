@@ -1,7 +1,7 @@
 constant is_readable = 1;
 constant is_writable = 1;
 
-private array(SyncDB.Flags.Base) _flags;
+protected array(SyncDB.Flags.Base) _flags;
 mapping(string:SyncDB.Flags.Base) flags = ([]);
 mapping(string:int(0..1)) is = ([
     "readable" : 1,
@@ -9,24 +9,25 @@ mapping(string:int(0..1)) is = ([
 ]);
 string name;
 
-mixed `->(string index) {
-    mixed v = ::`->(index, this);
-    //mixed v = call_function(::`->, index, this);
-    
-    if (v) return v;
-
-    if (has_index(SyncDB.MySQL.Filter, index)) {
-	return Function.curry(SyncDB.MySQL.Filter[index])(this);
-    }
-
-    if (has_prefix(index, "is_")) {
-        return is[index[3..]];
-    } else if (has_prefix(index, "f_")) {
-        return flags[index[2..]];
-    } 
-
-    return UNDEFINED;
+#define MAP(name)     mixed ` ## name ( ) {                           \
+    return Function.curry(SyncDB.MySQL.Filter.## name)(this);   \
 }
+
+MAP(Or)
+MAP(And)
+MAP(Equal)
+MAP(Ne)
+MAP(In)
+MAP(Match)
+MAP(True)
+MAP(False)
+MAP(Gt)
+MAP(Ge)
+MAP(Lt)
+MAP(Le)
+
+#undef MAP
+
 
 void get_default(mapping def) {
     object f = flags["default"];
@@ -51,37 +52,8 @@ void create(string name, SyncDB.Flags.Base ... _flags) {
     }
 }
 
-mixed decode_sql_value(string s) {
-    return s;
-}
-
-string encode_sql_value(mixed v) {
-    return v;
-}
-
-mixed decode_sql(string table, mapping row, mapping|void new) {
-    string n = sql_name(table);
-    mixed v;
-    if (has_index(row, n)) {
-	v = row[n];
-	if (stringp(v)) {
-	    v = decode_sql_value(v);
-	} else v = Val.null;
-	if (new) new[name] = v;
-	return v;
-    }
-    return UNDEFINED;
-}
-
-mapping encode_sql(string table, mapping row, mapping new) {
-    if (!new) new = ([]);
-    if (has_index(row, name)) {
-	new[escaped_sql_name(table)] = (row[name] == Val.null)
-				? Val.null
-				: encode_sql_value(row[name]);
-    }
-    return new;
-}
+mixed decode_sql(string table, mapping row, mapping|void new);
+mapping encode_sql(string table, mapping row, mapping new);
 
 string sql_name(string table) {
     object f = flags->foreign;
@@ -147,11 +119,7 @@ object get_filter_parser() {
 }
 #endif
 
-string sql_type(Sql.Sql sql, void|string type) {
-    if (type) 
-	return sprintf("`%s` %s %s", name, type, _flags->sql_type(encode_sql_value) * " ");
-    else return 0;
-}
+string sql_type(Sql.Sql sql, void|string type);
 
 string _sprintf(int t) {
     return sprintf("%O(%O, %s)", this_program, name, map(_flags, Function.curry(sprintf)("%O")) * ", ");

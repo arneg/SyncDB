@@ -1,4 +1,4 @@
-inherit .Base;
+inherit .Simple;
 
 int length;
 
@@ -22,6 +22,14 @@ string decode_sql_value(string s) {
     return utf8_to_string(s);
 }
 
+void generate_encode_value(object buf, string val) {
+    buf->add("%H(%s)", string_to_utf8, val);
+}
+
+void generate_decode_value(object buf, string val) {
+    buf->add("%H(%s)", utf8_to_string, val);
+}
+
 string encode_json(string|void type) {
     return ::encode_json(type || "SyncDB.Types.String");
 }
@@ -43,6 +51,6 @@ void create(string name, mixed ... args) {
     ::create(name, @args);
 
     if (!length) {
-        length = (int)this->f_maxlength;
+        length = (int)this->flags->maxlength;
     }
 }

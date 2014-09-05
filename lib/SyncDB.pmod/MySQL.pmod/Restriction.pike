@@ -30,3 +30,7 @@ mixed `->(string name) {
 
     return predef::`->(table, name);
 }
+
+void count_rows(object filter, function(int(0..1),mixed,mixed...:void) cb, mixed ... extra) {
+    table->count_rows(filter & restriction, cb, @extra);
+}
