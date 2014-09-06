@@ -43,9 +43,9 @@ SyncDB.Version|mapping decode_sql(string table, mapping row, void|mapping new) {
 void generate_encode(object buf, string table) {
     array t = escaped_sql_names(table);
     if (sizeof(t) == 1) {
-        buf->add("new[%c] = row[%c]->a[0];\n", t[0], name);
+        buf->add("new[%c] = (string)row[%c]->a[0];\n", t[0], name);
     } else {
-        buf->add("new += mkmapping(%c, row[%c]->a);\n", t, name);
+        buf->add("new += mkmapping(%c, (array(string))row[%c]->a);\n", t, name);
     }
 }
 
