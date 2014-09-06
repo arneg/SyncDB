@@ -84,7 +84,8 @@ protected mixed `->=(string name, mixed value) {
 
 protected void generic_cb(int err, mixed v) {
     if (err) {
-        werror("%O->save() failed: %O\n", this, v);
+        werror("%O->save() failed\n", this);
+        master()->handle_error(v);
     }
 }
 
@@ -171,7 +172,8 @@ int(0..1) drop() {
         save_id && remove_call_out(save_id);
         return 1;
     } else {
-        werror("delete failed: %O\n", v);
+        werror("delete failed\n");
+        master()->handle_error(v);
         return 0;
     }
 }
