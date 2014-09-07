@@ -25,9 +25,10 @@ mixed decode_sql(string table, mapping row, mapping|void new) {
 mapping encode_sql(string table, mapping row, mapping new) {
     if (!new) new = ([]);
     if (has_index(row, name)) {
-	new[escaped_sql_name(table)] = (row[name] == Val.null)
-				? Val.null
-				: encode_sql_value(row[name]);
+        mixed v = row[name];
+	new[escaped_sql_name(table)] = (objectp(v) && v->is_val_null)
+				? v
+				: encode_sql_value(v);
     }
     return new;
 }
