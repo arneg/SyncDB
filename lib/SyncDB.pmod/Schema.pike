@@ -67,7 +67,7 @@ array(SyncDB.Types.Base) index_fields() {
 }
 
 array(SyncDB.Types.Base) unique_fields() {
-    return filter(fields, fields->is_unique);
+    return filter(fields, fields->is->unique);
 }
 
 void add_type(object type) {
