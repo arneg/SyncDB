@@ -39,9 +39,9 @@ mixed `->(string name) {
     return ::`->(name);
 }
 
-object dummy() {
+object dummy(void|mapping m) {
     object o = table->prog();
-    mapping m = ([]);
+    if (!m) m = ([]);
     restriction->insert(m);
     o->init(m, table);
     return o;
