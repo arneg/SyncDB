@@ -631,6 +631,15 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
     }
 }
 
+//! Remove deleted entries from db.
+//! 
+//! @note
+//!     Does not currently work on linked tables.
+void cleanup() {
+    .Query index = .Filter.And(@schema["version"]->fields->Le(0))->encode_sql(this);
+    (delete_sql + index)(sql);
+}
+
 void delete(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mixed,mixed...:void) cb,
             mixed ... extra) {
     int(0..1) noerr;
