@@ -60,18 +60,18 @@ class Combine {
 class Or {
     inherit Combine;
 
-    object encode_sql(object table, function quote) {
+    object encode_sql(object table) {
 	if (!sizeof(filters)) error("empty filter!");
-	return SyncDB.MySQL.Query("(", filters->encode_sql(table, quote), " OR ") + ")";
+	return SyncDB.MySQL.Query("(", filters->encode_sql(table), " OR ") + ")";
     }
 }
 
 class And(object ... filters) {
     inherit Combine;
 
-    object encode_sql(object table, function quote) {
+    object encode_sql(object table) {
 	if (!sizeof(filters)) error("empty filter!");
-	return SyncDB.MySQL.Query("(", filters->encode_sql(table, quote), " AND ") + ")";
+	return SyncDB.MySQL.Query("(", filters->encode_sql(table), " AND ") + ")";
     }
 
     void insert(mapping row) {
