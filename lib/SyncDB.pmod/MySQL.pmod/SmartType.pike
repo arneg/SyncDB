@@ -1,9 +1,16 @@
 final protected array(Field) _fields = ({});
 
 protected program datum = .Datum;
+protected program real_datum;
 
 program get_datum() {
-    return datum;
+    return real_datum;
+}
+
+void compile_datum(object gen) {
+    gen->add("inherit %H;\n", datum);
+
+    fields->compile_datum(gen, datum());
 }
 
 array `fields() {
@@ -40,6 +47,11 @@ protected class Field {
         this_program::flags = flags;
         _fields += ({ this });
     }
+
+    void compile_datum(object gen, object blueprint) {
+        gen->add("mixed `%s() { return _modified[%<O] || _data[%<O]; }\n", name);
+        gen->add("mixed `%s=(mixed v) { check_value(%<O, v); return _modified[%<O] = v; }\n", name);
+    }
     
     object syncdb_type() {
         return syncdb_class(name, @flags);
@@ -51,29 +63,34 @@ mixed unique_identifier(mapping|object row) {
 }
 
 void create() {
-    if (schema) return;
+    if (!schema) {
+        int i = 0;
+        array(string) ind = call_function(::_indices, 3);
 
-    int i = 0;
-    array(string) ind = call_function(::_indices, 3);
-
-    foreach (ind;; string name) {
-        if (has_prefix(name, "`")) {
-            ind -= ({ name, name[1..] });
+        foreach (ind;; string name) {
+            if (has_prefix(name, "`")) {
+                ind -= ({ name, name[1..] });
+            }
         }
-    }
 
-    foreach (ind;; string name) {
-        mixed val = call_function(::`->, name, this);
-        if (objectp(val) && Program.inherits(object_program(val), Field)) {
-            val->name = name;
+        foreach (ind;; string name) {
+            mixed val = call_function(::`->, name, this);
+            if (objectp(val) && Program.inherits(object_program(val), Field)) {
+                val->name = name;
+            }
         }
+
+        // remove overloaded ones
+        _fields = filter(_fields, _fields->name);
+
+        .set_schema(this_program, SyncDB.Schema(@_fields->syncdb_type()));
+        .set_fields(this_program, _fields);
     }
-
-    // remove overloaded ones
-    _fields = filter(_fields, _fields->name);
-
-    .set_schema(this_program, SyncDB.Schema(@_fields->syncdb_type()));
-    .set_fields(this_program, _fields);
+    // compile datum
+    object gen = SyncDB.CodeGen();
+    compile_datum(gen);
+//    werror("Compiling %O:\n%s\n==========\n", this_program, (string)gen->buf);
+    real_datum = gen->compile(sprintf("Datum<%O>", this_program));
 }
 
 #define MAP_TYPE(name)    object name (mixed ... flags) {       \

@@ -67,21 +67,6 @@ void set_dirty(string name) {
     _modified[name] = _data[name];
 }
 
-protected mixed `->(string name) {
-    if (has_index(_data, name)) return _modified[name] || _data[name];
-    return call_function(::`->, name, this);
-}
-
-protected mixed `->=(string name, mixed value) {
-    if (has_index(_data, name)) {
-        check_value(name, value);
-        _modified[name] = value;
-        return value;
-    }
-
-    return call_function(::`->=, name, value, this);
-}
-
 protected void generic_cb(int err, mixed v) {
     if (err) {
         werror("%O->save() failed\n", this);
