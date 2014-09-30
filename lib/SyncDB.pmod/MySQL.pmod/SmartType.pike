@@ -49,6 +49,7 @@ protected class Field {
     }
 
     void compile_datum(object gen, object blueprint) {
+        if (has_value(indices(blueprint), name)) return;
         gen->add("mixed `%s() { return _modified[%<O] || _data[%<O]; }\n", name);
         gen->add("mixed `%s=(mixed v) { check_value(%<O, v); return _modified[%<O] = v; }\n", name);
     }
