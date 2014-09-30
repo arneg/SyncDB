@@ -7,10 +7,10 @@ program get_datum() {
     return real_datum;
 }
 
-void compile_datum(object gen) {
+void compile_datum(object gen, object blueprint) {
     gen->add("inherit %H;\n", datum);
 
-    fields->compile_datum(gen, datum());
+    fields->compile_datum(gen, blueprint);
 }
 
 array `fields() {
@@ -50,8 +50,8 @@ protected class Field {
 
     void compile_datum(object gen, object blueprint) {
         if (has_value(indices(blueprint), name)) return;
-        gen->add("mixed `%s() { return _modified[%<O] || _data[%<O]; }\n", name);
-        gen->add("mixed `%s=(mixed v) { check_value(%<O, v); return _modified[%<O] = v; }\n", name);
+        gen->Getter(name)->add("return _modified[%O] || _data[%<O];\n", name);
+        gen->Setter(name)->add("check_value(%O, v); return _modified[%<O] = v;\n", name);
     }
     
     object syncdb_type() {
@@ -88,8 +88,8 @@ void create() {
         .set_fields(this_program, _fields);
     }
     // compile datum
-    object gen = SyncDB.CodeGen();
-    compile_datum(gen);
+    object gen = SyncDB.Code.Program();
+    compile_datum(gen, datum());
 //    werror("Compiling %O:\n%s\n==========\n", this_program, (string)gen->buf);
     real_datum = gen->compile(sprintf("Datum<%O>", this_program));
 }
