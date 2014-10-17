@@ -205,5 +205,6 @@ object get_remote_table(string name, void|program type) {
 
 
 object remote_table(string name, void|program type) {
+    if (name == table->table_name() && (!type || type == object_program(table->smart_type))) return table;
     return table->remote_table(name, type);
 }
