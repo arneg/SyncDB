@@ -21,7 +21,7 @@ mapping(string:object) `nfields() {
 
 void set_database(object o) {
     ::set_database(o);
-    array(object) fields = .get_fields(object_program(smart_type));
+    array(object) fields = this_program::fields;
 
     if (!fields) {
         error("cannot find fields for %O in %O\n", smart_type, .type_to_fields);
@@ -241,7 +241,7 @@ void signal_update(SyncDB.Version version, void|array(mapping) rows) {
 }
 
 void destroy() {
-    array(object) fields = .get_fields(prog);
+    array(object) fields = this_program::fields;
 
     map(indices(_requests), invalidate_requests);
 
