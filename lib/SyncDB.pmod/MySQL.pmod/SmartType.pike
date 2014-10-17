@@ -10,6 +10,9 @@ program get_datum() {
 void compile_datum(object gen, object blueprint) {
     gen->add("inherit %H;\n", datum);
 
+    // version getter
+    gen->Getter("version")->add("return _modified[%O] || _data[%<O];\n", "version");
+
     fields->compile_datum(gen, blueprint);
 }
 
