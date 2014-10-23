@@ -59,5 +59,5 @@ void signal_update(string|object table, object version, void|array(mapping) rows
 }
 
 void unregister_table(object table) {
-    unregister_view(table->table_name(), table->prog, table); 
+    unregister_view(table->table_name(), object_program(table->smart_type), table); 
 }
