@@ -1,15 +1,16 @@
 private mapping(string:array(object)) local_tables = ([]);
 
 void unregister_view(string name, program type, object table) {
-    if (!Program.inherits(type, .SmartType))
-        werror("bad use of register_view(%O, %O, %O)\n", name, type, table);
+    if (!Program.inherits(type, .SmartType)) {
+        master()->handle_error(catch(error("bad use of unregister_view(%O, %O, %O)\n", name, type, table)));
+    }
     if (!local_tables[name]) return;
     local_tables[name] -= ({ table });
 }
 
 void register_table(string name, program type, object table) {
     if (!Program.inherits(type, .SmartType))
-        werror("bad use of register_table(%O, %O, %O)\n", name, type, table);
+        master()->handle_error(catch(error("bad use of register_table(%O, %O, %O)\n", name, type, table)));
     if (!local_tables[name]) {
         local_tables[name] = ({ });
     }
