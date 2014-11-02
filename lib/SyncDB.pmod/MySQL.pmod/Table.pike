@@ -658,12 +658,16 @@ void delete(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
         uwhere += " AND " + restriction->encode_sql(this);
     }
 
+    int(0..1) real_delete = 0;
+
+    foreach (schema->unique_fields();; object f) if (!f->is->automatic) {
+        real_delete = 1;
+        break;
+    }
+
     // if the primary key is not automatic, we do a real delete
-    if (schema->automatic) {
+    if (!real_delete) {
         mapping d = ([ ]);
-        foreach (schema->unique_fields();; object f) if (!f->is->automatic) {
-            d[f->name] = Val.null;
-        }
         d["version"] = -version;
         t = schema->encode_sql(table, d);
 
