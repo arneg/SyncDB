@@ -43,6 +43,7 @@ void create(object ... m) {
 #endif
     fields->get_default(default_row);
     add_type(version = SyncDB.Types.Version("version", tables(),
+                                            SyncDB.Flags.Automatic(),
 					    SyncDB.Flags.Unique(),
 					    SyncDB.Flags.Index()));
 }
