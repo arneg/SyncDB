@@ -37,14 +37,18 @@ void generate_decode_value(object buf, string val);
 void generate_encode_value(object buf, string val);
 
 void generate_encode(object buf, string table) {
-    buf->add(" v = row[%c];", name);
-    buf->add(" if (stringp(v)) new[%c] = ", escaped_sql_name(table));
+    string sql_name = escaped_sql_name(table);
+    buf->add(" if (has_index(row, %c)) {\n", name);
+    buf->add(" mixed v = row[%c];", name);
+    buf->add(" if (objectp(v) && v->is_val_null) new[%c] = v;", sql_name);
+    buf->add(" else new[%c] = ", sql_name);
     if (generate_encode_value) {
         generate_encode_value(buf, "v");
     } else {
         buf->add("%H(row[%c])", encode_sql_value, name);
     }
     buf->add(";\n");
+    buf->add(" }\n");
 }
 
 void generate_decode(object buf, string table) {
