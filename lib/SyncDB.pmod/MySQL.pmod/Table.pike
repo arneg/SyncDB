@@ -592,7 +592,7 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
 	lock_tables(sql);
 	locked = 1;
 	rows = (select_sql + where)(sql);
-	if (sizeof(rows) != 1) error("%O\nCannot find 1 row, found %O", select_sql + where, rows);
+	if (sizeof(rows) != 1) error("%O\nCannot find 1 row, found %O\n", select_sql + where, rows);
 	rows = rows[0];
         trigger("before_update", rows, keys);
 	oversion = schema["version"]->decode_sql(table, rows);
