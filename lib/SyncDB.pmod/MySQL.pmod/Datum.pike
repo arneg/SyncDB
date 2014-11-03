@@ -152,9 +152,9 @@ int(0..1) drop() {
         ret = err;
         v = b;
     };
+    if (save_id) save();
     delete(cb);
     if (!ret) {
-        save_id && remove_call_out(save_id);
         return 1;
     } else {
         werror("delete failed\n");
@@ -179,6 +179,9 @@ void save(function(int, mixed...:void)|void cb, mixed ... extra) {
 
 void save_later(void|int s) {
     object key = mutex->lock();
+#if constant(Roxen)
+    invalidate_requests();
+#endif
     if (save_id) return;
     save_id = call_out(save, s||5);
 }
@@ -192,6 +195,10 @@ mixed cast(string type) {
         return _data + _modified;
     }
     error("Cannot cast %O to %s\n", this, type);
+}
+
+void destroy() {
+    if (save_id) save();
 }
 
 mapping clone() {
