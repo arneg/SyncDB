@@ -113,7 +113,7 @@ class Program {
     }
 
     program compile(void|string filename) {
-        String buf = String.Buffer();
+        String.Buffer buf = String.Buffer();
 
         render(buf);
 
