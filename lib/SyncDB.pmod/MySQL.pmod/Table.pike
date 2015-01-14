@@ -849,7 +849,7 @@ void request_update(void|function cb, mixed ... args) {
                 aa[i] = max(@a);
             }
 
-            signal_update(SyncDB.Version(aa), rows);
+            handle_update(SyncDB.Version(aa), rows);
         }
     }
 
