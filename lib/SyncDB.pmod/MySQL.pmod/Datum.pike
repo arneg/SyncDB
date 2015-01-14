@@ -197,8 +197,13 @@ mixed cast(string type) {
     error("Cannot cast %O to %s\n", this, type);
 }
 
-void destroy() {
-    if (save_id) save();
+void destroy(int reason) {
+    if (save_id) {
+        werror("save_id != 0 in %O->destroy(%d).\n", this, reason);
+        if (find_call_out(save_id)) {
+            werror("Callout still active, refcounting bug?\n");
+        }
+    }
 }
 
 mapping clone() {
