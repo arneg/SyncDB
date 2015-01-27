@@ -55,6 +55,10 @@ class Combine {
     string _sprintf(int type) {
 	return sprintf("%O(%s)", this_program, filters->_sprintf('O')*", ");
     }
+
+    int(0..1) `==(mixed b) {
+        return objectp(b) && object_program(b) == this_program && equal(filters, b->filters);
+    }
 }
 
 class Or {
@@ -96,6 +100,14 @@ class FieldFilter {
 
     mapping `row() {
 	return ([ field : value ]);
+    }
+
+    int(0..1) `==(mixed b) {
+        return objectp(b) && object_program(b) == this_program && type == b->type && value == b->value;
+    }
+
+    int(0..1) _equal(mixed b) {
+        return objectp(b) && object_program(b) == this_program && type == b->type && equal(value, b->value);
     }
 }
 
@@ -158,6 +170,10 @@ class Not(object filter) {
 
     object encode_sql(object table) {
 	return "NOT (" + filter->encode_sql(table) + ")";
+    }
+
+    int(0..1) `==(mixed b) {
+        return objectp(b) && object_program(b) == this_program && b->filter == filter;
     }
 }
 
