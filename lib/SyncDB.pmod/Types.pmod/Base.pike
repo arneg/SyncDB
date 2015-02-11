@@ -84,7 +84,7 @@ array(string) sql_names(string table) {
 }
 
 string encode_json(string p, void|array extra) {
-    if (this->is_hidden) return "";
+    if (is->hidden) return "";
     if (!extra) extra = ({});
     extra = ({ Standards.JSON.encode(name) }) + extra + filter(map(_flags, Standards.JSON.encode), sizeof);
     return sprintf("(new %s(%s))", p, extra * (",\n"+" "*8));
@@ -102,7 +102,7 @@ object parser() {
 #else
 		master()->resolv("SyncDB.Serialization.Null");
 #endif
-	if (!this->is_mandatory) {
+	if (!is->mandatory) {
 	    _parser |= Serialization.Types.Undefined;
 	}
     }

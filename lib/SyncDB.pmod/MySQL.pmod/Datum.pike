@@ -208,7 +208,7 @@ void destroy(int reason) {
 
 mapping clone() {
     object schema = table->schema;
-    return (mapping)this - filter(schema->fields, schema->fields->is_unique)->name;
+    return (mapping)this - filter(schema->fields, schema->fields->is->unique)->name;
 }
 
 object get_remote_table(string name, void|program type) {

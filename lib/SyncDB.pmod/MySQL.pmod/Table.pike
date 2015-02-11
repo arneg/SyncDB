@@ -144,17 +144,17 @@ class Table {
     }
 
     array(SyncDB.Types.Base) readable() {
-	return filter(fields, fields->is_readable);
+	return filter(fields, fields->is->readable);
     }
 
     array(SyncDB.Types.Base) writable() {
-	return filter(fields, fields->is_writable);
+	return filter(fields, fields->is->writable);
     }
 
     string index(mapping row) {
 	mapping new = ([ ]);
 	foreach (readable();; object type) {
-	    if (!type->is_index) continue;
+	    if (!type->is->index) continue;
 	    // TODO: this will only work for single field types
 	    // later we somehow have to use filters, Equal by default
 	    type->encode_sql(name, row, new);
@@ -210,7 +210,7 @@ class Foreign {
 
     int(0..1) `is_automatic() {
 	werror("auto_increment: %O %O %O\n", sql_schema[fid], sql_schema[fid]->flags, sql_schema[fid]->flags->auto_increment);
-	return sql_schema[fid]->is_automatic;
+	return sql_schema[fid]->is->automatic;
     }
 }
 

@@ -119,7 +119,7 @@ class BinaryFilter {
     object encode_sql(object table) {
 	mapping new = ([]);
 
-	if (!type->is_readable)
+	if (!type->is->readable)
 	    error("Trying to index non-readable field.\n");
 #if constant(Serialization)
 	if (objectp(value) && Program.inherits(object_program(value), Serialization.Atom)) 
@@ -150,7 +150,7 @@ class Ne {
     object encode_sql(object table) {
 	mapping new = ([]);
 
-	if (!type->is_readable)
+	if (!type->is->readable)
 	    error("Trying to index non-readable field.\n");
 #if constant(Serialization)
 	if (objectp(value) && Program.inherits(object_program(value), Serialization.Atom)) 

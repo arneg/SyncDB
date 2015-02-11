@@ -33,7 +33,7 @@ void create(string name, SyncDB.Schema schema, SyncDB.Table db) {
 			]), .Insert));
     mapping m = ([]);
     foreach (schema->m; string name; object type) {
-	if (type->is_index) {
+	if (type->is->index) {
 	    m[name] = type->get_filter_parser();
 	}
     }
@@ -153,7 +153,7 @@ void filters_insert(object session, string name, mixed key) {
 void sync_unique(object session, mapping row) {
     if (has_index(syncers, session)) return;
     for (filters; string name; mapping m) {
-	if (!schema[name]->is_unique) continue;
+	if (!schema[name]->is->unique) continue;
 	filters_insert(session, name, row[name]);
     }
 }
