@@ -1,0 +1,19 @@
+key Migration needs:
+
+1) Introduce a syncdb table to keep track of the current schema version
+    table_name, version_number, installed timestamp
+
+2) Add version support to SyncDB.Schema, with (optional) hooks for an update
+   script (do we need downgrade scripts ?)
+
+3) Add version support to SmartType, which compiles down into the correct
+   SyncDB.Schema version
+
+4) Write a backup utility, which stores the Schema versions along with the
+   tables (maybe not necessary, since the syncdb table would be included in
+   the backup).
+
+
+some references:
+
+http://odetocode.com/blogs/scott/archive/2008/01/31/versioning-databases-the-baseline.aspx
