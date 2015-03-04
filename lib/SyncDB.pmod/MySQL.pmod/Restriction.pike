@@ -1,4 +1,4 @@
-object table, restriction;
+protected object table, restriction;
 
 void create(object table, object filter) {
     this_program::table = table;
