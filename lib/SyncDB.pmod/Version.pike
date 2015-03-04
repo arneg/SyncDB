@@ -34,6 +34,10 @@ int `>(mixed o) {
     return 0;
 }
 
+int(0..1) is_deleted() {
+    return min(@a) < 0;
+}
+
 string _sprintf(int fmt) {
     switch (fmt) {
     case 'd':
