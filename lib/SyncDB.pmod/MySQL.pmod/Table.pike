@@ -701,7 +701,7 @@ void delete(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
     if (noerr) {
         trigger("after_delete", keys);
         cb(0, 0, @extra);
-        signal_update(version, ({ keys }));
+        signal_update(-version, ({ keys }));
     } else {
 	cb(1, err, @extra);
     }

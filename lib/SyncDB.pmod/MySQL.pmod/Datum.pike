@@ -165,7 +165,7 @@ int(0..1) drop() {
 
 void delete(function(int, mixed...:void)|void cb, mixed ... extra) {
     object key = mutex->lock();
-    table->delete(id_data(), _data->version, cb||generic_cb);
+    table->delete(_data, _data->version, cb||generic_cb);
 }
 
 void save(function(int, mixed...:void)|void cb, mixed ... extra) {

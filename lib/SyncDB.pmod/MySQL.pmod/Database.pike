@@ -45,6 +45,19 @@ object register_view(string name, program type) {
     return table;
 }
 
+typedef function(object(SyncDB.Version),array(mapping|object):void) update_cb;
+
+mapping(string:array(update_cb)) update_cbs = ([]);
+
+void register_update(string table_name, update_cb cb) {
+    update_cbs[table_name] += ({ cb });
+}
+
+void unregister_update(string table_name, update_cb cb) {
+    if (has_index(update_cbs, table_name)) 
+        update_cbs[table_name] -= ({ cb });
+}
+
 void signal_update(string|object table, object version, void|array(mapping) rows) {
     mapping t = all_tables();
 
@@ -53,8 +66,10 @@ void signal_update(string|object table, object version, void|array(mapping) rows
         string name = table->table_name();
         if (has_index(t, name)) (t[name] - ({ table }))->handle_update(version, rows);
         if (this_program::name) .signal_update(this, name, version, rows);
+        if (has_index(update_cbs, name)) call_out(update_cbs[name], 0, version, rows);
     } else {
         if (has_index(t, table)) t[table]->handle_update(version, rows);
+        if (has_index(update_cbs, table)) call_out(update_cbs[table], 0, version, rows);
     }
 }
 
