@@ -2,6 +2,7 @@ final protected array(Field) _fields = ({});
 
 protected program datum = .Datum;
 protected program real_datum;
+protected program table_program = .TypedTable;
 
 program get_datum() {
     return real_datum;
@@ -31,8 +32,23 @@ object `schema() {
     return _schema;
 }
 
+void before_insert(object(.Table) table, mapping row);
+void after_insert(object(.Table) table, mapping row);
+void before_update(object(.Table) table, mapping row, mapping changes);
+void after_update(object(.Table) table, mapping row, mapping changes);
+void before_delete(object(.Table) table, mapping keys);
+void after_delete(object(.Table) table, mapping keys);
+
 object get_table(function(void:Sql.Sql) get_sql, string name, void|function|program prog) {
-    return .TypedTable(name, get_sql, schema, name, this);
+    object table = table_program(name, get_sql, schema, name, this);
+
+    foreach (({ "before_insert", "after_insert", "before_update",
+                "after_update", "before_delete", "after_delete" });; string trigger) {
+        function fun = predef::`->(this, trigger);
+        if (fun) table->register_trigger(trigger, fun);
+    }
+    
+    return table;
 }
 
 void create_table(function(void:Sql.Sql) get_sql, string name) {
