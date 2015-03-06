@@ -15,7 +15,14 @@ mapping(string:array) triggers = ([]);
 
 void trigger(string name, mixed ... args) {
     if (triggers[name]) {
-        triggers[name](this, @args);
+        foreach (triggers[name];; function fun) {
+            mixed err = catch(fun(this, @args));
+            if (err) {
+                if (has_prefix(name, "before_")) throw(err);
+                werror("Trigger %O %O threw an exception: %s\n", name, fun, describe_error(err));
+                master()->handle_error(err);
+            }
+        }
     }
 }
 
