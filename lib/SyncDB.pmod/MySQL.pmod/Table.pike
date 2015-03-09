@@ -327,12 +327,10 @@ object restrict(object filter) {
 
 mapping tables = ([ ]);
 .Query select_sql, _update_sql, delete_sql, count_sql;
-object restriction;
 
 .Query update_sql(array(string) fields, array(mixed) values) {
     .Query q = (_update_sql + fields*"=%s, ") + "=%s WHERE ";
     q += values;
-    if (restriction) q += restriction->encode_sql(this) + " AND ";
     return q;
 }
 
@@ -514,8 +512,6 @@ void select_complex(object filter, object order, object limit, mixed cb, mixed .
 
     object sql = this_program::sql;
 
-    if (restriction) filter &= restriction;
-
     mixed err = sql_error(sql, catch {
 	.Query index = filter->encode_sql(this);
 
@@ -551,8 +547,6 @@ void count_rows(object filter, function(int(0..1),mixed,mixed...:void) cb, mixed
     object sql = this_program::sql;
     int(0..) count;
 
-    if (restriction) filter &= restriction;
-
     mixed err = sql_error(sql, catch {
             .Query index = filter->encode_sql(this);
             array(mapping) rows;
@@ -582,10 +576,6 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
     schema["version"]->encode_sql(table, ([ "version" : version ]), t);
 
     object uwhere = where + " AND " + gen_where(t);
-
-    if (restriction) {
-        uwhere += " AND " + restriction->encode_sql(this);
-    }
 
     int locked = 0;
     int affected_rows = 0;
@@ -660,10 +650,6 @@ void delete(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
     schema["version"]->encode_sql(table, ([ "version" : version ]), t);
 
     object uwhere = where + " AND " + gen_where(t);
-
-    if (restriction) {
-        uwhere += " AND " + restriction->encode_sql(this);
-    }
 
     int(0..1) real_delete = 0;
 
@@ -766,10 +752,6 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb, mixed ... e
         // TODO: turn this into _one_ insert into several tables. or else turn this into
         // a transaction
         //
-        if (restriction) {
-            restriction->insert(row);
-        }
-
 	foreach (table_objects(); ; Table t) {
 	    mapping new = t->insert(row);
 	    if (!new) {
@@ -842,10 +824,6 @@ void request_update(void|function cb, mixed ... args) {
         }
 
         _low_update_sql += ")";
-
-        if (restriction) {
-            restriction += " AND " + restriction->encode_sql(this);
-        }
 
         rows = sanitize_result(_low_update_sql(sql));
 
