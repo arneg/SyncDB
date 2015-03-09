@@ -700,6 +700,18 @@ void delete(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
     }
 }
 
+void drop(object(SyncDB.MySQL.Filter.Base) filter) {
+    filter &= schema["version"]->fields[0]->Gt(0);
+
+    mixed err = sql_error(sql, catch {
+        .Query q = delete_sql + filter->encode_sql(this);
+        q(sql);
+        return;
+    });
+
+    throw(err);
+}
+
 // INSERT INTO table1(c1, c2, c3), table2(c4, c5, c6) VALUES ('v1', 'v2', 
 // 'v3',v4, 'v5', 'v6'); 
 //
@@ -712,8 +724,42 @@ void delete(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
     return .Query("UNLOCK TABLES;");
 }
 
+object(SyncDB.MySQL.Filter.Base) low_insert(array(mapping) rows) {
+    object sql = this_program::sql;
 
-void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb, mixed ... extra) {
+    trigger("before_insert", rows);
+
+    if (sizeof(table_objects()) > 1) error("low_insert does not support remote table.\n");
+
+    object table = table_objects()[0];
+
+    mapping def = schema->default_row;
+
+    if (sizeof(def))
+        rows = map(rows, Function.curry(predef::`+)(def));
+    rows = map(rows, table->insert);
+
+    array(string) fields = indices(rows[0]);
+
+    array data = Array.flatten(map(rows, Function.curry(map)(fields)));
+
+    object insert_sql = .Query("INSERT INTO `" + table->name + "` (" + fields * "," + ") VALUES (" +
+                               allocate(sizeof(rows), allocate(sizeof(fields), "%s") * ",") * "),(" +
+                               ")");
+    insert_sql->args = data;
+
+    mixed err = sql_error(sql, catch {
+        insert_sql(sql);
+
+        int last_id = sql->master_sql->insert_id();
+
+        return schema->id->Ge(last_id) & schema->id->Lt(last_id + sizeof(rows));
+    });
+
+    throw(err);
+}
+
+void insert(array(mapping)|mapping row, function(int(0..1),mixed,mixed...:void) cb, mixed ... extra) {
     mixed err;
     array rows;
     object sql = this_program::sql;

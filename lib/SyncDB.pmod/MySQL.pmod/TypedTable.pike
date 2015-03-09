@@ -128,17 +128,14 @@ array(object) fetch(void|object filter, void|object order, void|object limit) {
     return ret;
 }
 
-object put(mapping row) {
-    object ret;
-    void cb(int err, mixed v) {
-        if (!err) ret = v;
-        else {
-            werror("insert failed:\n");
-            master()->handle_error(v);
-        }
-    };
-    insert(row, cb);
-    return ret;
+array(object)|object put(array(mapping)|mapping row) {
+    object filter = low_insert(arrayp(row) ? row : ({ row }));
+    array(object) ret = fetch(filter);
+    return arrayp(row) ? ret : ret[0];
+}
+
+void just_put(array(mapping)|mapping row) {
+    low_insert(arrayp(row) ? row : ({ row }));
 }
 
 int(0..) count(void|object filter) {
