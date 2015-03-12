@@ -481,6 +481,11 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
     }
 
     // Initialize version
+    update_table_version();
+}
+
+void update_table_version() {
+    array t = table_names();
 
     foreach (t; int i; string name) {
 	t[i] = sprintf("ABS(MAX(`%s`.version)) AS '%<s.version'", name);
@@ -503,22 +508,15 @@ void select(object filter, object|function(int(0..1), array(mapping)|mixed:void)
     select_complex(filter, 0, 0, cb, @extra);
 }
 
-//! @decl void select_complex(object filter, object order, object|function(int(0..1), array(mapping)|mixed:void) cb,
-//!		      mixed ... extra)
-//! @expr{order@} is an optional parameter allowing results to be ordered.
-void select_complex(object filter, object order, object limit, mixed cb, mixed ... extra) {
-
-    mixed rows;
-
+object|array(mapping) low_select_complex(object filter, object order, object limit) {
     object sql = this_program::sql;
 
     mixed err = sql_error(sql, catch {
-	.Query index = filter->encode_sql(this);
-
-	if (!sizeof(index)) {
-	    cb(1, "Need indexable field(s).\n", @extra);
-	    return;
-	}
+        object|array(mapping) rows;
+	.Query index;
+        
+        if (filter) index = filter->encode_sql(this);
+        else index = .Query("TRUE");
 
 	if (order)
             index += order->encode_sql(this);
@@ -534,7 +532,22 @@ void select_complex(object filter, object order, object limit, mixed cb, mixed .
             rows = SyncDB.MySQL.ResultSet(rows);
             rows->num_rows = (int)sql->query("SELECT FOUND_ROWS() as num;")[0]->num;
         }
+
+        return rows;
     });
+
+    throw(err);
+}
+
+//! @decl void select_complex(object filter, object order, object|function(int(0..1), array(mapping)|mixed:void) cb,
+//!		      mixed ... extra)
+//! @expr{order@} is an optional parameter allowing results to be ordered.
+void select_complex(object filter, object order, object limit, mixed cb, mixed ... extra) {
+    mixed rows;
+    
+    mixed err = catch {
+        rows = low_select_complex(filter, order, limit);
+    };
 
     if (!err) {
         cb(0, rows, @extra);
@@ -704,8 +717,10 @@ void drop(object(SyncDB.MySQL.Filter.Base) filter) {
     filter &= schema["version"]->fields[0]->Gt(0);
 
     mixed err = sql_error(sql, catch {
+        array(mapping) rows = low_select_complex(filter, 0, 0);
         .Query q = delete_sql + filter->encode_sql(this);
         q(sql);
+        signal_update(-rows[0]->version, rows);
         return;
     });
 
@@ -727,21 +742,28 @@ void drop(object(SyncDB.MySQL.Filter.Base) filter) {
 object(SyncDB.MySQL.Filter.Base) low_insert(array(mapping) rows) {
     object sql = this_program::sql;
 
-    trigger("before_insert", rows);
-
     if (sizeof(table_objects()) > 1) error("low_insert does not support remote table.\n");
 
     object table = table_objects()[0];
 
     mapping def = schema->default_row;
 
-    if (sizeof(def))
-        rows = map(rows, Function.curry(predef::`+)(def));
-    rows = map(rows, table->insert);
+    if (sizeof(def)) {
+        foreach (rows;; mapping row) {
+            foreach (def; string s; mixed v) {
+                if (!has_index(row, s) || (objectp(row[s]) && row[s]->is_val_null))
+                    row[s] = v;
+            }
+        }
+    }
 
-    array(string) fields = indices(rows[0]);
+    trigger("before_insert", rows);
 
-    array data = Array.flatten(map(rows, Function.curry(map)(fields)));
+    array data = map(rows, table->insert);
+
+    array(string) fields = indices(data[0]);
+
+    data = Array.flatten(map(data, Function.curry(map)(fields)));
 
     object insert_sql = .Query("INSERT INTO `" + table->name + "` (" + fields * "," + ") VALUES (" +
                                allocate(sizeof(rows), allocate(sizeof(fields), "%s") * ",") * "),(" +
@@ -751,9 +773,18 @@ object(SyncDB.MySQL.Filter.Base) low_insert(array(mapping) rows) {
     mixed err = sql_error(sql, catch {
         insert_sql(sql);
 
-        int last_id = sql->master_sql->insert_id();
+        update_table_version();
 
-        return schema->id->Ge(last_id) & schema->id->Lt(last_id + sizeof(rows));
+        signal_update(version, rows);
+
+        trigger("after_insert", rows);
+
+        if (schema->automatic == schema->id) {
+            int last_id = sql->master_sql->insert_id();
+            return schema->id->Ge(last_id) & schema->id->Lt(last_id + sizeof(rows));
+        } else {
+            return schema->id->In(predef::`->(rows, schema->key));
+        }
     });
 
     throw(err);
