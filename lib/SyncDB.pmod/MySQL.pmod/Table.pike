@@ -779,7 +779,7 @@ object(SyncDB.MySQL.Filter.Base) low_insert(array(mapping) rows) {
 
         trigger("after_insert", rows);
 
-        if (schema->automatic == schema->id) {
+        if (schema->automatic == schema->key) {
             int last_id = sql->master_sql->insert_id();
             return schema->id->Ge(last_id) & schema->id->Lt(last_id + sizeof(rows));
         } else {

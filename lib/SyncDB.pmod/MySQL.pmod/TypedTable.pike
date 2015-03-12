@@ -131,6 +131,7 @@ array(object) fetch(void|object filter, void|object order, void|object limit) {
 array(object)|object put(array(mapping)|mapping row) {
     object filter = low_insert(arrayp(row) ? row : ({ row }));
     array(object) ret = fetch(filter);
+    if (!sizeof(ret)) error("Could not fetch row after inserting %O\nfilter: %O\n", row, filter);
     return arrayp(row) ? ret : ret[0];
 }
 
