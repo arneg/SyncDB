@@ -1,15 +1,32 @@
 inherit SyncDB.MySQL.Restriction;
 
 array(object) fetch(void|object filter, void|object order, void|object limit) {
-    return table->fetch(filter ? filter & restriction : restriction, order, limit);
+    return table->fetch(filter & restriction, order, limit);
 }
 
-object put(mapping row, mixed ... args) {
-    row += ([]);
-    restriction->insert(row);
-    return table->put(row, @args);
+object put(array(mapping)|mapping row) {
+    if (arrayp(row)) {
+        mapping tmp = ([]);
+        restriction->insert(tmp);
+        row = map(row, predef::`+, tmp);
+    } else {
+        row += ([]);
+        restriction->insert(row);
+    }
+    return table->put(row);
 }
 
+void just_put(array(mapping)|mapping row) {
+    if (arrayp(row)) {
+        mapping tmp = ([]);
+        restriction->insert(tmp);
+        row = map(row, predef::`+, tmp);
+    } else {
+        row += ([]);
+        restriction->insert(row);
+    }
+    table->just_put(row);
+}
 
 int(0..) count(void|object filter) {
     return table->count(filter & restriction);
