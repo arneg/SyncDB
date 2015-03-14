@@ -15,3 +15,7 @@ string encode_json() {
 string sql_type(function(mixed:string) encode) {
     return sprintf("NOT NULL");
 }
+
+array(SyncDB.MySQL.Query) flag_definitions(object type) {
+    return ({ SyncDB.MySQL.Query("NOT NULL") });
+}

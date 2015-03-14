@@ -4,7 +4,17 @@ string key;
 object id, version;
 array(string) index = ({ });
 string automatic;
-object restriction;
+
+array(object) migrations = ({ });
+private array(object) index_list = ({ });
+
+int get_schema_version() {
+    return sizeof(migrations);
+}
+
+array(object) get_indices() {
+    return index_list;
+}
 
 mapping default_row = ([]);
 
@@ -13,35 +23,8 @@ string _sprintf(int t) {
 }
 
 void create(object ... m) {
-    fields = m;
-    this_program::m = mkmapping(m->name, m);
-#if 1
-    //foreach (fields;; SyncDB.Types.Base type) {
-    foreach (fields;; object type) {
-	if (type->name == "version") {
-	    error("field called 'version' is reserved.");
-	}
-	// WINNER: Table(..., schema->m->foo->Equal("12"));
-	// Schema(..., SyncDB.Restriction.String("field", ...Equal("hans")))
-	if (Program.inherits(object_program(type), SyncDB.MySQL.Filter.Base)) {
-	    if (restriction) error("You cannot have more than one restriction "
-				   "(use And/Or/...)\n");
-	    restriction = type;
-	    continue;
-	}
-	if (type->is->index) index += ({ type->name });
-	if (type->is->key) {
-	    if (key) error("Defined two different keys in one schema.\n");
-	    key = type->name;
-	    id = type;
-	}
-	if (type->is->automatic) {
-	    if (automatic) error("Defined two different auto-increment values in one schema\n");
-	    automatic = type->name;
-	}
-    }
-#endif
-    fields->get_default(default_row);
+    this_program::m = ([ ]);
+    map(m, add_type);
     add_type(version = SyncDB.Types.Version("version", tables(),
                                             SyncDB.Flags.Automatic(),
 					    SyncDB.Flags.Unique(),
@@ -73,8 +56,25 @@ array(SyncDB.Types.Base) unique_fields() {
 
 void add_type(object type) {
     if (has_index(m, type->name)) fields = filter(fields, `!=, m[type->name]);
+    if (Program.inherits(object_program(type), SyncDB.MySQL.Filter.Base)) {
+        error("Restriction support has been removed.\n");
+    }
+    if (type->is->index) {
+        index += ({ type->name });
+        index_list += ({ .Indices.Btree(type->name, type) });
+    }
+    if (type->is->key) {
+        if (key) error("Defined two different keys in one schema.\n");
+        key = type->name;
+        id = type;
+    }
+    if (type->is->automatic) {
+        if (automatic) error("Defined two different auto-increment values in one schema\n");
+        automatic = type->name;
+    }
     fields += ({ type });
     m[type->name] = type;
+    fields->get_default(default_row);
 }
 
 #if constant(Serialization)

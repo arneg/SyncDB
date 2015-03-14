@@ -25,6 +25,10 @@ string sql_type(Sql.Sql sql) {
     return ::sql_type(sql, "LONGTEXT");
 }
 
+array(SyncDB.MySQL.Query) column_definitions(void|function(object:int(0..1)) filter_cb) {
+    return ::column_definitions("LONGTEXT", filter_cb);
+}
+
 void generate_decode_value(object buf, string val) {
     buf->add("%H(%s)", Standards.JSON.decode, val);
 }

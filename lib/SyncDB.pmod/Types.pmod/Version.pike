@@ -1,9 +1,9 @@
 inherit .Vector;
 
 void create(string name, array(string) tables, SyncDB.Flags.Base ... flags) {
-    int i;
+    int i = 0;
     array a = allocate(sizeof(tables)+1);
-    for (i = 0; i < sizeof(tables) ; i++) {
+    for (; i < sizeof(tables) ; i++) {
 	a[i] = SyncDB.Types.Integer(sprintf("_version_%d", i),
 				SyncDB.Flags.Foreign(tables[i], "version"));
     }

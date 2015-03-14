@@ -10,3 +10,7 @@ string encode_json() {
 string sql_type(function(mixed:string) encode) {
     return "AUTO_INCREMENT";
 }
+
+array(SyncDB.MySQL.Query) flag_definitions(object type) {
+    return ({ SyncDB.MySQL.Query("AUTO_INCREMENT") });
+}

@@ -69,3 +69,10 @@ string sql_type(Sql.Sql sql, void|string type) {
     else return 0;
 }
 
+array(SyncDB.MySQL.Query) column_definitions(object(SyncDB.MySQL.Query)|string sql_type,
+                                             void|function(object:int(0..1)) filter_cb) {
+    array(SyncDB.MySQL.Query) flag_definitions = Array.flatten((filter_cb ? filter(_flags, filter_cb) : _flags)->flag_definitions(this));
+    flag_definitions = map(flag_definitions, predef::`+, " ");
+    return ({ predef::`+(SyncDB.MySQL.Query(sprintf("`%s` ", name)), sql_type, " ", @flag_definitions) });
+}
+

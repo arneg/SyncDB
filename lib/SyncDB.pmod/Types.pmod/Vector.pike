@@ -56,5 +56,13 @@ string encode_json(void|string p, void|array extra) {
 }
 
 array(string)|string sql_type(Sql.Sql sql, void|function(object:int(0..1)) filter_cb) {
-    return filter(fields, filter_cb)->sql_type(sql);
+    return (filter_cb ? filter(fields, filter_cb) : fields)->sql_type(sql);
+}
+
+array(SyncDB.MySQL.Query) column_definitions(void|function(object:int(0..1)) filter_cb) {
+    return predef::`+(@((filter_cb ? filter(fields, filter_cb) : fields)->column_definitions()));
+}
+
+int(0..1) _equal(mixed b) {
+    return ::_equal(b) && equal(fields, b->fields);
 }

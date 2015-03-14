@@ -42,6 +42,13 @@ string sql_type(Sql.Sql sql) {
     }
 }
 
+array(SyncDB.MySQL.Query) column_definitions(void|function(object:int(0..1)) filter_cb) {
+    string sql_type;
+    if (length) sql_type = sprintf("VARCHAR(%d)", length);
+    else sql_type = "LONGTEXT BINARY";
+    return ::column_definitions(sql_type, filter_cb);
+}
+
 void create(string name, mixed ... args) {
     if (sizeof(args) && intp(args[0]) && args[0] > 0) {
 	length = args[0];

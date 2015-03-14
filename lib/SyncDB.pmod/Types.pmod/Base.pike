@@ -1,7 +1,7 @@
 constant is_readable = 1;
 constant is_writable = 1;
 
-protected array(SyncDB.Flags.Base) _flags;
+array(SyncDB.Flags.Base) _flags;
 mapping(string:SyncDB.Flags.Base) flags = ([]);
 mapping(string:int(0..1)) is = ([
     "readable" : 1,
@@ -121,6 +121,12 @@ object get_filter_parser() {
 
 string sql_type(Sql.Sql sql, void|string type);
 
+array(SyncDB.MySQL.Query) column_definitions(void|function(object:int(0..1)) filter_cb);
+
 string _sprintf(int t) {
     return sprintf("%O(%O, %s)", this_program, name, map(_flags, Function.curry(sprintf)("%O")) * ", ");
+}
+
+int(0..1) _equal(mixed b) {
+    return objectp(b) && object_program(b) == this_program && equal(_flags, b->_flags);
 }

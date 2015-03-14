@@ -17,3 +17,7 @@ void generate_decode_value(object buf, string val) {
 void generate_encode_value(object buf, string val) {
     buf->add(val);
 }
+
+array(SyncDB.MySQL.Query) column_definitions(void|function(object:int(0..1)) filter_cb) {
+    return ::column_definitions("BLOB", filter_cb);
+}
