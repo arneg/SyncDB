@@ -23,6 +23,10 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb2, mixed ... 
     table->insert(row, cb2, extra);
 }
 
+void drop(object(SyncDB.MySQL.Filter.Base) filter) {
+    table->drop(filter & restriction);
+}
+
 mixed `->(string name) {
     mixed v = call_function(::`->, name, this); 
 
