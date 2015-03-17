@@ -718,6 +718,7 @@ void drop(object(SyncDB.MySQL.Filter.Base) filter) {
 
     mixed err = sql_error(sql, catch {
         array(mapping) rows = low_select_complex(filter, 0, 0);
+        if (!sizeof(rows)) return;
         .Query q = delete_sql + filter->encode_sql(this);
         q(sql);
         signal_update(-rows[0]->version, rows);
