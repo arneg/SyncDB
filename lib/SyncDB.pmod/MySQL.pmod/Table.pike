@@ -713,16 +713,21 @@ void delete(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
     }
 }
 
-void drop(object(SyncDB.MySQL.Filter.Base) filter) {
+array drop(object(SyncDB.MySQL.Filter.Base) filter) {
     filter &= schema["version"]->fields[0]->Gt(0);
 
     mixed err = sql_error(sql, catch {
-        array(mapping) rows = low_select_complex(filter, 0, 0);
-        if (!sizeof(rows)) return;
+        array rows = low_select_complex(filter, 0, 0);
+        if (!sizeof(rows)) return rows;
+        foreach (rows;; mapping row) trigger("before_delete", row);
         .Query q = delete_sql + filter->encode_sql(this);
         q(sql);
-        signal_update(-rows[0]->version, rows);
-        return;
+        foreach (rows;; mapping row) {
+            trigger("after_delete", row);
+            row->version = 0;
+        }
+        signal_update(-version, rows);
+        return rows;
     });
 
     throw(err);

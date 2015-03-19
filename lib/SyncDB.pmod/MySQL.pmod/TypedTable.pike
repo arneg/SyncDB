@@ -226,13 +226,15 @@ void signal_update(SyncDB.Version version, void|array(mapping) rows) {
 
     trigger("change");
 
+    int(0..1) is_delete = version->is_deleted();
+
     foreach (rows;; mapping row) {
         mixed id = get_unique_identifier(row);
         invalidate_requests(id);
         // this is the local trigger, we dont need to notify the data
         // themselves, since they were the source of the change event.
 
-        if (!row->version && cache[id]) {
+        if (is_delete && cache[id]) {
             m_delete(cache, id);
         }
     }
@@ -256,6 +258,8 @@ void destroy() {
 void handle_update(SyncDB.Version version, void|array(mapping) rows) {
     ::handle_update(version, rows);
 
+    int(0..1) is_delete = version->is_deleted();
+
     trigger("change");
 
     foreach (rows;; mapping row) {
@@ -267,9 +271,10 @@ void handle_update(SyncDB.Version version, void|array(mapping) rows) {
         if (cache[id]) {
             // we make sure to copy it here, since complex types could be shared otherwise
             // ->update will call onchange!
-            cache[id]->update(copy_value(row));
-            if (!row->version) {
-                m_delete(cache, id);
+            if (is_delete) {
+                m_delete(cache, id)->mark_deleted();
+            } else {
+                cache[id]->update(copy_value(row));
             }
         }
     }

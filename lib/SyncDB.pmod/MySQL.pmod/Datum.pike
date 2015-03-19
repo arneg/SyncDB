@@ -102,6 +102,7 @@ protected void force_update() {
 }
 
 void modify(mapping diff) {
+    if (is_deleted()) error("Modifying deleted record.\n");
     foreach (diff; string name; mixed value) check_value(name, value);
     _modified += diff - ({ "version" });
 }
@@ -114,6 +115,7 @@ protected mapping id_data() {
 }
 
 protected void save_unlocked(function(int, mixed...:void)|void cb, mixed ... extra) {
+    if (is_deleted()) error("Modifying deleted record.\n");
     if (!cb) cb = generic_cb;
     if (!sizeof(_modified)) {
         cb(0);
@@ -145,7 +147,17 @@ protected void save_unlocked(function(int, mixed...:void)|void cb, mixed ... ext
 
 protected mixed save_id;
 
+int(0..1) is_deleted() {
+    return !has_index(_data, "version");
+}
+
+void mark_deleted() {
+    m_delete(_data, version);
+    _modified = ([]);
+}
+
 int(0..1) drop() {
+    if (is_deleted()) return 1;
     int(0..1) ret;
     mixed v;
     void cb(int(0..1) err, mixed b) {
