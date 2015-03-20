@@ -32,10 +32,19 @@ void unregister_dependency(string table, string trigger, function fun) {
     dependencies[table][trigger] -= ({ fun });
 }
 
+void unregister_view(string name, program type, object table) {
+    table->set_database();
+    ::unregister_view(name, type, table);
+}
+
+void register_table(string name, program type, object table) {
+    ::register_table(name, type, table);
+    table->set_database(this);
+}
+
 object register_view(string name, program type) {
     object table = type()->get_table(sqlcb, name);
     register_table(name, type, table);
-    table->set_database(this);
 
     if (has_index(dependencies, name))
         foreach (dependencies[name]; string trigger; array(function) a)
