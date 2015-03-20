@@ -19,17 +19,23 @@ mapping(string:object) `nfields() {
     return .get_nfields(object_program(smart_type));
 }
 
-void set_database(object o) {
-    ::set_database(o);
+void set_database(void|object o) {
     array(object) fields = this_program::fields;
 
-    if (!fields) {
-        error("cannot find fields for %O in %O\n", smart_type, .type_to_fields);
+    if (database) {
+        foreach (fields;; object field) {
+            if (field->remove_dependencies)
+                field->remove_dependencies(this, database);
+        }
     }
 
-    foreach (fields;; object field) {
-        if (field->create_dependencies)
-            field->create_dependencies(this, o);
+    ::set_database(o);
+
+    if (o) {
+        foreach (fields;; object field) {
+            if (field->create_dependencies)
+                field->create_dependencies(this, o);
+        }
     }
 }
 
@@ -241,15 +247,8 @@ void signal_update(SyncDB.Version version, void|array(mapping) rows) {
 }
 
 void destroy() {
-    array(object) fields = this_program::fields;
 
     map(indices(_requests), invalidate_requests);
-
-    if (database && arrayp(fields))
-        foreach (fields;; object field) {
-            if (field->remove_dependencies)
-                field->remove_dependencies(this, database);
-        }
 
     ::destroy();
 }

@@ -27,7 +27,7 @@ void signal_update(SyncDB.Version nversion, void|array(mapping) rows) {
 
 object database;
 
-void set_database(object o) {
+void set_database(void|object o) {
     database = o;
 }
 
