@@ -484,14 +484,15 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
     update_table_version();
 }
 
-void update_table_version() {
+void update_table_version(void|object con) {
+    if (!con) con = sql;
     array t = table_names();
 
     foreach (t; int i; string name) {
 	t[i] = sprintf("ABS(MAX(`%s`.version)) AS '%<s.version'", name);
     }
 
-    array r = query(sprintf("SELECT "+t*", "+" FROM `%s` WHERE 1;", table_names()*"`,`"));
+    array r = con->query(sprintf("SELECT "+t*", "+" FROM `%s` WHERE 1;", table_names()*"`,`"));
 
     foreach (table_names();; string name) {
         if (!r[0][name+".version"]) r[0][name+".version"] = "0";
@@ -776,22 +777,32 @@ object(SyncDB.MySQL.Filter.Base) low_insert(array(mapping) rows) {
                                ")");
     insert_sql->args = data;
 
+    int locked = 0;
+
     mixed err = sql_error(sql, catch {
+        object filter;
+	lock_tables(sql); locked = 1;
+
         insert_sql(sql);
 
-        update_table_version();
+        if (schema->automatic == schema->key) {
+            int last_id = sql->master_sql->insert_id();
+            filter = schema->id->Ge(last_id) & schema->id->Lt(last_id + sizeof(rows));
+        } else {
+            filter = schema->id->In(predef::`->(rows, schema->key));
+        }
+
+        update_table_version(sql);
+
+        unlock_tables(sql); locked = 0;
 
         signal_update(version, rows);
 
         trigger("after_insert", rows);
-
-        if (schema->automatic == schema->key) {
-            int last_id = sql->master_sql->insert_id();
-            return schema->id->Ge(last_id) & schema->id->Lt(last_id + sizeof(rows));
-        } else {
-            return schema->id->In(predef::`->(rows, schema->key));
-        }
+        return filter;
     });
+
+    if (locked) unlock_tables(sql);
 
     throw(err);
 }
