@@ -460,7 +460,7 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
     _update_sql = .Query(sprintf("UPDATE `%s` SET ", table_names()*"`,`"));
     delete_sql = .Query(sprintf("DELETE FROM `%s` WHERE ", table));
 
-    count_sql = .Query(sprintf("SELECT COUNT(%s) as cnt from `%s` WHERE ", schema->id->escaped_sql_name(table), table));
+    count_sql = .Query(sprintf("SELECT COUNT(*) as cnt from `%s` WHERE ", table));
 
     t = ({});
     install_triggers(table);
@@ -786,11 +786,13 @@ object(SyncDB.MySQL.Filter.Base) low_insert(array(mapping) rows) {
 
         insert_sql(sql);
 
-        if (schema->automatic == schema->key) {
-            int last_id = sql->master_sql->insert_id();
-            filter = schema->id->Ge(last_id) & schema->id->Lt(last_id + sizeof(rows));
-        } else {
-            filter = schema->id->In(predef::`->(rows, schema->key));
+        if (schema->id) {
+            if (schema->id->is->automatic) {
+                int last_id = sql->master_sql->insert_id();
+                filter = schema->id->Ge(last_id) & schema->id->Lt(last_id + sizeof(rows));
+            } else {
+                filter = schema->id->In(predef::`->(rows, schema->key));
+            }
         }
 
         update_table_version(sql);
