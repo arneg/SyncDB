@@ -45,7 +45,7 @@ mapping ignore_to() {
  * - columns changing type trivially (so that mysql does it without problems)
  * - columns being added
  * - creation/deletion and change of indices
- * 
+ *
  * things that require manual handling
  *
  * - renaming (should be simple)
@@ -101,7 +101,7 @@ array(.MySQL.Query) alter_statements() {
 
 array(.MySQL.Query) add_columns() {
     mapping to_add = (to_types() - values(rename_types())) - from_types() - ignore_to();
-    
+
     array(.MySQL.Query) ret = ({ });
 
     foreach (to;; object type) {
@@ -119,7 +119,7 @@ array(.MySQL.Query) add_columns() {
 
 array(.MySQL.Query) drop_columns() {
     mapping to_drop = (from_types() - indices(rename_types())) - to_types() - ignore_from();
-    
+
     array(.MySQL.Query) ret = ({ });
 
     if (from) foreach (from;; object type) {
@@ -148,7 +148,7 @@ array(.MySQL.Query) rename_columns() {
         object new_type = b[new_name];
 
         array(.MySQL.Query) column_definitions = new_type->column_definitions();
-        
+
         foreach (type->escaped_sql_names(); int i; string old_name)
             ret += ({ .MySQL.Query(sprintf("CHANGE COLUMN %s ", old_name)) + column_definitions[i] });
     }
