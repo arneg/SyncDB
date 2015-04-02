@@ -1,9 +1,21 @@
-mapping(string:SyncDB.Types.Base) m;
+//! Array of all fields.
 array(SyncDB.Types.Base) fields;
-string key;
-object id, version;
-array(string) index = ({ });
+
+//! Mapping containing @[fields], indexed by their names.
+mapping(string:SyncDB.Types.Base) m;
+
 string automatic;
+
+//! If the schema contains a unique key field, this one will be it.
+object id;
+
+//! If the schema contains a version field, this one will be it.
+object version;
+
+//! Name of the @[id].
+string `key() {
+    return id?->name;
+}
 
 array(object) migrations = ({ });
 private array(object) index_list = ({ });
@@ -16,6 +28,7 @@ array(object) get_indices() {
     return index_list;
 }
 
+//! Row of default values associated to this schema.
 mapping default_row = ([]);
 
 string _sprintf(int t) {
@@ -60,12 +73,10 @@ void add_type(object type) {
         error("Restriction support has been removed.\n");
     }
     if (type->is->index) {
-        index += ({ type->name });
         index_list += ({ .Indices.Btree(type->name, type) });
     }
     if (type->is->key) {
-        if (key) error("Defined two different keys in one schema.\n");
-        key = type->name;
+        if (id) error("Defined two different keys in one schema.\n");
         id = type;
     }
     if (type->is->automatic) {
