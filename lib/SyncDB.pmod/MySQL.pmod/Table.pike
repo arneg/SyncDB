@@ -399,7 +399,8 @@ string table_name() {
     return table;
 }
 
-void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema schema, string table) {
+void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema schema, void|string table) {
+    if (!table) table = dbname;
     this_program::table = table;
     sql = con;
     table_o = Table(table);
