@@ -36,3 +36,7 @@ void generate_decode_value(object buf, string val) {
 void generate_encode_value(object buf, string val) {
     buf->add("%H(%s)", Standards.JSON.encode, val);
 }
+
+string type_name() {
+    return "json";
+}

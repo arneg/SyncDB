@@ -21,3 +21,7 @@ void generate_encode_value(object buf, string val) {
 array(SyncDB.MySQL.Query) column_definitions(void|function(object:int(0..1)) filter_cb) {
     return ::column_definitions("BLOB", filter_cb);
 }
+
+string type_name() {
+    return "binary";
+}

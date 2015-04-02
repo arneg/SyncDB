@@ -58,3 +58,7 @@ object get_filter_parser() {
 string encode_json() {
     return ::encode_json("SyncDB.Types.Range", map(fields, Standards.JSON.encode));
 }
+
+string type_name() {
+    return "range";
+}

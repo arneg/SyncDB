@@ -130,3 +130,5 @@ string _sprintf(int t) {
 int(0..1) _equal(mixed b) {
     return objectp(b) && object_program(b) == this_program && equal(_flags, b->_flags);
 }
+
+string type_name();

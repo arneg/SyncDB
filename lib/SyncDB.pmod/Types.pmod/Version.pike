@@ -58,3 +58,6 @@ void generate_decode(object buf, string table) {
     }
 }
 
+string type_name() {
+    return "version";
+}

@@ -45,3 +45,7 @@ object get_filter_parser() {
 array(SyncDB.MySQL.Query) column_definitions(void|function(object:int(0..1)) filter_cb) {
     return ::column_definitions("DOUBLE", filter_cb);
 }
+
+string type_name() {
+    return "float";
+}

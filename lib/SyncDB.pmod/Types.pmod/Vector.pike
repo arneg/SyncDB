@@ -66,3 +66,7 @@ array(SyncDB.MySQL.Query) column_definitions(void|function(object:int(0..1)) fil
 int(0..1) _equal(mixed b) {
     return ::_equal(b) && equal(fields, b->fields);
 }
+
+string type_name() {
+    return "vector";
+}

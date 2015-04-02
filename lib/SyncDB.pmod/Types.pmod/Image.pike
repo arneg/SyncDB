@@ -9,3 +9,7 @@ object get_parser() {
 string encode_json() {
     return ::encode_json("SyncDB.Types.Image");
 }
+
+string type_name() {
+    return "image";
+}

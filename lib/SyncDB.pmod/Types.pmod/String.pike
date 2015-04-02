@@ -58,3 +58,7 @@ void create(string name, mixed ... args) {
 
     length = (int)this->flags->maxlength;
 }
+
+string type_name() {
+    return "string";
+}

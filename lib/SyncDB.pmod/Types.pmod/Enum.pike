@@ -26,3 +26,7 @@ array(SyncDB.MySQL.Query) column_definitions(void|function(object:int(0..1)) fil
     SyncDB.MySQL.Query sql_type = SyncDB.MySQL.Query("ENUM(" + allocate(sizeof(options), "'%s'") * "," + ")", options);
     return ::column_definitions(sql_type, filter_cb);
 }
+
+string type_name() {
+    return "enum";
+}

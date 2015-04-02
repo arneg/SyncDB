@@ -59,3 +59,7 @@ string sql_type(Sql.Sql sql) {
 array(SyncDB.MySQL.Query) column_definitions(void|function(object:int(0..1)) filter_cb) {
     return ::column_definitions("DATETIME", filter_cb);
 }
+
+string type_name() {
+    return "datetime";
+}
