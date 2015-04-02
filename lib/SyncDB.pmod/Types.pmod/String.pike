@@ -51,13 +51,10 @@ array(SyncDB.MySQL.Query) column_definitions(void|function(object:int(0..1)) fil
 
 void create(string name, mixed ... args) {
     if (sizeof(args) && intp(args[0]) && args[0] > 0) {
-	length = args[0];
-	args = args[1..];
+        args[0] = SyncDB.Flags.MaxLength(args[0]);
     }
 
     ::create(name, @args);
 
-    if (!length) {
-        length = (int)this->flags->maxlength;
-    }
+    length = (int)this->flags->maxlength;
 }
