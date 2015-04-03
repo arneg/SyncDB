@@ -545,7 +545,7 @@ class PageIterator {
     inherit Iterator;
 
     object filter, order;
-    int rows, page;
+    int rows, page = 0;
 
     object data;
 
@@ -571,7 +571,7 @@ class PageIterator {
     }
 
     mixed value() {
-        return data;
+        return (array)data;
     }
 
     void set_index(int n) {
@@ -583,8 +583,12 @@ class PageIterator {
         return (data->num_rows + (rows - 1)) / rows;
     }
 
+    int num_rows() {
+        return data->num_rows;
+    }
+
     int(0..1) `!() {
-        return page < sizeof(this);
+        return page >= sizeof(this);
     }
 
     int next() {
