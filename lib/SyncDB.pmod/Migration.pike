@@ -241,7 +241,6 @@ void migrate(Sql.Sql sql, string table_name) {
             object tbl = SyncDB.MySQL.Table(table_name, sql, to);
             // fetch all rows and update
             foreach (tbl->PageIterator(0, 0, 100);; array|object rows) {
-                rows = (array)rows;
                 foreach (rows;; mapping row) {
                     row = update_row(row);
                     if (row) tbl->update(row, row->version, lambda(int n, mixed ... bar) {});
