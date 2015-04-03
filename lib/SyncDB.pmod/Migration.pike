@@ -1,5 +1,9 @@
 .Schema from, to;
 
+string _sprintf(int t) {
+    return sprintf("%O(%O, %O)", this_program, from, to);
+}
+
 mapping from_types() {
     return from ? from->m : ([]);
 }
@@ -170,6 +174,8 @@ array(.MySQL.Query) modify_columns() {
             array(string) to_names = t_to->escaped_sql_names();
             array(.MySQL.Query) column_definitions = t_to->column_definitions();
 
+            if (equal(column_definitions, t_from->column_definitions())) continue;
+
             if (!equal(from_names, to_names)) {
                 werror("Cannot automatically transform %O to %O\n", t_from, t_to);
                 continue;
@@ -201,6 +207,47 @@ array(.MySQL.Query) add_indices() {
     return ret;
 }
 
+void before_alter(Sql.Sql sql, string table_name);
+void after_alter(Sql.Sql sql, string table_name);
+
+mapping transform_row(mapping row);
+mapping update_row(mapping row);
+
 void migrate(Sql.Sql sql, string table_name) {
-    upgrade_table(table_name)(sql); 
+    if (transform_row) {
+        if (upgrade_table(table_name))
+            error("Both %O and native table upgrades are not compatible.\n", transform_row);
+
+        string cpy_table_name = table_name+"_migration_copy";
+        sql->query("RENAME TABLE `"+table_name+"` TO `"+cpy_table_name+"`");
+        create_table(table_name)(sql);
+
+        object tbl_orig = SyncDB.MySQL.Table(cpy_table_name, sql, from);
+        object tbl = SyncDB.MySQL.Table(table_name, sql, to);
+
+        foreach (tbl_orig->PageIterator(0, 0, 100);; array|object rows) {
+            rows = map((array)rows, transform_row);
+            rows = filter(rows, rows);
+            if (sizeof(rows)) tbl->low_insert(rows);
+        }
+
+        drop_table(cpy_table_name)(sql);
+    } else {
+        if (before_alter) before_alter(sql, table_name);
+        .MySQL.Query alter = upgrade_table(table_name);
+        if (alter) alter(sql);
+
+        if (update_row) {
+            object tbl = SyncDB.MySQL.Table(table_name, sql, to);
+            // fetch all rows and update
+            foreach (tbl->PageIterator(0, 0, 100);; array|object rows) {
+                rows = (array)rows;
+                foreach (rows;; mapping row) {
+                    row = update_row(row);
+                    if (row) tbl->update(row, row->version, lambda(int n, mixed ... bar) {});
+                }
+            }
+        }
+        if (after_alter) after_alter(sql, table_name);
+    }
 }

@@ -20,8 +20,77 @@ string `key() {
 array(object) migrations = ({ });
 private array(object) index_list = ({ });
 
+
+void type_versions(mapping m) {
+    fields->type_versions(m);
+}
+
+this_program get_previous_schema(int schema_version, mapping(string:int)|void versions) {
+    if (schema_version != sizeof(migrations)) {
+        if (schema_version > sizeof(migrations))
+            error("Schema is older than requested version.\n");
+        return migrations[schema_version]->from->get_previous_schema(schema_version, versions);
+    }
+
+    if (!versions) return this;
+
+    mapping my_versions = ([]);
+    array fields = (this_program::fields - ({ version }));
+
+    type_versions(my_versions);
+
+    foreach (my_versions; string name; int version) {
+        int requested_version = (int)versions[name];
+        if (version == requested_version) continue;
+        if (version < requested_version) error("Type version inversion. SyncDB version is too old.\n");
+
+        fields = fields->get_previous_type(name, requested_version);
+    }
+
+    return this_program(@fields);
+}
+
+object get_migration(string type_name, object from) {
+    array(object) ret = fields->get_migration(type_name, from, this);
+    ret = filter(ret, ret);
+    if (!sizeof(ret)) return 0;
+    if (sizeof(ret) == 1) return ret[0];
+    return predef::`+(@ret);
+}
+
 int get_schema_version() {
     return sizeof(migrations);
+}
+
+array(object) get_migrations(int schema_version, mapping(string:int) type_versions) {
+    if (schema_version < get_schema_version()) {
+        return get_previous_schema(schema_version)->get_migrations(schema_version, type_versions)
+            + ({ migrations[schema_version..] });
+    }
+    array(object) ret = ({ });
+    // first get the type versions, then the schema migrations
+    mapping my_versions = ([]);
+
+    this_program::type_versions(my_versions);
+
+    this_program from;
+
+    foreach (indices(type_versions + my_versions);; string type_name) {
+        while (type_versions[type_name] < my_versions[type_name]) {
+            if (!from)
+                from = get_previous_schema(schema_version, type_versions);
+            type_versions[type_name]++;
+            this_program to = get_previous_schema(schema_version, type_versions);
+
+            object migration = to->get_migration(type_name, from);
+
+            ret += ({ migration });
+
+            from = to;
+        }
+    }
+
+    return ret;
 }
 
 array(object) get_indices() {
@@ -113,7 +182,7 @@ object parser_in() {
 
 object parser_out() {
     return parser(lambda(string field, SyncDB.Types.Base type) {
-	  return type->is->readable && !type->is->hidden; 
+	  return type->is->readable && !type->is->hidden;
     });
 }
 #endif
