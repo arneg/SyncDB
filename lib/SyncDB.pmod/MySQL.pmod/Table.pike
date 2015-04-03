@@ -541,6 +541,69 @@ object|array(mapping) low_select_complex(object filter, object order, object lim
     throw(err);
 }
 
+class PageIterator {
+    inherit Iterator;
+
+    object filter, order;
+    int rows, page;
+
+    object data;
+
+    void create(object filter, object order, int rows) {
+        this_program::filter = filter;
+        this_program::order = order;
+        this_program::rows = rows;
+        fetch();
+    }
+
+    private void fetch() {
+        data = low_select_complex(filter, order, .Select.Limit(page * rows, rows));
+    }
+
+    int index() {
+        return page;
+    }
+
+    int first() {
+        page = 0;
+        fetch();
+        return sizeof(data);
+    }
+
+    mixed value() {
+        return data;
+    }
+
+    void set_index(int n) {
+        page = n;
+        fetch();
+    }
+
+    int _sizeof() {
+        return (data->num_rows + (rows - 1)) / rows;
+    }
+
+    int(0..1) `!() {
+        return page < sizeof(this);
+    }
+
+    int next() {
+        page++;
+        return page < sizeof(this);
+    }
+
+    this_program `+=(int steps) {
+        page += steps;
+        return this;
+    }
+
+    this_program `+(int ... steps) {
+        this_program o = this_program(filter, order, rows);
+        o->set_index(predef::`+(page, @steps));
+        return o;
+    }
+}
+
 //! @decl void select_complex(object filter, object order, object|function(int(0..1), array(mapping)|mixed:void) cb,
 //!		      mixed ... extra)
 //! @expr{order@} is an optional parameter allowing results to be ordered.
