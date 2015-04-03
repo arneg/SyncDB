@@ -26,3 +26,8 @@ object _get_iterator() {
 void sort(function cmp, mixed ... args) {
     a = Array.sort_array(a, cmp, @args);
 }
+
+mixed cast(string type) {
+    if (type == "array") return a;
+    error("Cannot cast %O to %O\n", this, type);
+}
