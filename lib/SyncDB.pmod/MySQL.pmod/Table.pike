@@ -356,19 +356,19 @@ void install_triggers(string table) {
             END IF;
 	END", table);
 
-    array a = query("SHOW TRIGGERS WHERE `Trigger` = %s;", "insert_"+table);
+    array a = query("SHOW TRIGGERS WHERE `Table` = %s AND `Event` = 'INSERT';", table);
 
     if (!sizeof(a) || a[0]->Statement != insertt) {
         if (sizeof(a))
-            query(sprintf("DROP TRIGGER insert_%s;", table));
+            query(sprintf("DROP TRIGGER %s;", a[0]->Trigger));
         query(sprintf("CREATE TRIGGER insert_%s BEFORE INSERT ON %<s FOR EACH ROW %s ;", table, insertt));
     }
 
-    a = query("SHOW TRIGGERS WHERE `Trigger` = %s;", "update_"+table);
+    a = query("SHOW TRIGGERS WHERE `Table` = %s AND `Event` = 'UPDATE';", table);
 
     if (!sizeof(a) || a[0]->Statement != updatet) {
         if (sizeof(a))
-            query(sprintf("DROP TRIGGER update_%s;", table));
+            query(sprintf("DROP TRIGGER %s;", a[0]->Trigger));
         query(sprintf("CREATE TRIGGER update_%s BEFORE UPDATE ON %<s FOR EACH ROW %s ;", table, updatet));
     }
 }
