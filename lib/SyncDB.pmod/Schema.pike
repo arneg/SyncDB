@@ -148,7 +148,7 @@ void add_type(object type) {
         if (id) error("Defined two different keys in one schema.\n");
         id = type;
     }
-    if (type->is->automatic) {
+    if (type != version && type->is->automatic) {
         if (automatic) error("Defined two different auto-increment values in one schema\n");
         automatic = type->name;
     }
