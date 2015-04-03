@@ -70,3 +70,22 @@ int(0..1) _equal(mixed b) {
 string type_name() {
     return "vector";
 }
+
+void type_versions(mapping(string:int) versions) {
+    ::type_versions(versions);
+    fields->type_versions(versions);
+}
+
+object get_previous_type(string type_name, int version) {
+    return this_program(name, fields->get_previous_type(type_name, version), @_flags);
+}
+
+object get_migration(string type_name, object from, object to) {
+    array(object) ret = fields->get_migration(type_name, from, to) +
+                        ({ ::get_migration(type_name, from, to) });
+
+    ret = filter(ret, ret);
+    if (!sizeof(ret)) return 0;
+    if (sizeof(ret) == 1) return ret[0];
+    return predef::`+(@ret);
+}

@@ -124,7 +124,9 @@ string sql_type(Sql.Sql sql, void|string type);
 array(SyncDB.MySQL.Query) column_definitions(void|function(object:int(0..1)) filter_cb);
 
 string _sprintf(int t) {
-    return sprintf("%O(%O, %s)", this_program, name, map(_flags, Function.curry(sprintf)("%O")) * ", ");
+    string f = map(_flags, Function.curry(sprintf)("%O")) * ", ";
+    if (sizeof(f)) f = ", "+f;
+    return sprintf("%O(%O%s)", this_program, name, f);
 }
 
 int(0..1) _equal(mixed b) {
@@ -132,3 +134,28 @@ int(0..1) _equal(mixed b) {
 }
 
 string type_name();
+
+object previous_type();
+
+int type_version() {
+    if (previous_type) return previous_type()->type_version() + 1;
+    return 0;
+}
+
+object get_previous_type(string type_name, int version) {
+    if (!this_program::type_name || this_program::type_name() != type_name) return this;
+    if (type_version() > version) return previous_type()->get_previous_type(type_name, version);
+    return this;
+}
+
+//! Get the migration object necessary to migrate from @[previous_type()@]. @expr{from@} is expected to
+//! contain types of @[previous_type()@].
+object get_migration(string type_name, object from, object to) {
+    if (type_name != this_program::type_name()) return 0;
+    if (!previous_type) return 0;
+    return master()->resolv("SyncDB.SimpleMigration")(from, to);
+}
+
+void type_versions(mapping(string:int) versions) {
+    versions[type_name()] = type_version();
+}
