@@ -169,6 +169,20 @@ void _test5() {
     test_simple(a, b);
 }
 
+void _test6() {
+    SyncDB.Schema a = SyncDB.Schema(
+        SyncDB.Types.Integer("id", SyncDB.Flags.Key(), SyncDB.Flags.Automatic()),
+        SyncDB.Types.Datetime("bar"),
+    );
+
+    SyncDB.Schema b = SyncDB.Schema(
+        SyncDB.Types.Integer("id", SyncDB.Flags.Key(), SyncDB.Flags.Automatic()),
+        SyncDB.Types.Date("bar"),
+    );
+
+    test_simple(a, b);
+}
+
 int success_count, error_count;
 
 void run(string path, function(mixed...:void) r, mixed ... args) {
