@@ -192,11 +192,11 @@ void run(string path, function(mixed...:void) r, mixed ... args) {
     float t_tot = (t2 - t1)/ 1E6;
 
     if (err) {
-        werror(" ERR %f seconds\n", t_tot);
+        werror(" ERR %f seconds (utime: %f seconds)\n", t_tot, t);
         error_count++;
         master()->handle_error(err);
     } else {
-        werror("  OK %f seconds\n", t_tot);
+        werror("  OK %f seconds (utime: %f seconds)\n", t_tot, t);
         success_count++;
     }
 }
