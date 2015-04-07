@@ -7,7 +7,7 @@ void populate_table(Sql.Sql sql, string table_name, SyncDB.Schema schema) {
 }
 
 void test_migrations(object ... migrations) {
-    SyncDB.Migration(0, migrations[0]->from)->create_table("table1")(sql);
+    SyncDB.Migration.Base(0, migrations[0]->from)->create_table("table1")(sql);
     populate_table(sql, "table1", migrations[0]->from);
     migrations->migrate(sql, "table1");
 
@@ -56,9 +56,7 @@ void test_migrations(object ... migrations) {
 }
 
 void test_simple(SyncDB.Schema a, SyncDB.Schema b) {
-    // FIXME: this aborts pike
-    // object(inherits SyncDB.Migration) mig = SyncDB.SimpleMigration(a, b);
-    object mig = SyncDB.SimpleMigration(a, b);
+    object mig = SyncDB.Migration.Simple(a, b);
 
     test_migrations(mig);
     
@@ -69,7 +67,7 @@ void test_simple(SyncDB.Schema a, SyncDB.Schema b) {
 }
 
 void test_alter(SyncDB.Schema a, SyncDB.Schema b) {
-    SyncDB.Migration mig = SyncDB.Migration(a, b);
+    object mig = SyncDB.Migration.Base(a, b);
 
     test_migrations(mig);
     
@@ -90,7 +88,7 @@ void _test1() {
         SyncDB.Types.Datetime("foo"),
     );
 
-    SyncDB.Migration mig2 = SyncDB.Migration(a, b);
+    SyncDB.Migration.Base mig2 = SyncDB.Migration.Base(a, b);
 
     mig2->rename_type("bar", "foo");
     mig2->rename_type("foo", "bar");
