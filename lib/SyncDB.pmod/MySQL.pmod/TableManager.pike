@@ -1,27 +1,25 @@
 private mapping(string:array(object)) local_tables = ([]);
 
-void unregister_view(string name, program type, object table) {
-    if (!Program.inherits(type, .SmartType)) {
-        master()->handle_error(catch(error("bad use of unregister_view(%O, %O, %O)\n", name, type, table)));
-    }
-    if (!local_tables[name]) return;
+object unregister_table(string name, object table) {
+    if (!local_tables[name]) return 0;
     local_tables[name] -= ({ table });
+
+    return table;
 }
 
-void register_table(string name, program type, object table) {
-    if (!Program.inherits(type, .SmartType))
-        master()->handle_error(catch(error("bad use of register_table(%O, %O, %O)\n", name, type, table)));
-    if (!local_tables[name]) {
+object register_table(string name, object table) {
+    if (!local_tables[name])
         local_tables[name] = ({ });
-    }
     local_tables[name] += ({ table });
+
+    return table;
 }
 
 mapping(string:array(object)) all_tables() {
     return local_tables;
 }
 
-class RemoteTable(string name, void|program type) {
+class RemoteTable(string name, void|object|program type) {
     object table;
 
     mixed `->(string key) {
@@ -45,24 +43,25 @@ class RemoteTable(string name, void|program type) {
     }
 };
 
-object low_get_table(string name, void|program type) {
+object low_get_table(string name, void|program|object type) {
     if (!local_tables[name] || !sizeof(local_tables[name]))
         return 0;
 
     if (!type) return local_tables[name][0];
 
     foreach (local_tables[name];; object table) {
-        if (object_program(table->smart_type) == type) return table;
+        if (!type || (objectp(type) && table->smart_type == type) ||
+            (programp(type) && object_program(table->smart_type) == type)) return table;
     }
 
     return 0;
 }
 
-object get_table(string name, void|program type) {
+object get_table(string name, void|object|program type) {
     return low_get_table(name, type) || RemoteTable(name, type);
 }
 
-function table_cb(string name, void|program type) {
+function table_cb(string name, void|object type) {
     return Function.curry(get_table)(name, type);
 }
 

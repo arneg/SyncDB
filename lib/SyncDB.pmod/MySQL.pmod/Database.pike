@@ -32,19 +32,10 @@ void unregister_dependency(string table, string trigger, function fun) {
     dependencies[table][trigger] -= ({ fun });
 }
 
-void unregister_view(string name, program type, object table) {
-    table->set_database();
-    ::unregister_view(name, type, table);
-}
+object register_view(string name, object type) {
+    object table = type->get_table(sqlcb, name);
 
-void register_table(string name, program type, object table) {
-    ::register_table(name, type, table);
-    table->set_database(this);
-}
-
-object register_view(string name, program type) {
-    object table = type()->get_table(sqlcb, name);
-    register_table(name, type, table);
+    register_table(name, table);
 
     if (has_index(dependencies, name))
         foreach (dependencies[name]; string trigger; array(function) a)
@@ -52,6 +43,21 @@ object register_view(string name, program type) {
                 table->register_trigger(trigger, fun);
 
     return table;
+}
+
+void unregister_view(string name, object type) {
+    object table = low_get_table(name, type);
+    unregister_table(name, table);
+}
+
+void register_table(string name, object table) {
+    ::register_table(name, table);
+    table->set_database(this);
+}
+
+void uregister_table(string name, object table) {
+    table->set_database();
+    ::unregister_table(name, table);
 }
 
 typedef function(object(SyncDB.Version),array(mapping|object):void) update_cb;
@@ -80,8 +86,4 @@ void signal_update(string|object table, object version, void|array(mapping) rows
         if (has_index(t, table)) t[table]->handle_update(version, rows);
         if (has_index(update_cbs, table)) call_out(update_cbs[table], 0, version, rows);
     }
-}
-
-void unregister_table(object table) {
-    unregister_view(table->table_name(), object_program(table->smart_type), table); 
 }
