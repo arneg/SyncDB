@@ -2,8 +2,18 @@ inherit "base";
 
 void populate_table(Sql.Sql sql, string table_name, SyncDB.Schema schema) {
     object tbl = SyncDB.MySQL.Table(table_name, sql, schema);
+    array rows = map(enumerate(100), Function.curry(sample_data)(schema));
 
-    tbl->low_insert(map(enumerate(100), Function.curry(sample_data)(schema)));
+    tbl->low_insert(rows);
+
+    array a = tbl->low_select_complex();
+
+    foreach (a; int i; mapping row) {
+        m_delete(row, "version");
+        m_delete(row, schema->automatic);
+        if (!equal(row, rows[i]))
+            error("Data does not survive insert/select:\n%O vs %O\n", row, rows[i]);
+    }
 }
 
 void test_migrations(object ... migrations) {
@@ -108,12 +118,12 @@ void _test2() {
     );
 
     test_migrations((class {
-        inherit SyncDB.SimpleMigration;
+        inherit SyncDB.Migration.Simple;
 
         mapping transform_row(mapping row) {
             return ([
-                "bar" : (string)row->bar,
-                "foo" : (string)row->foo,
+                "bar" : get_sample_data("string", row->bar),
+                "foo" : get_sample_data("string", row->foo),
             ]);
         }
     })(a, b));
@@ -131,11 +141,11 @@ void _test3() {
     );
 
     test_migrations((class {
-        inherit SyncDB.SimpleMigration;
+        inherit SyncDB.Migration.Simple;
 
         mapping transform_row(mapping row) {
             return row + ([
-                "bar" : (string)row->bar,
+                "bar" : get_sample_data("string", row->bar),
             ]);
         }
     })(a, b));
