@@ -46,13 +46,19 @@ void unregister_trigger(string name, function cb) {
     }
 }
 
+int(0..1) has_trigger(string name) {
+    return has_index(triggers, name);
+}
+
 
 function(void:Sql.Sql) _sql_cb;
 Sql.Sql _sql;
 
 Sql.Sql `sql() {
     if (_sql_cb) {
-        return _sql_cb();
+        Sql.Sql o = _sql_cb();
+        if (o->get_charset() != "unicode") error("Expect Sql.Sql objects with charset 'unicode'.\n");
+        return o;
     }
 
     return _sql;
@@ -62,6 +68,7 @@ Sql.Sql `sql=(Sql.Sql|function(void:Sql.Sql) o) {
     if (functionp(o)) {
 	_sql_cb = o;
     } else {
+        if (o->get_charset() != "unicode") error("Expect Sql.Sql objects with charset 'unicode'.\n");
 	_sql = o;
     }
 }
@@ -853,12 +860,15 @@ object(SyncDB.MySQL.Filter.Base) low_insert(array(mapping) rows) {
 
         insert_sql(sql);
 
+        // TODO: when inserting some rows with id, these checks will actually fail.
         if (schema->id) {
-            if (schema->id->is->automatic) {
+            object id_field = schema->id;
+
+            if (id_field->is->automatic) {
                 int last_id = sql->master_sql->insert_id();
-                filter = schema->id->Ge(last_id) & schema->id->Lt(last_id + sizeof(rows));
+                filter = id_field->Ge(last_id) & id_field->Lt(last_id + sizeof(rows));
             } else {
-                filter = schema->id->In(predef::`->(rows, schema->key));
+                filter = id_field->In(rows[id_field->name]);
             }
         }
 
