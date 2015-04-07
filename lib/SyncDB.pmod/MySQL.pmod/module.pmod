@@ -58,39 +58,6 @@ void create_table(Sql.Sql sql, string name, object schema) {
     }
 }
 
-mapping(program:object) type_to_schema = ([]);
-mapping(program:array(object)) type_to_fields = ([]);
-mapping(program:mapping(string:object)) type_to_nfields = ([]);
-
-object get_schema(program type) {
-    return type_to_schema[type];
-}
-
-void set_schema(program type, object schema) {
-    type_to_schema[type] = schema;
-}
-
-array(object) get_fields(program type) {
-    return type_to_fields[type];
-}
-
-mapping(string:object) get_nfields(program type) {
-    return type_to_nfields[type];
-}
-
-void set_fields(program type, array(object) fields) {
-    mapping nf;
-    type_to_fields[type] = fields;
-    type_to_nfields[type] = nf = mkmapping(fields->name, fields);
-    foreach (fields;; object f) {
-        if (f->fields) {
-            foreach (f->fields;; object subfield) {
-                nf[f->name + "." + subfield->name] = subfield;
-            }
-        }
-    }
-}
-
 mapping(string:array(object)) all_databases = ([]);
 
 void register_database(string name, object db) {

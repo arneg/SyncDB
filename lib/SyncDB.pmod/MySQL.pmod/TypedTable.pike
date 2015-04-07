@@ -12,11 +12,11 @@ void create(string dbname, function(void:Sql.Sql) cb, SyncDB.Schema schema, stri
 }
 
 array(object) `fields() {
-    return .get_fields(object_program(smart_type));
+    return smart_type->fields;
 }
 
 mapping(string:object) `nfields() {
-    return .get_nfields(object_program(smart_type));
+    return smart_type->nfields;
 }
 
 void set_database(void|object o) {
