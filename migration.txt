@@ -13,6 +13,12 @@ key Migration needs:
    tables (maybe not necessary, since the syncdb table would be included in
    the backup).
 
+Potential issues:
+
+1) The transform_row migration should make sure to also insert automatic
+   fields as such. Is this currently supported?
+
+
 
 some references:
 
