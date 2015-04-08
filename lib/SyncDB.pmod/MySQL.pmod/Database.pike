@@ -3,6 +3,12 @@ inherit .TableManager;
 function sqlcb;
 string name;
 
+array(this_program) other_databases() {
+    if (!name) return ({});
+
+    return .all_databases[name] - ({ this });
+}
+
 class TableVersion {
     inherit .SmartType;
 
