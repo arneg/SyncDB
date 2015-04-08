@@ -89,3 +89,9 @@ object get_migration(string type_name, object from, object to) {
     if (sizeof(ret) == 1) return ret[0];
     return predef::`+(@ret);
 }
+
+string _sprintf(int t) {
+    string f = map(_flags, Function.curry(sprintf)("%O")) * ", ";
+    if (sizeof(f)) f = ", "+f;
+    return sprintf("%O(%O, %O%s)", this_program, name, fields, f);
+}
