@@ -6,6 +6,8 @@ protected program datum = .Datum;
 protected program real_datum;
 protected program table_program = .TypedTable;
 
+array(mapping(string:object)) changes;
+
 program get_datum() {
     return real_datum;
 }
@@ -42,7 +44,6 @@ void create_table(function(void:Sql.Sql) get_sql, string name) {
     .create_table(get_sql(), name, schema);
 }
 
-
 protected class Field {
     mixed syncdb_class;
     array flags;
@@ -51,7 +52,6 @@ protected class Field {
     void create(program syncdb_class, mixed ... flags) {
         this_program::syncdb_class = syncdb_class;
         this_program::flags = flags;
-        fields += ({ this });
     }
 
     void compile_datum(object gen, object blueprint) {
@@ -83,15 +83,14 @@ void create() {
         mixed val = call_function(::`->, name, this);
         if (objectp(val) && Program.inherits(object_program(val), Field)) {
             val->name = name;
+            fields += ({ val });
         }
     }
-
-    // remove overloaded ones
-    fields = filter(fields, fields->name);
 
     schema = SyncDB.Schema(@fields->syncdb_type());
 
     nfields = mkmapping(fields->name, fields);
+
     foreach (fields;; object f) {
         if (f->fields) {
             foreach (f->fields;; object subfield) {
@@ -100,10 +99,44 @@ void create() {
         }
     }
 
+    if (changes) {
+        mapping current_fields = nfields;
+        array schemata = allocate(sizeof(changes) + 1);
+
+        for (int i = sizeof(changes)-1; i >= 0; i--) {
+            mapping m = changes[i];
+
+            foreach (m; string name; object field) if (field) field->name = name;
+
+            // overwrite with _previous_ fields
+            m = current_fields + m;
+
+            foreach (m; string name; object field) if (!field) m_delete(m, name);
+
+            // ordering is lost here, is this a problem?
+            // FIXME: we can win back the ordering, by extracting the order from within
+            // fields, i.e. use filter(fields, mkmapping(values(m), values(m)));
+            current_fields = m;
+
+            schemata[i] = SyncDB.Schema(@values(current_fields)->syncdb_type());
+        }
+
+        schemata[-1] = schema;
+
+        array migrations = allocate(sizeof(schemata)-1);
+
+        for (int i = 1; i < sizeof(schemata); i++) {
+            object schema = schemata[i];
+            migrations[i-1] = SyncDB.Migration.Base(schemata[i-1], schema);
+        }
+
+        schema->migrations = migrations;
+    }
+
     // compile datum
     object gen = SyncDB.Code.Program();
     compile_datum(gen, datum());
-//    werror("Compiling %O:\n%s\n==========\n", this_program, (string)gen->buf);
+    // werror("Compiling %O:\n%s\n==========\n", this_program, (string)gen->buf);
     real_datum = gen->compile(sprintf("Datum<%O>", this_program));
 }
 
