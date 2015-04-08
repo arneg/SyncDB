@@ -65,7 +65,7 @@ int get_schema_version() {
 array(object) get_migrations(int schema_version, mapping(string:int) type_versions) {
     if (schema_version < get_schema_version()) {
         return get_previous_schema(schema_version)->get_migrations(schema_version, type_versions)
-            + ({ migrations[schema_version..] });
+            + migrations[schema_version..];
     }
     array(object) ret = ({ });
     // first get the type versions, then the schema migrations
