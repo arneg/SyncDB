@@ -27,7 +27,7 @@ void test_migrations(object ... migrations) {
     mixed err = catch {
         {
             mixed v1 = sql->query("SHOW CREATE TABLE table1")["Create Table"];
-            mixed v2 = sql->query("SHOW CREATE TABLE table1")["Create Table"];
+            mixed v2 = sql->query("SHOW CREATE TABLE table2")["Create Table"];
 
             // we do not care about the order of columns
             if (sizeof(v1) != 1 || sizeof(v2) != 1) {
@@ -46,15 +46,29 @@ void test_migrations(object ... migrations) {
             object tbl1 = SyncDB.MySQL.Table("table1", sql, migrations[-1]->to);
             object tbl2 = SyncDB.MySQL.Table("table2", sql, migrations[-1]->to);
 
-            object it1 = tbl1->PageIterator(0, 0, 1);
-            object it2 = tbl2->PageIterator(0, 0, 1);
+            object it1 = tbl1->PageIterator(0, 0, 100);
+            object it2 = tbl2->PageIterator(0, 0, 100);
+
+            mapping mask = migrations[0]->from->m & migrations[-1]->to->m;
 
             if (it1->num_rows() != it2->num_rows())
                 error("Number of rows in tables differs after migration: %d vs %d\n", it1->num_rows(), it2->num_rows());
 
             for (; it1 && it2; it1++, it2++) {
-                if (!equal(it1->value(), it2->value()))
-                    error("Content in tables differs after migration.\n%O vs %O\n", it1->value(), it2->value());
+                array old = it1->value();
+                array new = it2->value();
+
+                foreach (old; int i; mapping v1) {
+                    mapping v2 = new[i];
+
+                    v2 = mask & v2;
+                    v1 = mask & v1;
+                    // just compare those values which have been present in both versions
+                    if (!equal(v1, v2))
+                        error("Content in tables differs after migration %O.\n%O vs %O\n",
+                              migrations, v1, v2);
+                }
+
             }
         }
     };
@@ -85,6 +99,14 @@ void test_alter(SyncDB.Schema a, SyncDB.Schema b) {
     if (sizeof(migrations)) test_migrations(@migrations);
     migrations = b->get_migrations(0, ([]));
     if (sizeof(migrations)) test_migrations(@migrations);
+}
+
+void test_smarttype(program type) {
+    object a = type();
+    array migrations = a->schema->get_migrations(0, ([]));
+    
+    if (sizeof(migrations))
+        test_migrations(@migrations);
 }
 
 void _test1() {
@@ -191,6 +213,30 @@ void _test6() {
     test_simple(a, b);
 }
 
+void _test7() {
+    class A {
+        inherit SyncDB.MySQL.SmartType;
+
+        Field id = Integer(KEY, AUTOMATIC);
+        Field foo = String();
+
+        array(mapping(string:object)) changes = ({
+            ([
+                "foo" : 0,
+                "bar" : Integer(),
+            ]),
+            ([
+                "flu" : 0,
+             ]),
+            ([
+                "flu" : JSON(DEFAULT(([]))),
+            ]),
+        });
+    };
+
+    test_smarttype(A);
+}
+
 int success_count, error_count;
 
 void run(string path, function(mixed...:void) r, mixed ... args) {
@@ -226,8 +272,9 @@ void run(string path, function(mixed...:void) r, mixed ... args) {
 int main(int argc, array(string) argv) {
     foreach (sort(indices(this));; string s) {
         if (has_prefix(s, "_test")) {
+            if (argc > 2 && argv[2] != s) continue;
             mixed v = predef::`->(this, s);
-            if (functionp(v)) run(argv[-1], v);
+            if (functionp(v)) run(argv[1], v);
         }
     }
 
