@@ -70,6 +70,8 @@ class Base {
 
         if (!sizeof(statements)) return 0;
 
+        statements += ({ .MySQL.Query("DEFAULT CHARACTER SET utf8 DEFAULT COLLATE utf8_general_ci") });
+
         foreach (statements; int i; object q) {
             if (i) alter += ",";
             alter += q;
@@ -90,7 +92,7 @@ class Base {
             statement += definition;
         }
 
-        statement += ")";
+        statement += ") ENGINE InnoDB DEFAULT CHARACTER SET utf8 DEFAULT COLLATE utf8_general_ci";
 
         return statement;
     }
@@ -130,10 +132,10 @@ class Base {
         if (from) foreach (from;; object type) {
             if (!to_drop[type->name]) continue;
 
-            array(string) names = type->sql_names();
+            array(string) names = type->escaped_sql_names();
 
             foreach (names; int i; string column_name) {
-                ret += ({ .MySQL.Query("DROP COLUMN `" + column_name + "`") });
+                ret += ({ .MySQL.Query("DROP COLUMN " + column_name + "") });
             }
         }
 
