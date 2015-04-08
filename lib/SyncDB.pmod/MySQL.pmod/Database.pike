@@ -3,7 +3,16 @@ inherit .TableManager;
 function sqlcb;
 string name;
 
+class TableVersion {
+    inherit .SmartType;
 
+    Field table_name = String(MAX_LENGTH(64), KEY);
+    Field schema_version = Integer();
+    Field type_versions = JSON(DEFAULT(([])));
+};
+
+private object version_table;
+constant version_table_name = "syncdb_versions";
 // list of tables keeping references to table 'trigger'+'name'
 mapping(string:mapping(string:array(function))) dependencies = ([]);
 
@@ -11,6 +20,22 @@ void create(function sqlcb, void|string name) {
     this_program::sqlcb = sqlcb;
     this_program::name = name;
     if (name) .register_database(name, this);
+}
+
+int(0..1) has_version_table() {
+    Sql.Sql sql = sqlcb();
+
+    return has_value(sql->list_tables(version_table_name), version_table_name);
+}
+
+object get_version_table() {
+    if (!version_table)
+        version_table = TableVersion()->get_table(sqlcb, version_table_name);
+    return version_table;
+}
+
+void create_version_table() {
+    SyncDB.Migration(0, TableVersion()->schema)->create_table(version_table_name);
 }
 
 void destroy() {
