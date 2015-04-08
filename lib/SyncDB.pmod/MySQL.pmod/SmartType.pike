@@ -28,7 +28,21 @@ void after_update(object(.Table) table, mapping row, mapping changes);
 void before_delete(object(.Table) table, mapping keys);
 void after_delete(object(.Table) table, mapping keys);
 
-object get_table(function(void:Sql.Sql) get_sql, string name, void|function|program prog) {
+object get_previous_table(function(void:Sql.Sql) get_sql, string name,
+                          int schema_version, mapping(string:int) type_versions) {
+    object schema = this_program::schema->get_previous_schema(schema_version, type_versions);
+    object table = table_program(name, get_sql, schema, name, this);
+
+    foreach (({ "before_insert", "after_insert", "before_update",
+                "after_update", "before_delete", "after_delete" });; string trigger) {
+        function fun = predef::`->(this, trigger);
+        if (fun) table->register_trigger(trigger, fun);
+    }
+
+    return table;
+}
+
+object get_table(function(void:Sql.Sql) get_sql, string name) {
     object table = table_program(name, get_sql, schema, name, this);
 
     foreach (({ "before_insert", "after_insert", "before_update",

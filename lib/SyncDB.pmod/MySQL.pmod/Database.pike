@@ -33,7 +33,9 @@ void unregister_dependency(string table, string trigger, function fun) {
 }
 
 object register_view(string name, object type) {
-    object table = type->get_table(sqlcb, name);
+    object table = type->get_previous_table(sqlcb, name, 0, ([]));
+
+    if (low_get_table(name, type)) error("table for %O %O already exists.\n", name, type);
 
     register_table(name, table);
 
