@@ -15,6 +15,9 @@ class TableVersion {
     Field table_name = String(MAX_LENGTH(64), KEY);
     Field schema_version = Integer();
     Field type_versions = JSON(DEFAULT(([])));
+    Field created = Datetime();
+    Field migration_started = Datetime();
+    Field migration_stopped = Datetime();
 };
 
 private object version_table;
@@ -35,13 +38,14 @@ int(0..1) has_version_table() {
 }
 
 object get_version_table() {
-    if (!version_table)
-        version_table = TableVersion()->get_table(sqlcb, version_table_name);
+    if (version_table) return version_table;
+    if (!has_version_table()) return 0;
+    version_table = TableVersion()->get_table(sqlcb, version_table_name);
     return version_table;
 }
 
 void create_version_table() {
-    SyncDB.Migration(0, TableVersion()->schema)->create_table(version_table_name);
+    SyncDB.Migration.Base(0, TableVersion()->schema)->create_table(version_table_name)(sqlcb());
 }
 
 void destroy() {
@@ -64,9 +68,112 @@ void unregister_dependency(string table, string trigger, function fun) {
 }
 
 object register_view(string name, object type) {
-    object table = type->get_previous_table(sqlcb, name, 0, ([]));
+    object schema = type->schema;
 
-    if (low_get_table(name, type)) error("table for %O %O already exists.\n", name, type);
+    object vtable = get_version_table();
+    object table;
+
+    if (vtable) {
+        mapping type_versions = schema->type_versions();
+        int schema_version = schema->get_schema_version();
+        Sql.Sql sql;
+        array(object) tmp;
+
+RETRY: do {
+            tmp = vtable->fetch_by_table_name(name);
+            object v = sizeof(tmp) && tmp[0];
+
+            if (!v) {
+                // does the table even exist?
+                Sql.Sql sql = sqlcb();
+                mixed err = catch {
+                    if (!has_value(sql->list_tables(name), name)) {
+                        v = vtable->put(([
+                            "table_name" : name,
+                            "type_versions" : type_versions,
+                            "schema_version" : schema_version,
+                            "created" : Calendar.now(),
+                            "migration_started" : Calendar.now(),
+                        ]));
+                        Thread.MutexKey key = v->lock();
+                        SyncDB.Migration.Base(0, schema)->create_table(name)(sql);
+                        v->migration_stopped = Calendar.now();
+                        v->save_unlocked();
+                        destruct(key);
+                    }
+                    break RETRY;
+                };
+
+                if (err) {
+                    throw(err);
+                }
+            }
+
+            if (!v || schema_version != v->schema_version || !equal(type_versions, v->type_versions)) {
+                if (!sql) {
+                    sql = sqlcb();
+                    sql->query(sprintf("LOCK TABLES `%s` WRITE;", name));
+                    tmp = vtable->fetch_by_table_name(name);
+                    continue;
+                }
+
+                // we have caught some other migration happening
+                if (v && v->migration_stopped->is_val_null) {
+                    werror("Some other migration is currently taking place. Unlock and retry.\n");
+                    sql->query("UNLOCK TABLES;");
+                    int since = time() - v->migration_started->unix_time();
+                    // 5 minutes seems fair?
+                    if (since > 5 * 60)
+                        error("A Migration has been running since %d seconds ago. Probably died progress. Fix manually!\n");
+                    continue;
+                }
+
+                array(object) migrations = schema->get_migrations(v->schema_version, v->type_versions);
+
+                if (!v) {
+                    object initial_schema = sizeof(migrations) ? migrations[0]->from : schema;
+                    migrations = ({
+                        SyncDB.Migration.Simple(initial_schema, initial_schema)
+                    }) + migrations;
+                    v = vtable->put(([
+                        "type_versions" : ([]),
+                        "schema_version" : 0,
+                        "created" : Calendar.now(),
+                    ]));
+                }
+
+                // locking this late is fine, as threads will anyway have to lock the table which needs to
+                // be migrated.
+                Thread.MutexKey key = v->lock();
+
+                v->migration_started = Calendar.now();
+                v->migration_stopped = Val.null;
+                v->save_unlocked();
+
+                int t1 = gethrtime();
+                werror("Migrating table %s\n", name);
+
+                migrations[0]->migrate(sql, name);
+
+                werror("Migrated table %s in %f seconds\n", name, (gethrtime() - t1)/1E6);
+
+                v->type_versions = migrations[0]->to->type_versions();
+                v->schema_version = migrations[0]->to->get_schema_version();
+                v->migration_stopped = Calendar.now();
+                v->save_unlocked();
+
+                sql = 0;
+                destruct(key);
+            }
+            break;
+        } while (1);
+
+        table = type->get_table(sqlcb, name);
+    } else {
+        table = type->get_previous_table(sqlcb, name, 0, ([]));
+
+        if (low_get_table(name, type)) error("table for %O %O already exists.\n", name, type);
+    }
 
     register_table(name, table);
 
