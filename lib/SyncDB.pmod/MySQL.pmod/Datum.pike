@@ -8,7 +8,11 @@ void invalidate_requests() {
     table->invalidate_requests(unique_identifier());
 }
 #endif
-Thread.Mutex mutex = Thread.Mutex();
+final protected Thread.Mutex mutex = Thread.Mutex();
+
+Thread.MutexKey lock() {
+    return mutex->lock();
+}
 
 protected mapping _modified = ([]);
 protected mapping _data = ([]);
@@ -114,7 +118,7 @@ protected mapping id_data() {
     return m;
 }
 
-protected void save_unlocked(function(int, mixed...:void)|void cb, mixed ... extra) {
+void save_unlocked(function(int, mixed...:void)|void cb, mixed ... extra) {
     if (is_deleted()) error("Modifying deleted record.\n");
     if (!cb) cb = generic_cb;
     if (!sizeof(_modified)) {
