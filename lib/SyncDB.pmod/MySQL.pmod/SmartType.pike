@@ -142,6 +142,7 @@ void create() {
         for (int i = 1; i < sizeof(schemata); i++) {
             object schema = schemata[i];
             migrations[i-1] = SyncDB.Migration.Base(schemata[i-1], schema);
+            schema->migrations = migrations[..i-1];
         }
 
         schema->migrations = migrations;
