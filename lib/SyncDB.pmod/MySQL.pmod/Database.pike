@@ -45,6 +45,7 @@ object get_version_table() {
     if (version_table) return version_table;
     if (!has_version_table()) return 0;
     version_table = TableVersion()->get_table(sqlcb, version_table_name);
+    register_table(version_table_name, version_table);
     return version_table;
 }
 
@@ -54,6 +55,7 @@ void create_version_table() {
 
 void destroy() {
     if (name) .unregister_database(name, this);
+    if (version_table) unregister_table(version_table_name, version_table);
 }
 
 //! register a trigger from a remote table
