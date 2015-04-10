@@ -37,7 +37,11 @@ int(0..1) has_version_table() {
     return has_value(sql->list_tables(version_table_name), version_table_name);
 }
 
+Thread.Mutex mutex = Thread.Mutex();
+
 object get_version_table() {
+    if (version_table) return version_table;
+    Thread.MutexKey key = mutex->lock();
     if (version_table) return version_table;
     if (!has_version_table()) return 0;
     version_table = TableVersion()->get_table(sqlcb, version_table_name);

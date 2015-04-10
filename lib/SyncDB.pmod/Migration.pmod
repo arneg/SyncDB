@@ -216,6 +216,8 @@ class Base {
     mapping transform_row(mapping row);
     mapping update_row(mapping row);
 
+    //! Perform the migration. @expr{sql@} is expected to hold a WRITE lock on the table.
+    //! The lock will be gone when this function returns.
     void migrate(Sql.Sql sql, string table_name) {
         if (transform_row) {
             mapping(string:int)|array(string) current_tables = sql->list_tables();
@@ -248,6 +250,8 @@ class Base {
                 rows = filter(rows, rows);
                 if (sizeof(rows)) tbl->low_insert(rows);
             }
+
+            sql->query("UNLOCK TABLES;");
 
             sql->query(sprintf("RENAME TABLE `%s` TO `%s`, `%s` TO `%s`",
                                table_name, tmp_table_name,
