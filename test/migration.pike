@@ -237,6 +237,96 @@ void _test7() {
     test_smarttype(A);
 }
 
+void _test8() {
+    object db = SyncDB.MySQL.Database(`sql, "migration");
+
+    db->create_version_table();
+    
+    class B0 {
+        inherit SyncDB.MySQL.SmartType;
+
+        Field id = Integer(KEY, AUTOMATIC);
+        Field bar = Integer();
+    };
+
+    class B1 {
+        inherit SyncDB.MySQL.SmartType;
+
+        Field id = Integer(KEY, AUTOMATIC);
+        Field foo = String();
+
+        array(mapping(string:object)) changes = ({
+            ([
+                "foo" : 0,
+                "bar" : Integer(),
+            ]),
+        });
+    };
+
+    class B2 {
+        inherit SyncDB.MySQL.SmartType;
+
+        Field id = Integer(KEY, AUTOMATIC);
+        Field foo = String();
+        Field flu = JSON(DEFAULT(([])));
+
+        array(mapping(string:object)) changes = ({
+            ([
+                "foo" : 0,
+                "bar" : Integer(),
+            ]),
+            ([
+                "flu" : 0,
+             ]),
+        });
+    };
+
+    class B3 {
+        inherit SyncDB.MySQL.SmartType;
+
+        Field id = Integer(KEY, AUTOMATIC);
+        Field foo = String();
+
+        array(mapping(string:object)) changes = ({
+            ([
+                "foo" : 0,
+                "bar" : Integer(),
+            ]),
+            ([
+                "flu" : 0,
+             ]),
+            ([
+                "flu" : JSON(DEFAULT(([]))),
+             ])
+        });
+    };
+
+    array(object) types = ({ B0, B1, B2, B3 })();
+
+    foreach (types;; object type) {
+        db->register_view("table1", type);
+        db->unregister_view("table1", type);
+    }
+}
+
+void _test9() {
+    object db = SyncDB.MySQL.Database(`sql, "migration");
+
+    void do_migration() {
+        // NOTE: all threads try to create the version table, we dont care which one succeeds
+        catch {
+            db->create_version_table();
+        };
+
+        object type = B3();
+
+        db->register_view("table1", type);
+        db->unregister_view("table1", type);
+    };
+
+    allocate(10, Thread.Thread)(do_migration)->wait();
+}
+
 int success_count, error_count;
 
 void run(string path, function(mixed...:void) r, mixed ... args) {
