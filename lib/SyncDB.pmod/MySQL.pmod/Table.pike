@@ -342,6 +342,8 @@ mapping tables = ([ ]);
 }
 
 void install_triggers(string table) {
+    Sql.Sql sql = this_program::sql;
+
     string insertt = sprintf(#"BEGIN
             DECLARE v INT;
 	    SELECT MAX(ABS(%s.version)) INTO v FROM %<s WHERE 1;
@@ -363,21 +365,25 @@ void install_triggers(string table) {
             END IF;
 	END", table);
 
-    array a = query("SHOW TRIGGERS WHERE `Table` = %s AND `Event` = 'INSERT';", table);
+    lock_tables(sql);
+
+    array a = sql->query("SHOW TRIGGERS WHERE `Table` = %s AND `Event` = 'INSERT';", table);
 
     if (!sizeof(a) || a[0]->Statement != insertt) {
         if (sizeof(a))
-            query(sprintf("DROP TRIGGER %s;", a[0]->Trigger));
-        query(sprintf("CREATE TRIGGER insert_%s BEFORE INSERT ON %<s FOR EACH ROW %s ;", table, insertt));
+            sql->query(sprintf("DROP TRIGGER %s;", a[0]->Trigger));
+        sql->query(sprintf("CREATE TRIGGER insert_%s BEFORE INSERT ON %<s FOR EACH ROW %s ;", table, insertt));
     }
 
-    a = query("SHOW TRIGGERS WHERE `Table` = %s AND `Event` = 'UPDATE';", table);
+    a = sql->query("SHOW TRIGGERS WHERE `Table` = %s AND `Event` = 'UPDATE';", table);
 
     if (!sizeof(a) || a[0]->Statement != updatet) {
         if (sizeof(a))
-            query(sprintf("DROP TRIGGER %s;", a[0]->Trigger));
-        query(sprintf("CREATE TRIGGER update_%s BEFORE UPDATE ON %<s FOR EACH ROW %s ;", table, updatet));
+            sql->query(sprintf("DROP TRIGGER %s;", a[0]->Trigger));
+        sql->query(sprintf("CREATE TRIGGER update_%s BEFORE UPDATE ON %<s FOR EACH ROW %s ;", table, updatet));
     }
+
+    unlock_tables(sql);
 }
 
 object gen_where(mapping t) {
