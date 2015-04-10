@@ -94,7 +94,9 @@ RETRY: do {
                 Sql.Sql sql = sqlcb();
                 mixed err = catch {
                     if (!has_value(sql->list_tables(name), name)) {
+#ifdef SYNCDB_MIGRATION_DEBUG
                         werror("creating table %s\n", name);
+#endif
                         v = vtable->put(([
                             "table_name" : name,
                             "type_versions" : type_versions,
@@ -131,7 +133,9 @@ RETRY: do {
 
                 // we have caught some other migration happening
                 if (v && v->migration_stopped->is_val_null) {
+#ifdef SYNCDB_MIGRATION_DEBUG
                     werror("Some other thread/process is currently migrating table %O. Unlock and retry.\n", name);
+#endif
                     sql->query("UNLOCK TABLES;");
                     sql = 0;
                     int since = time() - v->migration_started->unix_time();
@@ -175,7 +179,9 @@ RETRY: do {
                 v->save_unlocked();
 
                 int t1 = gethrtime();
+#ifdef SYNCDB_MIGRATION_DEBUG
                 werror("Migrating table %s with %O\n", name, migrations[0]);
+#endif
 
                 migrations[0]->migrate(sql, name);
 
@@ -189,7 +195,9 @@ RETRY: do {
                 sql = 0;
                 destruct(key);
             } else if (v->migration_stopped->is_val_null) {
+#ifdef SYNCDB_MIGRATION_DEBUG
                 werror("Observing a migration in flight on %O\n", name);
+#endif
                 sleep(0.25);
                 continue;
             }
