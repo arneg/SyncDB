@@ -309,22 +309,43 @@ void _test8() {
     }
 }
 
-void _test9() {
-    object db = SyncDB.MySQL.Database(`sql, "migration");
-
+void test_parallel_register(object global_db, object type) {
     void do_migration() {
+        object db = global_db || SyncDB.MySQL.Database(`sql, "migration");
         // NOTE: all threads try to create the version table, we dont care which one succeeds
         catch {
             db->create_version_table();
         };
-
-        object type = B3();
 
         db->register_view("table1", type);
         db->unregister_view("table1", type);
     };
 
     allocate(10, Thread.Thread)(do_migration)->wait();
+}
+
+void _test9() {
+    object db = SyncDB.MySQL.Database(`sql, "migration");
+
+    test_parallel_register(db, B3());
+}
+
+void _test10() {
+    test_parallel_register(0, B3());
+}
+
+void _test11() {
+    test_parallel_register(0, B0());
+    test_parallel_register(0, B3());
+}
+
+void _test12() {
+    // this test simulates going from old SyncDB to the migration system, i.e. tables exist but
+    // no entries in the version table
+    object type = B0();
+    SyncDB.MySQL.create_table(sql, "table1", type->schema);
+    populate_table(sql, "table1", type->schema);
+    test_parallel_register(0, B3());
 }
 
 int success_count, error_count;
@@ -362,7 +383,7 @@ void run(string path, function(mixed...:void) r, mixed ... args) {
 int main(int argc, array(string) argv) {
     foreach (sort(indices(this));; string s) {
         if (has_prefix(s, "_test")) {
-            if (argc > 2 && argv[2] != s) continue;
+            if (argc > 2 && !has_value(argv[2..], s)) continue;
             mixed v = predef::`->(this, s);
             if (functionp(v)) run(argv[1], v);
         }
