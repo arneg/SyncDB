@@ -21,23 +21,23 @@ array(object) migrations = ({ });
 private array(object) index_list = ({ });
 
 
-void type_versions(mapping m) {
+mapping(string:int) type_versions() {
+    mapping(string:int) m = ([]);
     fields->type_versions(m);
+    return m;
 }
 
 this_program get_previous_schema(int schema_version, mapping(string:int)|void versions) {
     if (schema_version != sizeof(migrations)) {
         if (schema_version > sizeof(migrations))
-            error("Schema is older than requested version.\n");
+            error("Schema is older than requested version: %d vs %d.\n", schema_version, sizeof(migrations));
         return migrations[schema_version]->from->get_previous_schema(schema_version, versions);
     }
 
     if (!versions) return this;
 
-    mapping my_versions = ([]);
+    mapping my_versions = type_versions();
     array fields = (this_program::fields - ({ version }));
-
-    type_versions(my_versions);
 
     foreach (my_versions; string name; int version) {
         int requested_version = (int)versions[name];
@@ -69,9 +69,7 @@ array(object) get_migrations(int schema_version, mapping(string:int) type_versio
     }
     array(object) ret = ({ });
     // first get the type versions, then the schema migrations
-    mapping my_versions = ([]);
-
-    this_program::type_versions(my_versions);
+    mapping my_versions = this_program::type_versions();
 
     this_program from;
 
