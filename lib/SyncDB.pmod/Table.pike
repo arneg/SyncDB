@@ -10,8 +10,15 @@ void create(mixed dbname, mixed schema, void|mixed db) {
 }
 
 mixed `->(string name) {
+    if (object_variablep(this, name)) return call_function(::`->, name, this);
+
+    mixed v = call_function(::`->, name, this);
+
+    if (!undefinedp(v)) return v;
+
     if (schema && schema[name]) return schema[name];
-    return call_function(::`->, name, this);
+
+    return UNDEFINED;
 }
 
 // update triggerd by this table
