@@ -15,7 +15,10 @@ Thread.Local _sql = Thread.Local();
 Sql.Sql `sql() {
     Sql.Sql _sql = this_program::_sql->get();
 
-    if (!_sql || !_sql->is_open()) {
+    // do not hand the connection out if it is being
+    // used somewhere else
+
+    if (!_sql || _refs(_sql) > 3 || !_sql->is_open()) {
         _sql = Sql.Sql(_sql_path);
         _sql->set_charset("unicode");
         this_program::_sql->set(_sql);
