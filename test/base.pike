@@ -2,19 +2,23 @@ string _sql_path;
 
 string `sql_path=(string v) {
     _sql_path = v;
-    _sql = 0;
+    _sql = Thread.Local();
 }
 
 string `sql_path() {
     return _sql_path;
 }
 
-Sql.Sql _sql;
+
+Thread.Local _sql = Thread.Local();
 
 Sql.Sql `sql() {
+    Sql.Sql _sql = this_program::_sql->get();
+
     if (!_sql || !_sql->is_open()) {
         _sql = Sql.Sql(_sql_path);
         _sql->set_charset("unicode");
+        this_program::_sql->set(_sql);
     }
 
     return _sql;
