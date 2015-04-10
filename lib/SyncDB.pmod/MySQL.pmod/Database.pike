@@ -94,6 +94,7 @@ RETRY: do {
                 Sql.Sql sql = sqlcb();
                 mixed err = catch {
                     if (!has_value(sql->list_tables(name), name)) {
+                        werror("creating table %s\n", name);
                         v = vtable->put(([
                             "table_name" : name,
                             "type_versions" : type_versions,
@@ -106,16 +107,21 @@ RETRY: do {
                         v->migration_stopped = Calendar.now();
                         v->save_unlocked();
                         destruct(key);
+                        break RETRY;
                     }
-                    break RETRY;
                 };
 
-                if (err) {
-                    throw(err);
+                // sql_state 23000
+                if (err && err->sqlstate == "23000") {
+                    // insert collision on table->put above.
+                    continue;
                 }
+                if (err) throw(err);
             }
 
             if (!v || schema_version != v->schema_version || !equal(type_versions, v->type_versions)) {
+                if (v && schema_version < v->schema_version)
+                    error("Requested Schema version older than database.\n");
                 if (!sql) {
                     sql = sqlcb();
                     sql->query(sprintf("LOCK TABLES `%s` WRITE;", name));
@@ -125,28 +131,40 @@ RETRY: do {
 
                 // we have caught some other migration happening
                 if (v && v->migration_stopped->is_val_null) {
-                    werror("Some other migration is currently taking place. Unlock and retry.\n");
+                    werror("Some other thread/process is currently migrating table %O. Unlock and retry.\n", name);
                     sql->query("UNLOCK TABLES;");
+                    sql = 0;
                     int since = time() - v->migration_started->unix_time();
                     // 5 minutes seems fair?
                     if (since > 5 * 60)
                         error("A Migration has been running since %d seconds ago. Probably died progress. Fix manually!\n");
+                    sleep(0.25);
                     continue;
                 }
 
-                array(object) migrations = schema->get_migrations(v->schema_version, v->type_versions);
+                array(object) migrations; 
 
                 if (!v) {
-                    object initial_schema = sizeof(migrations) ? migrations[0]->from : schema;
+                    object initial_schema = schema->get_previous_schema(0, ([]));
                     migrations = ({
                         SyncDB.Migration.Simple(initial_schema, initial_schema)
-                    }) + migrations;
-                    v = vtable->put(([
-                        "type_versions" : ([]),
-                        "schema_version" : 0,
-                        "created" : Calendar.now(),
-                    ]));
-                }
+                    });
+                    mixed err = catch {
+                        v = vtable->put(([
+                            "table_name" : name,
+                            "type_versions" : ([]),
+                            "schema_version" : 0,
+                            "created" : Calendar.now(),
+                        ]));
+                    };
+                    if (err) {
+                        if (err->sqlstate == "23000") continue;
+
+                        throw(err);
+                    }
+                } else migrations = ({ });
+
+                migrations += schema->get_migrations(v->schema_version, v->type_versions);
 
                 // locking this late is fine, as threads will anyway have to lock the table which needs to
                 // be migrated.
@@ -157,7 +175,7 @@ RETRY: do {
                 v->save_unlocked();
 
                 int t1 = gethrtime();
-                werror("Migrating table %s\n", name);
+                werror("Migrating table %s with %O\n", name, migrations[0]);
 
                 migrations[0]->migrate(sql, name);
 
@@ -170,7 +188,12 @@ RETRY: do {
 
                 sql = 0;
                 destruct(key);
+            } else if (v->migration_stopped->is_val_null) {
+                werror("Observing a migration in flight on %O\n", name);
+                sleep(0.25);
+                continue;
             }
+            if (sql) sql->query("UNLOCK TABLES;");
             break;
         } while (1);
 
