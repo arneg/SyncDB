@@ -81,6 +81,7 @@ object sql_error(object sql, mixed err) {
     if (!err) return 0;
     // some other error, which we need to pass on
     if (!arrayp(err)) return err;
+    if (!sql) return err;
 
     if (functionp(sql->sqlstate)) {
         state = sql->sqlstate();
