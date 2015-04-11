@@ -278,3 +278,7 @@ void handle_update(SyncDB.Version version, void|array(mapping) rows) {
         }
     }
 }
+
+string _sprintf(int type) {
+    return sprintf("%O(%O, %O)", this_program, table_name(), smart_type);
+}
