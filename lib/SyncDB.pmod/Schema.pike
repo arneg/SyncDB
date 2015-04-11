@@ -139,7 +139,7 @@ void add_type(object type) {
     if (Program.inherits(object_program(type), SyncDB.MySQL.Filter.Base)) {
         error("Restriction support has been removed.\n");
     }
-    if (type->is->index) {
+    if (type->is->index && !type->is->key && !type->is->unique) {
         index_list += ({ .Indices.Btree(type->name, type) });
     }
     if (type->is->key) {
