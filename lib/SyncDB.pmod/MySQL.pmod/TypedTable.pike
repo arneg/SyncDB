@@ -80,6 +80,7 @@ void select_complex(object filter, object order, object limit,
 
         cb(0, v, @extra);
     };
+#if 0
     if (object_program(filter) == SyncDB.MySQL.Filter.Equal && filter->type->is->key) {
         object key = mutex->lock();
         mixed id = filter->value;
@@ -93,6 +94,7 @@ void select_complex(object filter, object order, object limit,
 
         destruct(key);
     }
+#endif
     ::select_complex(filter, order, limit, _cb);
 }
 
