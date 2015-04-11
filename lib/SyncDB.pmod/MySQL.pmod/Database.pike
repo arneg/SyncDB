@@ -73,6 +73,8 @@ void unregister_dependency(string table, string trigger, function fun) {
     dependencies[table][trigger] -= ({ fun });
 }
 
+#define SYNCDB_MIGRATION_DEBUG
+
 object register_view(string name, object type) {
     object schema = type->schema;
 
@@ -85,6 +87,7 @@ object register_view(string name, object type) {
         Sql.Sql sql;
         array(object) tmp;
 
+        mixed err = catch {
 RETRY: do {
             tmp = vtable->fetch_by_table_name(name);
             object v = sizeof(tmp) && tmp[0];
@@ -141,8 +144,8 @@ RETRY: do {
                     int since = time() - v->migration_started->unix_time();
                     // 5 minutes seems fair?
                     if (since > 5 * 60)
-                        error("A Migration has been running since %d seconds ago. Probably died progress. Fix manually!\n");
-                    sleep(0.25);
+                        error("A Migration has been running since %d seconds ago. Probably died. Fix manually!\n", since);
+                    sleep(1);
                     continue;
                 }
 
@@ -180,7 +183,8 @@ RETRY: do {
 
                 int t1 = gethrtime();
 #ifdef SYNCDB_MIGRATION_DEBUG
-                werror("Migrating table %s with %O\n", name, migrations[0]);
+                werror("Migrating table %s with to version %d %O\n", name,
+                       migrations[0]->to->get_schema_version(), migrations[0]->to->type_versions());
 #endif
 
                 migrations[0]->migrate(sql, name);
@@ -194,16 +198,25 @@ RETRY: do {
 
                 sql = 0;
                 destruct(key);
+                continue;
             } else if (v->migration_stopped->is_val_null) {
 #ifdef SYNCDB_MIGRATION_DEBUG
+                int since = time() - v->migration_started->unix_time();
+                // 5 minutes seems fair?
+                if (since > 5 * 60)
+                    error("A Migration has been running since %d seconds ago. Probably died. Fix manually!\n", since);
                 werror("Observing a migration in flight on %O\n", name);
 #endif
-                sleep(0.25);
+                sleep(1);
                 continue;
             }
-            if (sql) sql->query("UNLOCK TABLES;");
             break;
         } while (1);
+        };
+
+        if (sql) sql->query("UNLOCK TABLES;");
+
+        if (err) throw(err);
 
         table = type->get_table(sqlcb, name);
     } else {
