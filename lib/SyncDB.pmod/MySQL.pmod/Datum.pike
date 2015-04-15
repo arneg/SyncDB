@@ -90,7 +90,7 @@ string describe() {
     return (string)this->id;
 }
 
-protected void force_update() {
+void force_update() {
     object tid = table->schema->id;
     object f = tid->Equal(_data[tid->name]);
     mapping ret;
@@ -119,6 +119,10 @@ protected mapping id_data() {
 }
 
 void save_unlocked(function(int, mixed...:void)|void cb, mixed ... extra) {
+    if (save_id) {
+        remove_call_out(save_id);
+        save_id = 0;
+    }
     if (is_deleted()) error("Modifying deleted record.\n");
     if (!cb) cb = generic_cb;
     if (!sizeof(_modified)) {
@@ -186,10 +190,6 @@ void delete(function(int, mixed...:void)|void cb, mixed ... extra) {
 
 void save(function(int, mixed...:void)|void cb, mixed ... extra) {
     object key = mutex->lock();
-    if (save_id) {
-        remove_call_out(save_id);
-        save_id = 0;
-    }
     save_unlocked(cb, @extra);
 }
 
