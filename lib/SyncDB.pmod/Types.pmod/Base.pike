@@ -55,12 +55,16 @@ void create(string name, SyncDB.Flags.Base ... _flags) {
 mixed decode_sql(string table, mapping row, mapping|void new);
 mapping encode_sql(string table, mapping row, mapping new);
 
-string sql_name(string table) {
-    object f = flags->foreign;
-    if (f) {
-	return f->table||table + "." + f->field||name;
+string sql_name(void|string table) {
+    if (table) {
+        object f = flags->foreign;
+        if (f) {
+            return f->table||table + "." + f->field||name;
+        }
+        return table + "." + name;
+    } else {
+        return name;
     }
-    return table + "." + name;
 }
 
 string escaped_sql_name(void|string table) {
