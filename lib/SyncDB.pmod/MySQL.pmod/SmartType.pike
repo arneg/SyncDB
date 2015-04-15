@@ -174,6 +174,8 @@ MAP_TYPE(Float)
 
 MAP_FLAG(MAX_LENGTH, MaxLength)
 MAP_FLAG(DEFAULT, Default)
+MAP_FLAG(COLLATE, Collate);
+MAP_FLAG(CHARSET, Charset);
 
 #define MAP_CFLAG(name, rname)   protected object name = SyncDB.Flags. ## rname ( );
 
