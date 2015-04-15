@@ -2,7 +2,7 @@ inherit "base";
 
 void populate_table(Sql.Sql sql, string table_name, SyncDB.Schema schema) {
     object tbl = SyncDB.MySQL.Table(table_name, sql, schema);
-    array rows = map(enumerate(100), Function.curry(sample_data)(schema));
+    array rows = map(enumerate(150), Function.curry(sample_data)(schema));
 
     tbl->low_insert(rows);
 
@@ -49,10 +49,13 @@ void test_migrations(object ... migrations) {
             object it1 = tbl1->PageIterator(0, 0, 100);
             object it2 = tbl2->PageIterator(0, 0, 100);
 
-            mapping mask = migrations[0]->from->m & migrations[-1]->to->m;
+            mapping mask = (migrations[0]->from->m & migrations[-1]->to->m) - ({ "version" });
 
             if (it1->num_rows() != it2->num_rows())
-                error("Number of rows in tables differs after migration: %d vs %d\n", it1->num_rows(), it2->num_rows());
+                error("Number of rows in tables differs after migration: %d vs %d\n",
+                      it1->num_rows(), it2->num_rows());
+
+            int cnt = 0;
 
             for (; it1 && it2; it1++, it2++) {
                 array old = it1->value();
@@ -65,8 +68,9 @@ void test_migrations(object ... migrations) {
                     v1 = mask & v1;
                     // just compare those values which have been present in both versions
                     if (!equal(v1, v2))
-                        error("Content in tables differs after migration %O.\n%O vs %O\n",
-                              migrations, v1, v2);
+                        error("Content in tables differs after migration %O at %d.\n%O vs %O\n",
+                              migrations, cnt, v1, v2);
+                    cnt ++;
                 }
 
             }
@@ -132,11 +136,13 @@ void _test2() {
     SyncDB.Schema a = SyncDB.Schema(
         SyncDB.Types.Integer("bar"),
         SyncDB.Types.Integer("foo"),
+        SyncDB.Types.Integer("flu"),
     );
 
     SyncDB.Schema b = SyncDB.Schema(
         SyncDB.Types.String("bar"),
         SyncDB.Types.String("foo"),
+        SyncDB.Types.Integer("flu"),
     );
 
     test_migrations((class {
@@ -146,6 +152,7 @@ void _test2() {
             return ([
                 "bar" : get_sample_data("string", row->bar),
                 "foo" : get_sample_data("string", row->foo),
+                "flu" : row->flu,
             ]);
         }
     })(a, b));
@@ -213,12 +220,29 @@ void _test6() {
     test_simple(a, b);
 }
 
+void _test61() {
+    SyncDB.Schema a = SyncDB.Schema(
+        SyncDB.Types.Integer("id", SyncDB.Flags.Key(), SyncDB.Flags.Automatic()),
+        SyncDB.Types.Datetime("bar"),
+        SyncDB.Types.Float("prio"),
+    );
+
+    SyncDB.Schema b = SyncDB.Schema(
+        SyncDB.Types.Integer("id", SyncDB.Flags.Key(), SyncDB.Flags.Automatic()),
+        SyncDB.Types.Date("bar"),
+        SyncDB.Types.Float("prio"),
+    );
+
+    test_simple(a, b);
+}
+
 void _test7() {
     class A {
         inherit SyncDB.MySQL.SmartType;
 
         Field id = Integer(KEY, AUTOMATIC);
         Field foo = String();
+        Field prio = Float();
 
         array(mapping(string:object)) changes = ({
             ([
@@ -309,16 +333,18 @@ void _test8() {
     }
 }
 
-void test_parallel_register(object global_db, object type) {
+void test_parallel_register(object global_db, program prog, void|string name) {
+    if (!name) name = "table1";
     void do_migration() {
+        object type = prog();
         object db = global_db || SyncDB.MySQL.Database(`sql, "migration");
         // NOTE: all threads try to create the version table, we dont care which one succeeds
         catch {
             db->create_version_table();
         };
 
-        db->register_view("table1", type);
-        db->unregister_view("table1", type);
+        db->register_view(name, type);
+        db->unregister_view(name, type);
     };
 
     allocate(10, Thread.Thread)(do_migration)->wait();
@@ -327,16 +353,16 @@ void test_parallel_register(object global_db, object type) {
 void _test9() {
     object db = SyncDB.MySQL.Database(`sql, "migration");
 
-    test_parallel_register(db, B3());
+    test_parallel_register(db, B3);
 }
 
 void _test10() {
-    test_parallel_register(0, B3());
+    test_parallel_register(0, B3);
 }
 
 void _test11() {
-    test_parallel_register(0, B0());
-    test_parallel_register(0, B3());
+    test_parallel_register(0, B0);
+    test_parallel_register(0, B3);
 }
 
 void _test12() {
@@ -345,7 +371,7 @@ void _test12() {
     object type = B0();
     SyncDB.MySQL.create_table(sql, "table1", type->schema);
     populate_table(sql, "table1", type->schema);
-    test_parallel_register(0, B3());
+    test_parallel_register(0, B3);
 }
 
 int success_count, error_count;

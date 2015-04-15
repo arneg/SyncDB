@@ -27,12 +27,15 @@ Sql.Sql `sql() {
     return _sql;
 }
 
-mixed get_sample_data(string type_name, int n) {
+mixed get_sample_data(string type_name, int n, void|object type) {
     mixed v;
 
     switch (type_name) {
     case "string":
-        v = (string)enumerate(10, 1, 'A'+n);
+        if (type && type->is->unique) {
+            // the below might clash with collation
+            v = (string)n;
+        } else v = (string)enumerate(10, 1, 'A'+n);
         break;
     case "integer":
         v = n;
@@ -43,8 +46,20 @@ mixed get_sample_data(string type_name, int n) {
     case "date":
         v = Calendar.Second("unix", n)->day();
         break;
+    case "float":
+        v = (float)n;
+        break;
     case "json":
         v = ([ (string)n : ({ n, n+1 }) ]);
+        break;
+    case "vector":
+        if (type) {
+            array ret = allocate(sizeof(type->fields));
+            foreach (type->fields; int i; object field) {
+                ret[i] = get_sample_data(field->type_name, n, field);
+            }
+            return ret;
+        }
         break;
     default:
         v = Val.null;
@@ -63,7 +78,7 @@ mapping sample_data(SyncDB.Schema a, int n) {
         string name = type->name;
         mixed v;
 
-        v = get_sample_data(type->type_name(), n);
+        v = get_sample_data(type->type_name(), n, type);
     
         data[name] = v;
     }
