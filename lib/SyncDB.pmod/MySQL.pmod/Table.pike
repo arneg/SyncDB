@@ -580,24 +580,26 @@ class PageIterator {
 
     int first() {
         page = 0;
-        fetch();
         return sizeof(data);
     }
 
     mixed value() {
+        if (!data) fetch();
         return (array)data;
     }
 
     void set_index(int n) {
         page = n;
-        fetch();
+        data = 0;
     }
 
     int _sizeof() {
+        if (!data) fetch();
         return (data->num_rows + (rows - 1)) / rows;
     }
 
     int num_rows() {
+        if (!data) fetch();
         return data->num_rows;
     }
 
@@ -607,11 +609,13 @@ class PageIterator {
 
     int next() {
         page++;
+        data = 0;
         return page < sizeof(this);
     }
 
     this_program `+=(int steps) {
         page += steps;
+        data = 0;
         return this;
     }
 
