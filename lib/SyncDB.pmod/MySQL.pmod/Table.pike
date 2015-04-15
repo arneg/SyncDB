@@ -147,6 +147,9 @@ class Table {
     }
 
     void add_field(object type) {
+        foreach (type->sql_names();; string column) {
+            if (!sql_schema[column]) error("Unknown column %O\n", column);
+        }
 	fields += ({ type });
     }
 
@@ -155,7 +158,10 @@ class Table {
     }
 
     array(string) escaped_sql_names() {
-	return predef::`+(@fields->escaped_sql_names(name));
+        if (this == table_o)
+            return predef::`+(@fields->escaped_sql_names(0));
+        else
+            return predef::`+(@fields->escaped_sql_names(name));
     }
 
     array(SyncDB.Types.Base) readable() {
@@ -334,7 +340,7 @@ object restrict(object filter) {
 }
 
 mapping tables = ([ ]);
-.Query select_sql, _update_sql, delete_sql, count_sql;
+.Query select_sql, select_sql_count, _update_sql, delete_sql, count_sql;
 
 .Query update_sql(array(string) fields, array(mixed) values) {
     .Query q = (_update_sql + fields*"=%s, ") + "=%s WHERE ";
@@ -468,9 +474,9 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
     if (sizeof(table_fields) != sizeof(table_o->sql_names()))
         t = table_o->escaped_sql_names();
 
-    // TODO: if this is very slow, we should be using a seperate one for limit queries
-    select_sql = .Query(sprintf("SELECT SQL_CALC_FOUND_ROWS %s FROM `%s`",
-                        sizeof(t) ? t*"," : "*", table));
+    select_sql_count = .Query(sprintf("SELECT SQL_CALC_FOUND_ROWS %s FROM `%s`",
+                                      sizeof(t) ? t*"," : "*", table));
+    select_sql = .Query(sprintf("SELECT %s FROM `%s`", sizeof(t) ? t*"," : "*", table));
     _update_sql = .Query(sprintf("UPDATE `%s` SET ", table_names()*"`,`"));
     delete_sql = .Query(sprintf("DELETE FROM `%s` WHERE ", table));
 
@@ -481,11 +487,13 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
     foreach (tables; string foreign_table; Table t) {
 	// generate the version triggers
 	select_sql += t->join(table);
+        select_sql_count += t->join(table);
 	// generate proper selects/inserts
 	install_triggers(foreign_table);
     }
 
     select_sql += " WHERE ";
+    select_sql_count += " WHERE ";
 
     t = table_names();
 
@@ -493,6 +501,7 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
         string vf = sprintf("`%s`.version > 0 AND ", name);
         count_sql += vf;
         select_sql += vf;
+        select_sql_count += vf;
     }
 
     // Initialize version
@@ -537,10 +546,13 @@ object|array(mapping) low_select_complex(object filter, object order, object lim
 	if (order)
             index += order->encode_sql(this);
 
-        if (limit)
+        if (limit) {
             index += limit->encode_sql(this);
 
-	rows = (select_sql + index)(sql);
+            rows = (select_sql_count + index)(sql);
+        } else {
+            rows = (select_sql + index)(sql);
+        }
 
         rows = sanitize_result(rows);
 
