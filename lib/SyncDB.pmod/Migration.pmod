@@ -1,6 +1,32 @@
 class Base {
     .Schema from, to;
 
+    string describe() {
+        string ret = "Migrating ";
+        if (from->get_schema_version() != to->get_schema_version()) {
+            ret += sprintf("schema version from %d to %d", 
+                           from->get_schema_version(),
+                           to->get_schema_version());
+        } else {
+            // types changed
+            mapping to_type_version = to->type_versions();
+            mapping from_type_version = from->type_versions();
+
+            int c = 0;
+
+            foreach (sort(indices(to_type_version));; string name) {
+                if (to_type_version[name] != from_type_version[name]) {
+                    if (c) ret += ", ";
+                    ret += sprintf("type %O from %d to %d", name,
+                                   from_type_version[name],
+                                   to_type_version[name]);
+                    c++;
+                }
+            }
+        }
+        return ret;
+    }
+
     string _sprintf(int t) {
         return sprintf("%O(%O, %O)", this_program, from, to);
     }
@@ -235,7 +261,8 @@ class Base {
             }
 
             if (current_tables[cpy_table_name]) {
-                error("old migration cpy table still around. please fix manually!\n");
+                werror("old migration cpy table still around. removing.\n");
+                drop_table(cpy_table_name)(sql);
             }
 
 
@@ -245,7 +272,9 @@ class Base {
 
             object tbl = SyncDB.MySQL.Table(cpy_table_name, sql, to);
 
-            foreach (tbl_orig->PageIterator(0, 0, 100);; array|object rows) {
+            object it = tbl_orig->PageIterator(0, 0, 103);
+
+            foreach (it;; array|object rows) {
                 rows = map((array)rows, transform_row);
                 rows = filter(rows, rows);
                 if (sizeof(rows)) tbl->low_insert(rows);
