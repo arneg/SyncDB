@@ -251,6 +251,7 @@ void signal_update(SyncDB.Version version, void|array(mapping) rows) {
 void destroy() {
 
     map(indices(_requests), invalidate_requests);
+    map(values(cache), destruct);
 
     ::destroy();
 }
