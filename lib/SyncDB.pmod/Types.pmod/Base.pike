@@ -1,6 +1,10 @@
 constant is_readable = 1;
 constant is_writable = 1;
 
+array(this_program) get_column_fields() {
+    return ({ this });
+}
+
 array(SyncDB.Flags.Base) _flags;
 mapping(string:SyncDB.Flags.Base) flags = ([]);
 mapping(string:int(0..1)) is = ([

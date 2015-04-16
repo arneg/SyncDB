@@ -4,6 +4,10 @@ constant is_array = 1;
 
 array(object) fields;
 
+array(this_program) get_column_fields() {
+    return predef::`+(@fields->get_column_fields());
+}
+
 mapping `subfields() {
     return mkmapping(fields->name, fields);
 }

@@ -106,7 +106,6 @@ void create(object ... m) {
     this_program::m = ([ ]);
     map(m, add_type);
     add_type(version = SyncDB.Types.Version("version", tables(),
-                                            SyncDB.Flags.Automatic(),
 					    SyncDB.Flags.Unique(),
 					    SyncDB.Flags.Index()));
 }
@@ -139,16 +138,18 @@ void add_type(object type) {
     if (Program.inherits(object_program(type), SyncDB.MySQL.Filter.Base)) {
         error("Restriction support has been removed.\n");
     }
-    if (type->is->index && !type->is->key && !type->is->unique) {
-        index_list += ({ .Indices.Btree(type->name, type) });
-    }
-    if (type->is->key) {
-        if (id) error("Defined two different keys in one schema.\n");
-        id = type;
-    }
-    if (type != version && type->is->automatic) {
-        if (automatic) error("Defined two different auto-increment values in one schema\n");
-        automatic = type->name;
+    foreach (type->get_column_fields();; object type) {
+        if (type->is->index && !type->is->key && !type->is->unique) {
+            index_list += ({ .Indices.Btree(type->name, type) });
+        }
+        if (type->is->key) {
+            if (id) error("Defined two different keys in one schema.\n");
+            id = type;
+        }
+        if (type->is->automatic) {
+            if (automatic) error("Defined two different auto-increment values in one schema\n");
+            automatic = type->name;
+        }
     }
     fields += ({ type });
     m[type->name] = type;
