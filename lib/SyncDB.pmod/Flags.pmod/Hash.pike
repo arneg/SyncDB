@@ -1,5 +1,7 @@
 inherit .Base;
 
+constant is_schema_equal = 0;
+
 // A field with this flag is hashed before exposing it to the client. It
 // locally only supports equality test.
 Crypto.HashState hash;

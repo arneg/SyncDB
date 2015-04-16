@@ -1,3 +1,5 @@
+constant is_schema_relevant = 1;
+
 int get_priority() {
     return 50;
 }

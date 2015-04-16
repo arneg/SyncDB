@@ -137,6 +137,13 @@ int(0..1) _equal(mixed b) {
     return objectp(b) && object_program(b) == this_program && equal(_flags, b->_flags);
 }
 
+//! Similar to @[_equal] but ignore those flags, which are not relevant for the schema.
+int(0..1) schema_equal(mixed b) {
+    return objectp(b) && object_program(b) == this_program &&
+           equal(filter(_flags, _flags->is_schema_relevant),
+                 filter(b->_flags, b->_flags->is_schema_relevant));
+}
+
 string type_name();
 
 object previous_type();

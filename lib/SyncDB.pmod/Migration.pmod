@@ -198,7 +198,7 @@ class Base {
             object t_from = from_types()[name];
             object t_to = to_types()[name];
 
-            if (!equal(t_from, t_to)) {
+            if (!t_from->schema_equal(t_to)) {
                 array(string) from_names = t_from->escaped_sql_names();
                 array(string) to_names = t_to->escaped_sql_names();
                 array(.MySQL.Query) column_definitions = t_to->column_definitions();

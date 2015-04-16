@@ -126,3 +126,7 @@ protected int _sizeof() {
 string render(function quote) {
     return sprintf(fmt, @map(args, quote));
 }
+
+int(0..1) _equal(mixed b) {
+    return objectp(b) && object_program(b) == this_program && fmt == b->fmt && equal(args, b->args);
+}
