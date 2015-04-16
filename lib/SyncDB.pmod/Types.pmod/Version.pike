@@ -1,14 +1,14 @@
 inherit .Vector;
 
 void create(string name, array(string) tables, SyncDB.Flags.Base ... flags) {
+    flags += ({ SyncDB.Flags.ReadOnly() });
     int i = 0;
     array a = allocate(sizeof(tables)+1);
     for (; i < sizeof(tables) ; i++) {
 	a[i] = SyncDB.Types.Integer(sprintf("_version_%d", i),
-				SyncDB.Flags.Foreign(tables[i], "version"));
+				SyncDB.Flags.Foreign(tables[i], "version"), @flags);
     }
-    a[i] = SyncDB.Types.Integer("version");
-    flags += ({ SyncDB.Flags.ReadOnly() });
+    a[i] = SyncDB.Types.Integer("version", @flags);
     ::create(name, a, @flags);
 }
 
