@@ -30,3 +30,7 @@ array(SyncDB.MySQL.Query) column_definitions(void|function(object:int(0..1)) fil
 string type_name() {
     return "enum";
 }
+
+int(0..1) _equal(mixed b) {
+    return ::_equal(b) && equal(options, b->options);
+}
