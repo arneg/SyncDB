@@ -73,7 +73,7 @@ void unregister_dependency(string table, string trigger, function fun) {
     dependencies[table][trigger] -= ({ fun });
 }
 
-#define SYNCDB_MIGRATION_DEBUG
+//#define SYNCDB_MIGRATION_DEBUG
 
 Thread.Mutex migration_mutex = Thread.Mutex();
 
@@ -134,7 +134,7 @@ RETRY: do {
                 };
 
                 // sql_state 23000
-                if (err && err->sqlstate == "23000") {
+                if (objectp(err) && err->sqlstate == "23000") {
                     // insert collision on table->put above.
                     continue;
                 }
