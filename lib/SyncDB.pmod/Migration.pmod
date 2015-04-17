@@ -246,6 +246,7 @@ class Base {
     //! The lock will be gone when this function returns.
     void migrate(Sql.Sql sql, string table_name) {
         if (transform_row) {
+            // TODO: handle renames
             mapping(string:int)|array(string) current_tables = sql->list_tables();
 
             current_tables = mkmapping(current_tables, allocate(sizeof(current_tables), 1));
