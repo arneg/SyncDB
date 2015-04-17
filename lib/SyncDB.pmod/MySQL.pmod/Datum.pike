@@ -160,7 +160,7 @@ int(0..1) is_deleted() {
 }
 
 void mark_deleted() {
-    m_delete(_data, version);
+    m_delete(_data, "version");
     _modified = ([]);
 }
 
