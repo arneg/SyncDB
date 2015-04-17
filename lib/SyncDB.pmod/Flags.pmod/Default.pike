@@ -19,3 +19,7 @@ string sql_type(function(mixed:string) encode) {
 array(SyncDB.MySQL.Query) flag_definitions(object type) {
     return ({ SyncDB.MySQL.Query("NOT NULL") });
 }
+
+string _sprintf(int t) {
+    return sprintf("%O(%O)", this_program, default_value);
+}
