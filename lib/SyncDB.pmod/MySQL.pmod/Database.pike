@@ -69,8 +69,16 @@ void register_dependency(string table, string trigger, function fun) {
     dependencies[table][trigger] += ({ fun });
 }
 
+void register_trigger(string table, string trigger, function fun) {
+    register_dependency(table, trigger, fun);
+}
+
 void unregister_dependency(string table, string trigger, function fun) {
     dependencies[table][trigger] -= ({ fun });
+}
+
+void unregister_trigger(string table, string trigger, function fun) {
+    unregister_dependency(table, trigger, fun);
 }
 
 //#define SYNCDB_MIGRATION_DEBUG
@@ -279,12 +287,23 @@ RETRY: do {
     if (low_get_table(name, type)) error("table for %O %O already exists.\n", name, type);
     register_table(name, table);
 
-    if (has_index(dependencies, name))
-        foreach (dependencies[name]; string trigger; array(function) a)
-            foreach (a;; function fun)
-                table->register_trigger(trigger, fun);
-
     return table;
+}
+
+array(function) get_triggers(string table, string event) {
+    // we do not allow before_ events for external dbs, and in particular we dont let them
+    // cancel events in other dbs
+    if (name && has_prefix(event, "after_")) {
+        array(object) dbs = .all_databases[name];
+        // this db is registered
+        array ret = ({});
+        if (dbs) foreach (dbs->dependencies;; mapping m) {
+            ret += (m[?table][?event] || ({}));
+        }
+        return ret;
+    } else {
+        return dependencies[?table][?event] || ({ });
+    }
 }
 
 void unregister_view(string name, object type) {
@@ -303,32 +322,4 @@ void register_table(string name, object table) {
 void uregister_table(string name, object table) {
     table->set_database();
     ::unregister_table(name, table);
-}
-
-typedef function(object(SyncDB.Version),array(mapping|object):void) update_cb;
-
-mapping(string:array(update_cb)) update_cbs = ([]);
-
-void register_update(string table_name, update_cb cb) {
-    update_cbs[table_name] += ({ cb });
-}
-
-void unregister_update(string table_name, update_cb cb) {
-    if (has_index(update_cbs, table_name)) 
-        update_cbs[table_name] -= ({ cb });
-}
-
-void signal_update(string|object table, object version, void|array(mapping) rows) {
-    mapping t = all_tables();
-
-    if (objectp(table)) {
-        // local update, propagate to all tables globally
-        string name = table->table_name();
-        if (has_index(t, name)) (t[name] - ({ table }))->handle_update(version, rows);
-        if (this_program::name) .signal_update(this, name, version, rows);
-        if (has_index(update_cbs, name)) call_out(update_cbs[name], 0, version, rows);
-    } else {
-        if (has_index(t, table)) t[table]->handle_update(version, rows);
-        if (has_index(update_cbs, table)) call_out(update_cbs[table], 0, version, rows);
-    }
 }

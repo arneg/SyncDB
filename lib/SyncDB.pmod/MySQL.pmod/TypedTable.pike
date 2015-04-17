@@ -9,6 +9,9 @@ void create(string dbname, function(void:Sql.Sql) cb, SyncDB.Schema schema, stri
     this_program::smart_type = smart_type;
     this_program::prog = smart_type->get_datum();
     ::create(dbname, cb, schema, table);
+
+    register_trigger("after_update", after_update);
+    register_trigger("after_delete", after_delete);
 }
 
 array(object) `fields() {
@@ -23,6 +26,7 @@ void set_database(void|object o) {
     array(object) fields = this_program::fields;
 
     if (database) {
+
         foreach (fields;; object field) {
             if (field->remove_dependencies)
                 field->remove_dependencies(this, database);
@@ -32,6 +36,7 @@ void set_database(void|object o) {
     ::set_database(o);
 
     if (o) {
+
         foreach (fields;; object field) {
             if (field->create_dependencies)
                 field->create_dependencies(this, o);
@@ -181,104 +186,60 @@ object restrict(object filter) {
 }
 
 #if constant(Roxen)
-mapping(mixed:array) _requests = ([]);
-array(mixed) _table_requests = ({ });
+mapping(mixed:int) _table_requests = set_weak_flag(([]), Pike.WEAK_INDICES);
 
-void register_request(mixed ... args) {
-    if (sizeof(args) == 2) {
-        object cachekey;
-        mixed id;
-        cachekey = args[0];
-        id = args[1];
-        if (!has_index(_requests, id)) {
-            _requests[id] = ({ });
-        }
-        _requests[id] += ({ cachekey });
-    } else {
-        object id;
-        id = args[0];
-        id->misc->cachekey->add_activation_cb(low_register_cachekey);
-    }
+void register_request(object id) {
+    id->misc->cachekey->add_activation_cb(low_register_cachekey);
 }
 
 void low_register_cachekey(mixed cachekey) {
-    _table_requests += ({ cachekey });
+    _table_requests[cachekey] = 1;
 }
 
 void invalidate_requests(mixed id) {
-    array keys = _table_requests;
-    
-    if (has_index(_requests, id)) {
-        keys += m_delete(_requests, id);
-    }
+    if (!sizeof(_table_requests)) return;
 
-    if (!keys || !sizeof(keys)) return;
+    array keys = indices(_table_requests);
 
-    keys = filter(keys, keys);
-
-    if (sizeof(keys)) {
+    _table_requests = set_weak_flag(([]), Pike.WEAK_INDICES);
 
 #ifdef CACHE_TRACE
-        werror("invalidating %O\n", keys);
+    werror("invalidating %d\n", sizeof(keys));
 #endif
-        // Tristate cached serve stale cache entries once. we cannot
-        // tolerate that, so we have to go for a manual destruct here.
-        //map(keys, roxen.invalidate);
-        map(keys, destruct);
-        _table_requests = ({});
-    }
+    // Tristate cached serve stale cache entries once. we cannot
+    // tolerate that, so we have to go for a manual destruct here.
+    //map(keys, roxen.invalidate);
+    map(keys, destruct);
 }
-
-void signal_update(SyncDB.Version version, void|array(mapping) rows) {
-    ::signal_update(version, rows);
-
-    trigger("change");
-
-    int(0..1) is_delete = version->is_deleted();
-
-    foreach (rows;; mapping row) {
-        mixed id = get_unique_identifier(row);
-        invalidate_requests(id);
-        // this is the local trigger, we dont need to notify the data
-        // themselves, since they were the source of the change event.
-
-        if (is_delete && cache[id]) {
-            m_delete(cache, id);
-        }
-    }
-}
+#endif
 
 void destroy() {
-
-    map(indices(_requests), invalidate_requests);
+#ifdef Roxen
+    invalidate_requests();
+#endif
     map(values(cache), destruct);
-
-    ::destroy();
 }
+
+void after_delete(object table, mapping keys) {
+    if (table == this) return;
+    mixed id = get_unique_identifier(keys);
+#ifdef Roxen
+    invalidate_requests(id);
 #endif
 
-void handle_update(SyncDB.Version version, void|array(mapping) rows) {
-    ::handle_update(version, rows);
+    object datum = m_delete(cache, id);
+    if (datum) datum->mark_deleted();
+}
 
-    int(0..1) is_delete = version->is_deleted();
-
-    trigger("change");
-
-    foreach (rows;; mapping row) {
-        mixed id = get_unique_identifier(row);
-#if constant(Roxen)
-        invalidate_requests(id);
+void after_update(object table, mapping row, mapping changes) {
+    if (table == this) return;
+    mixed id = get_unique_identifier(row);
+#ifdef Roxen
+    invalidate_requests(id);
 #endif
-
-        if (cache[id]) {
-            // we make sure to copy it here, since complex types could be shared otherwise
-            // ->update will call onchange!
-            if (is_delete) {
-                m_delete(cache, id)->mark_deleted();
-            } else {
-                cache[id]->update(copy_value(row));
-            }
-        }
+    object datum = cache[id];
+    if (datum) {
+        datum->update(copy_value(row));
     }
 }
 

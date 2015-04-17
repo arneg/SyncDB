@@ -1,56 +1,6 @@
 // vim:syntax=lpc
 inherit SyncDB.Table;
 
-function(object:void) onupdate;
-
-mapping(string:array) triggers = ([]);
-
-// different types of triggers
-// before_insert ( new row )
-// after_insert ( new row )
-// before_update ( old row, changes )
-// after_update ( new row, changes )
-// before_delete ( keys )
-// after_delete ( keys )
-
-void trigger(string name, mixed ... args) {
-    if (triggers[name]) {
-        foreach (triggers[name];; function fun) {
-            mixed err = catch(fun(this, @args));
-            if (err) {
-                if (has_prefix(name, "before_")) throw(err);
-                werror("Trigger %O %O threw an exception: %s\n", name, fun, describe_error(err));
-                master()->handle_error(err);
-            }
-        }
-    }
-}
-
-void register_trigger(string name, function cb) {
-    if (triggers[name]) {
-        triggers[name] += ({ cb });
-    } else {
-        triggers[name] = ({ cb });
-    }
-}
-
-void unregister_trigger(string name, function cb) {
-    array a;
-    if (a = triggers[name]) {
-        a -= ({ cb });
-        if (!sizeof(triggers[name])) {
-            m_delete(triggers, name);
-        } else {
-            triggers[name] = a;
-        }
-    }
-}
-
-int(0..1) has_trigger(string name) {
-    return has_index(triggers, name);
-}
-
-
 function(void:Sql.Sql) _sql_cb;
 Sql.Sql _sql;
 
@@ -730,7 +680,6 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
 	if (affected_rows == 1) {
             mapping new = sanitize_result(rows[0]);
             trigger("after_update", new, keys);
-            signal_update(nversion, ({ new }));
 	    cb(0, new, @extra);
 	} else {
 	    cb(1, SyncDB.Error.Collision(this, nversion, oversion), @extra);
@@ -806,7 +755,6 @@ void delete(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
     if (noerr) {
         trigger("after_delete", keys);
         cb(0, 0, @extra);
-        signal_update(-version, ({ keys }));
     } else {
 	cb(1, err, @extra);
     }
@@ -825,7 +773,6 @@ array drop(object(SyncDB.MySQL.Filter.Base) filter) {
             trigger("after_delete", row);
             row->version = 0;
         }
-        signal_update(-version, rows);
         return rows;
     });
 
@@ -862,7 +809,8 @@ object(SyncDB.MySQL.Filter.Base) low_insert(array(mapping) rows) {
         }
     }
 
-    trigger("before_insert", rows);
+    foreach (rows;; mapping row)
+        trigger("before_insert", row);
 
     array data = map(rows, table->insert);
 
@@ -899,9 +847,8 @@ object(SyncDB.MySQL.Filter.Base) low_insert(array(mapping) rows) {
 
         unlock_tables(sql); locked = 0;
 
-        signal_update(version, rows);
-
-        trigger("after_insert", rows);
+        foreach (rows;; mapping row)
+            trigger("after_insert", row);
         return filter;
     });
 
@@ -986,7 +933,6 @@ void insert(array(mapping)|mapping row, function(int(0..1),mixed,mixed...:void) 
         }
         rows = sanitize_result(rows);
         row = rows[0];
-        signal_update(row->version, rows);
     });
 
     unlock_tables(sql);
@@ -997,45 +943,6 @@ void insert(array(mapping)|mapping row, function(int(0..1),mixed,mixed...:void) 
     } else {
 	cb(1, err, @extra);
     }
-}
-
-array last_modified;
-
-void request_update(void|function cb, mixed ... args) {
-    array t = table_objects();
-    array(mapping) rows = ({});
-    object sql = this_program::sql;
-    array mod = t->modified_sql(sql);
-
-    if (!equal(mod, last_modified)) {
-        last_modified = mod;
-        .Query _low_update_sql;
-
-        _low_update_sql = select_sql;
-
-        _low_update_sql += "(";
-
-        foreach (t;int i;Table tab) {
-            if (i) _low_update_sql += " OR ";
-            _low_update_sql += .Query(sprintf("%s.version > %%d", tab->name), version[i]);
-        }
-
-        _low_update_sql += ")";
-
-        rows = sanitize_result(_low_update_sql(sql));
-
-        if (sizeof(rows)) {
-            array aa = Array.columns(rows->version->a, enumerate(sizeof(version)));
-
-            foreach (aa; int i; array a) {
-                aa[i] = max(@a);
-            }
-
-            handle_update(SyncDB.Version(aa), rows);
-        }
-    }
-
-    if (cb) cb(0, rows, @args);
 }
 
 mixed sanitize_result(mixed rows) {

@@ -21,32 +21,66 @@ mixed `->(string name) {
     return UNDEFINED;
 }
 
-// update triggerd by this table
-void signal_update(SyncDB.Version nversion, void|array(mapping) rows) {
-    // TODO: we might lose updates here.
-    version = nversion;
-    //handle_update(nversion, rows);
+final object database;
+
+mapping(string:array) triggers = ([]);
+
+void register_trigger(string event, function f) {
+    if (!triggers[event]) triggers[event] = ({ f });
+    else triggers[event] += ({ f });
+    if (database) database->register_trigger(dbname, event, f);
+}
+
+void unregister_trigger(string event, function f) {
+    triggers[event] -= ({ f });
+    if (database) database->unregister_trigger(dbname, event, f);
+}
+
+void set_database(void|object o) {
+    if (database) {
+        foreach (triggers; string event; array a) {
+            foreach (a;; function f) {
+                database->unregister_trigger(dbname, event, f);
+            }
+        }
+    }
+
+    database = o;
 
     if (database) {
-        database->signal_update(this, nversion, rows);
+        foreach (triggers; string event; array a) {
+            foreach (a;; function f) {
+                database->register_trigger(dbname, event, f);
+            }
+        }
     }
 }
 
-object database;
+// different types of triggers
+// before_insert ( new row )
+// after_insert ( new row )
+// before_update ( old row, changes )
+// after_update ( new row, changes )
+// before_delete ( keys )
+// after_delete ( keys )
 
-void set_database(void|object o) {
-    database = o;
+array get_triggers(string name) {
+    if (database) return database->get_triggers(dbname, name);
+    return triggers[name] || ({ });
 }
 
-// update triggered from somewhere else
-void handle_update(SyncDB.Version nversion, void|array(mapping) rows) {
-    version = nversion;
-}
+void trigger(string event, mixed ... args) {
+    array triggers = get_triggers(event);
 
-void destroy() {
-    if (database) {
-        database->unregister_table(this);
-        database = 0;
+    if (triggers && sizeof(triggers)) {
+        if (has_prefix(event, "before_")) {
+            triggers(this, @args);
+        } else {
+            foreach (triggers;; mixed f) {
+                mixed err = catch(f(this, @args));
+                if (err) master()->handle_error(err);
+            }
+        }
     }
 }
 

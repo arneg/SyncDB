@@ -1,11 +1,10 @@
 #if constant(Roxen)
 void register_request(object id) {
-    if (id->misc->cachekey)
-        id->misc->cachekey->add_activation_cb(table->register_request, unique_identifier());
+    table->register_request(id);
 }
 
 void invalidate_requests() {
-    table->invalidate_requests(unique_identifier());
+    table->invalidate_requests();
 }
 #endif
 final protected Thread.Mutex mutex = Thread.Mutex();
