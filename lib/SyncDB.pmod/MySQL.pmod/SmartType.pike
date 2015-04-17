@@ -120,6 +120,8 @@ void create() {
         for (int i = sizeof(changes)-1; i >= 0; i--) {
             mapping m = changes[i];
 
+            // TODO: add renames
+
             foreach (m; string name; object field) if (field) field->name = name;
 
             // overwrite with _previous_ fields
@@ -141,7 +143,16 @@ void create() {
 
         for (int i = 1; i < sizeof(schemata); i++) {
             object schema = schemata[i];
-            migrations[i-1] = SyncDB.Migration.Base(schemata[i-1], schema);
+            object previous_schema = schemata[i-1];
+
+            // if default values have been added, we need to create a simple
+            // migration, to make sure they are all being updated
+            if (sizeof(schema->default_row - previous_schema->default_row)) {
+                migrations[i-1] = SyncDB.Migration.Simple(previous_schema, schema);
+            } else {
+                migrations[i-1] = SyncDB.Migration.Base(previous_schema, schema);
+            }
+
             schema->migrations = migrations[..i-1];
         }
 
