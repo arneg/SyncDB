@@ -11,7 +11,7 @@ void populate_table(Sql.Sql sql, string table_name, SyncDB.Schema schema) {
     foreach (a; int i; mapping row) {
         m_delete(row, "version");
         m_delete(row, schema->automatic);
-        if (!equal(row, rows[i]))
+        if (!equal(row, schema->default_row + rows[i]))
             error("Data does not survive insert/select:\n%O vs %O\n", row, rows[i]);
     }
 }
@@ -236,30 +236,26 @@ void _test61() {
     test_simple(a, b);
 }
 
-void _test7() {
-    class A {
-        inherit SyncDB.MySQL.SmartType;
+class A {
+    inherit SyncDB.MySQL.SmartType;
 
-        Field id = Integer(KEY, AUTOMATIC);
-        Field foo = String();
-        Field prio = Float();
+    Field id = Integer(KEY, AUTOMATIC);
+    Field foo = String();
+    Field prio = Float();
 
-        array(mapping(string:object)) changes = ({
-            ([
-                "foo" : 0,
-                "bar" : Integer(),
-            ]),
-            ([
-                "flu" : 0,
-             ]),
-            ([
-                "flu" : JSON(DEFAULT(([]))),
-            ]),
-        });
-    };
-
-    test_smarttype(A);
-}
+    array(mapping(string:object)) changes = ({
+        ([
+            "foo" : 0,
+            "bar" : Integer(),
+        ]),
+        ([
+            "flu" : 0,
+         ]),
+        ([
+            "flu" : JSON(DEFAULT(([]))),
+        ]),
+    });
+};
 
 void _test8() {
     object db = SyncDB.MySQL.Database(`sql, "migration");
@@ -333,91 +329,85 @@ void _test8() {
     }
 }
 
-void test_parallel_register(object global_db, program prog, void|string name) {
+void test_parallel_register(int(0..1) shared_db, string name, program ... progs) {
+    object global_db;
+    if (shared_db) global_db = SyncDB.MySQL.Database(`sql, "migration");
     if (!name) name = "table1";
-    void do_migration() {
+
+    void do_migration(program prog) {
         object type = prog();
         object db = global_db || SyncDB.MySQL.Database(`sql, "migration");
-        // NOTE: all threads try to create the version table, we dont care which one succeeds
         catch {
             db->create_version_table();
         };
 
+            // NOTE: all threads try to create the version table, we dont care which one succeeds
         db->register_view(name, type);
         db->unregister_view(name, type);
     };
 
-    allocate(10, Thread.Thread)(do_migration)->wait();
-}
-
-void _test9() {
-    object db = SyncDB.MySQL.Database(`sql, "migration");
-
-    test_parallel_register(db, B3);
-}
-
-void _test10() {
-    test_parallel_register(0, B3);
-}
-
-void _test11() {
-    test_parallel_register(0, B0);
-    test_parallel_register(0, B3);
-}
-
-void _test12() {
-    // this test simulates going from old SyncDB to the migration system, i.e. tables exist but
-    // no entries in the version table
-    object type = B0();
-    SyncDB.MySQL.create_table(sql, "table1", type->schema);
-    populate_table(sql, "table1", type->schema);
-    test_parallel_register(0, B3);
-}
-
-int success_count, error_count;
-
-void run(string path, function(mixed...:void) r, mixed ... args) {
-    sql_path = path;
-
-    catch (sql->query("DROP DATABASE `migration_test`"));
-
-    sql->query("CREATE DATABASE `migration_test`");
-
-    sql_path = path + "migration_test";
-
-    werror("Running test %O ... ", r);
-
-    mixed err;
-
-    int t1 = gethrtime();
-    float t = gauge {
-        err = catch(r(@args));
-    };
-    int t2 = gethrtime();
-    float t_tot = (t2 - t1)/ 1E6;
-
-    if (err) {
-        werror(" ERR %f seconds (utime: %f seconds)\n", t_tot, t);
-        error_count++;
-        master()->handle_error(err);
-    } else {
-        werror("  OK %f seconds (utime: %f seconds)\n", t_tot, t);
-        success_count++;
+    foreach (progs;; program prog) {
+        allocate(10, Thread.Thread)(do_migration, prog)->wait();
     }
+}
+
+void test_parallel_register_from_legacy(int(0..1) shared_db, string name, program ... types) {
+    object type = types[0]();
+    SyncDB.MySQL.create_table(sql, "table1", type->schema);
+    // we know that legacy tables are broken
+    catch (populate_table(sql, "table1", type->schema));
+    test_parallel_register(shared_db, name, @types);
+}
+
+mapping(string:program|array(program)) smart_types() {
+    return ([
+            "a" : A,
+            "b" : ({ B0, B1, B2, B3 })
+            ]);
 }
 
 int main(int argc, array(string) argv) {
-    foreach (sort(indices(this));; string s) {
-        if (has_prefix(s, "_test")) {
-            if (argc > 2 && !has_value(argv[2..], s)) continue;
-            mixed v = predef::`->(this, s);
-            if (functionp(v)) run(argv[1], v);
+    string path = argv[1];
+
+    mapping m = smart_types();
+
+    foreach (sort(indices(m));; string n) {
+        program|array(program) p = m[n];
+        if (argc > 2) {
+            if (!has_value(argv[2..], "smart_types") && !has_value(argv[2..], n)) continue;
+        }
+
+        if (arrayp(p)) {
+            foreach (p; int i; program prog)
+                run(path, sprintf("SmartType %s.%d (%O)", n, i, p[i]), test_smarttype, prog);
+        } else {
+            run(path, sprintf("SmartType %s (%O)", n, p), test_smarttype, p);
         }
     }
 
-    int all = success_count + error_count;
+    foreach (sort(indices(m));; string n) {
+        program|array(program) p = m[n];
+        if (argc > 2) {
+            if (!has_value(argv[2..], "register") && !has_value(argv[2..], n)) continue;
+        }
+        if (arrayp(p)) {
+            run(path, sprintf("Register %s", n), test_parallel_register, 0, n, @p);
+        } else {
+            run(path, sprintf("Register %s", n), test_parallel_register, 0, n, p);
+        }
 
-    werror("%d tests failed.\n%d tests succeeded\n", error_count, success_count);
+        if (arrayp(p)) {
+            run(path, sprintf("Shared db Register %s", n), test_parallel_register, 1, n, @p);
+        } else {
+            run(path, sprintf("Shared db Register %s", n), test_parallel_register, 1, n, p);
+        }
 
-    return 0;
+        if (arrayp(p)) {
+            run(path, sprintf("Shared db Register %s from legacy", n), test_parallel_register_from_legacy, 1, n, @p);
+        } else {
+            run(path, sprintf("Shared db Register %s from legacy", n), test_parallel_register_from_legacy, 1, n, p);
+        }
+    }
+
+    return ::main(argc, argv);
 }
