@@ -262,8 +262,7 @@ class Base {
             }
 
             if (current_tables[cpy_table_name]) {
-                werror("old migration cpy table still around. removing.\n");
-                drop_table(cpy_table_name)(sql);
+                error("old migration cpy table still around. please fix manually!\n");
             }
 
 
