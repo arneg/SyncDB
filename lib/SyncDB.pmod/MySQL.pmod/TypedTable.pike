@@ -12,6 +12,9 @@ void create(string dbname, function(void:Sql.Sql) cb, SyncDB.Schema schema, stri
 
     register_trigger("after_update", after_update);
     register_trigger("after_delete", after_delete);
+#if constant(Roxen)
+    register_trigger("after_insert", after_insert);
+#endif
 }
 
 array(object) `fields() {
@@ -26,7 +29,6 @@ void set_database(void|object o) {
     array(object) fields = this_program::fields;
 
     if (database) {
-
         foreach (fields;; object field) {
             if (field->remove_dependencies)
                 field->remove_dependencies(this, database);
@@ -196,7 +198,7 @@ void low_register_cachekey(mixed cachekey) {
     _table_requests[cachekey] = 1;
 }
 
-void invalidate_requests(mixed id) {
+void invalidate_requests(void|mixed id) {
     if (!sizeof(_table_requests)) return;
 
     array keys = indices(_table_requests);
@@ -214,7 +216,7 @@ void invalidate_requests(mixed id) {
 #endif
 
 void destroy() {
-#ifdef Roxen
+#if constant(Roxen)
     invalidate_requests();
 #endif
     map(values(cache), destruct);
@@ -223,7 +225,7 @@ void destroy() {
 void after_delete(object table, mapping keys) {
     if (table == this) return;
     mixed id = get_unique_identifier(keys);
-#ifdef Roxen
+#if constant(Roxen)
     invalidate_requests(id);
 #endif
 
@@ -234,7 +236,7 @@ void after_delete(object table, mapping keys) {
 void after_update(object table, mapping row, mapping changes) {
     if (table == this) return;
     mixed id = get_unique_identifier(row);
-#ifdef Roxen
+#if constant(Roxen)
     invalidate_requests(id);
 #endif
     object datum = cache[id];
@@ -242,6 +244,12 @@ void after_update(object table, mapping row, mapping changes) {
         datum->update(copy_value(row));
     }
 }
+
+#if constant(Roxen)
+void after_insert(object table, mapping row) {
+    invalidate_requests();
+}
+#endif
 
 string _sprintf(int type) {
     return sprintf("%O(%O, %O)", this_program, table_name(), smart_type);
