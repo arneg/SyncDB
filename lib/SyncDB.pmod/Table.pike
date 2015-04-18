@@ -26,6 +26,7 @@ final object database;
 mapping(string:array) triggers = ([]);
 
 void register_trigger(string event, function f) {
+    if (!functionp(f)) error("Bad argument.\n");
     if (!triggers[event]) triggers[event] = ({ f });
     else triggers[event] += ({ f });
     if (database) database->register_trigger(dbname, event, f);
@@ -91,4 +92,12 @@ SyncDB.Version table_version() {
 object remote_table(string name, void|program prog) {
     if (!database) error("Cannot access remote tables without database.\n");
     return database->get_table(name, prog);
+}
+
+void destroy() {
+    if (database) {
+        werror("%O destructed while having a database set.\n", this);
+        master()->handle_error(catch(error("bar")));
+        set_database();
+    }
 }
