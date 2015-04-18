@@ -25,10 +25,76 @@ constant version_table_name = "syncdb_versions";
 // list of tables keeping references to table 'trigger'+'name'
 mapping(string:mapping(string:array(function))) dependencies = ([]);
 
-void create(function sqlcb, void|string name) {
+SyncDB.ReaderWriterLock rwlock;
+Thread.Mutex mutex = Thread.Mutex();
+
+function(int(0..1):void) maintenance_callback;
+
+protected void create(function sqlcb, void|string name, void|function(int(0..1):void) maintenance_callback) {
     this_program::sqlcb = sqlcb;
+    this_program::maintenance_callback = maintenance_callback;
+    set_name(name);
+}
+
+void set_name(string name) {
+    if (this_program::name) {
+        .unregister_database(this_program::name, this);
+    }
+
     this_program::name = name;
-    if (name) .register_database(name, this);
+
+    if (name) {
+        rwlock = .register_database(name, this);
+    } else {
+        rwlock = SyncDB.ReaderWriterLock();
+    }
+}
+
+Thread.MutexKey get_database_key() {
+    return rwlock->lock_read();
+}
+
+Thread.MutexKey try_get_database_key() {
+    return rwlock->try_lock_read();
+}
+
+Thread.MutexKey get_database_key_or_callback(function f, mixed ... args) {
+    return rwlock->lock_read_or_callback(f, @args);
+}
+
+array(function) get_maintenance_callbacks() {
+    array dbs = name ? .all_databases[name] : ({ this });
+    dbs = dbs->maintenance_callback;
+    dbs = filter(dbs, dbs);
+    if (sizeof(dbs)) return dbs;
+    return 0;
+}
+
+void call_maintenance_callbacks(int(0..1) maintenance) {
+    array(function) maintenance_cbs = get_maintenance_callbacks();
+
+    if (maintenance_cbs) {
+        foreach (maintenance_cbs;; function f) {
+            mixed err = catch(f(maintenance));
+            if (err) master()->handle_error(err);
+        }
+    }
+}
+
+SyncDB.ReaderWriterLockKey get_maintenance_key(void|int(0..1) signal) {
+    SyncDB.ReaderWriterLockKey key = rwlock->lock_write();
+    
+    if (signal) {
+        call_maintenance_callbacks(1);
+
+        key->done_cb = Function.curry(call_maintenance_callbacks)(0);
+    }
+
+    return key;
+}
+
+void call_with_database_key(function f, mixed ... args) {
+    rwlock->call_with_read_key(f, @args);
 }
 
 int(0..1) has_version_table() {
@@ -37,15 +103,13 @@ int(0..1) has_version_table() {
     return sql && has_value(sql->list_tables(version_table_name), version_table_name);
 }
 
-Thread.Mutex mutex = Thread.Mutex();
-
 object get_version_table() {
     if (version_table) return version_table;
     Thread.MutexKey key = mutex->lock();
     if (version_table) return version_table;
     if (!has_version_table()) return 0;
     version_table = TableVersion()->get_table(sqlcb, version_table_name);
-    register_table(version_table_name, version_table);
+    //register_table(version_table_name, version_table);
     return version_table;
 }
 
@@ -60,6 +124,7 @@ void destroy() {
 
 //! register a trigger from a remote table
 void register_dependency(string table, string trigger, function fun) {
+    Thread.MutexKey key = mutex->lock();
     if (!dependencies[table])
         dependencies[table] = ([]);
 
@@ -74,14 +139,13 @@ void register_trigger(string table, string trigger, function fun) {
 }
 
 void unregister_dependency(string table, string trigger, function fun) {
+    Thread.MutexKey key = mutex->lock();
     dependencies[table][trigger] -= ({ fun });
 }
 
 void unregister_trigger(string table, string trigger, function fun) {
     unregister_dependency(table, trigger, fun);
 }
-
-//#define SYNCDB_MIGRATION_DEBUG
 
 Thread.Mutex migration_mutex = Thread.Mutex();
 
@@ -237,7 +301,16 @@ RETRY: do {
                 werror("Table(%O): %s\n", name, migrations[0]->describe());
 #endif
 
-                migrations[0]->migrate(sql, name);
+                mixed err = catch {
+                    migrations[0]->migrate(sql, name);
+                };
+
+                if (err) {
+                    v->migration_stopped = Calendar.now();
+                    // best effort
+                    v->save_unlocked();
+                    throw(err);
+                }
 
 #ifdef SYNCDB_MIGRATION_DEBUG
                 werror("Table(%O): DONE in %f seconds\n", name, (gethrtime() - t1)/1E6);
@@ -307,6 +380,7 @@ array(function) get_triggers(string table, string event) {
 }
 
 void unregister_view(string name, object type) {
+    Thread.MutexKey key = mutex->lock();
     object table = low_get_table(name, type);
     if (table) {
         unregister_table(name, table);
