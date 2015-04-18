@@ -58,14 +58,32 @@ void create_table(Sql.Sql sql, string name, object schema) {
     }
 }
 
-mapping(string:array(object)) all_databases = ([]);
+Thread.Mutex database_mutex = Thread.Mutex();
 
-void register_database(string name, object db) {
-    if (!has_index(all_databases, name)) all_databases[name] = ({});
+mapping(string:array(object)) all_databases = ([]);
+mapping(string:object(SyncDB.ReaderWriterLock)) database_locks = ([]);
+
+object(SyncDB.ReaderWriterLock) register_database(string name, object db) {
+    object key = database_mutex->lock();
+
+    if (!has_index(all_databases, name)) {
+        all_databases[name] = ({});
+        database_locks[name] = SyncDB.ReaderWriterLock();
+    }
     all_databases[name] += ({ db });
+    return database_locks[name];
 }
 
 void unregister_database(string name, object db) {
-    if (has_index(all_databases, name))
+    object key = database_mutex->lock();
+
+    if (has_index(all_databases, name)) {
         all_databases[name] -= ({ db });
+        if (!sizeof(all_databases[name])) {
+            m_delete(database_locks, name);
+            m_delete(all_databases, name);
+        }
+    }
 }
+
+
