@@ -48,12 +48,18 @@ class ReaderWriterLockKey {
     private ReaderWriterLock lock;
     private Thread.MutexKey key;
 
+    function done_cb;
+
     protected void create(ReaderWriterLock lock, Thread.MutexKey key) {
         this_program::lock = lock;
         this_program::key = key;
     }
 
     void destroy() {
+        if (done_cb) {
+            mixed err = catch(done_cb());
+            if (err) master()->handle_error();
+        }
         lock->writer_done(key);
     }
 }
@@ -71,10 +77,15 @@ class ReaderWriterLock() {
     array reader_queue = ({ });
     Thread.MutexKey read_key = actual_mutex->lock();
 
+    private Thread.Thread current_writer;
+
     ReaderWriterLockKey lock_write() {
         object key = mutex->lock();
 
         num_writers ++;
+
+        if (current_writer == Thread.this_thread())
+            error("Recursive write lock.\n");
 
         if (num_writers > 1) {
             // there is other writers still going
@@ -83,6 +94,8 @@ class ReaderWriterLock() {
 
         read_key = 0;
 
+        current_writer = Thread.this_thread();
+        
         return ReaderWriterLockKey(this, read_key = actual_mutex->lock());
     }
 
@@ -90,6 +103,8 @@ class ReaderWriterLock() {
         object key = mutex->lock();
 
         num_writers --;
+
+        current_writer = 0;
 
         // wake up one writer
         if (num_writers) {
