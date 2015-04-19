@@ -2,6 +2,7 @@ private mapping(string:array(object)) local_tables = ([]);
 
 object unregister_table(string name, object table) {
     if (!local_tables[name]) return 0;
+    if (!has_value(local_tables[name], table)) return 0;
     local_tables[name] -= ({ table });
 
     return table;

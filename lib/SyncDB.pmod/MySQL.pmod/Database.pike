@@ -380,20 +380,27 @@ array(function) get_triggers(string table, string event) {
 }
 
 void unregister_view(string name, object type) {
-    Thread.MutexKey key = mutex->lock();
     object table = low_get_table(name, type);
     if (table) {
         unregister_table(name, table);
-        destruct(table);
+    } else {
+        werror("unregistering unknown table for %O %O\n", name, type);
     }
 }
 
 void register_table(string name, object table) {
+    Thread.MutexKey key = mutex->lock();
     ::register_table(name, table);
+    destruct(key);
     table->set_database(this);
 }
 
-void uregister_table(string name, object table) {
+void unregister_table(string name, object table) {
+    Thread.MutexKey key = mutex->lock();
+    if (!::unregister_table(name, table)) {
+        error("%O is not registered here.\n", table);
+    }
+    destruct(key);
     table->set_database();
-    ::unregister_table(name, table);
+    destruct(table);
 }
