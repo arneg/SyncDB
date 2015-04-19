@@ -172,7 +172,7 @@ class Farm {
 
     int max_threads = 5;
 
-    string debug_info() {
+    string debug_status() {
         return sprintf("Threads: %O\nJobs: %d\n", threads, jobs->size());
     }
 
