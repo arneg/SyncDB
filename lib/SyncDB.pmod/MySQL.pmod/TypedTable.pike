@@ -28,22 +28,11 @@ mapping(string:object) `nfields() {
 void set_database(void|object o) {
     array(object) fields = this_program::fields;
 
-    if (database) {
-        foreach (fields;; object field) {
-            if (field->remove_dependencies)
-                field->remove_dependencies(this, database);
-        }
-    }
+    if (database) fields->remove_dependencies(this, database);
 
     ::set_database(o);
 
-    if (o) {
-
-        foreach (fields;; object field) {
-            if (field->create_dependencies)
-                field->create_dependencies(this, o);
-        }
-    }
+    if (database) fields->create_dependencies(this, database);
 }
 
 void low_select(mixed ... args) {
