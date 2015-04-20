@@ -2,7 +2,9 @@ string _sql_path;
 
 string `sql_path=(string v) {
     _sql_path = v;
+#ifdef CACHE_CONNECTIONS
     _sql = Thread.Local();
+#endif
 }
 
 string `sql_path() {
@@ -10,21 +12,52 @@ string `sql_path() {
 }
 
 
+#ifdef CACHE_CONNECTIONS
 Thread.Local _sql = Thread.Local();
+#endif
+
+class SQLKey(Sql.Sql con) {
+    mixed `->(string key) {
+        return predef::`->(con, key);
+    }
+
+    protected void destroy(int reason) {
+        switch (reason) {
+        case Object.DESTRUCT_EXPLICIT:
+            werror("explicit destruct.\n");
+            break;
+        case Object.DESTRUCT_NO_REFS:
+            //werror("refcount destruct.\n");
+            break;
+        case Object.DESTRUCT_GC:
+            werror("gc destruct.\n");
+            break;
+        case Object.DESTRUCT_CLEANUP:
+            werror("cleanup destruct.\n");
+            break;
+        }
+    }
+}
 
 Sql.Sql `sql() {
-    Sql.Sql _sql = this_program::_sql->get();
+    Sql.Sql _sql;
+#ifdef CACHE_CONNECTIONS
+    _sql = this_program::_sql->get();
 
     // do not hand the connection out if it is being
     // used somewhere else
 
-    if (!_sql || _refs(_sql) > 3 || !_sql->is_open()) {
+    if (!_sql || _refs(_sql) > 3 || !_sql->is_open())
+#endif
+    {
         _sql = Sql.Sql(_sql_path);
         _sql->set_charset("unicode");
+#ifdef CACHE_CONNECTIONS
         this_program::_sql->set(_sql);
+#endif
     }
 
-    return _sql;
+    return SQLKey(_sql);
 }
 
 mixed get_sample_data(string type_name, int n, void|object type) {
@@ -120,7 +153,7 @@ void run(string path, string name, function(mixed...:void) r, mixed ... args) {
         werror("  OK %f seconds (utime: %f seconds)\n", t_tot, t);
         success_count++;
     }
-    gc();
+    //gc();
 }
 
 variant void run(string path, function(mixed...:void) r, mixed ... args) {
