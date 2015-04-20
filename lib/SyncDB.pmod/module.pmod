@@ -95,8 +95,16 @@ class ReaderWriterLock() {
         read_key = 0;
 
         current_writer = Thread.this_thread();
+
+        destruct(key);
+
+        // this looks racy, but in fact noone else will write to read_key
+        // while we are at it.
+
+        Thread.MutexKey my_key = read_key = actual_mutex->lock();
+
         
-        return ReaderWriterLockKey(this, read_key = actual_mutex->lock());
+        return ReaderWriterLockKey(this, my_key);
     }
 
     void writer_done(Thread.MutexKey read_key) {
@@ -108,8 +116,9 @@ class ReaderWriterLock() {
 
         // wake up one writer
         if (num_writers) {
-            wants_to_write->signal();
             destruct(read_key);
+            wants_to_write->signal();
+            destruct(key);
         } else {
             array a = reader_queue;
 
@@ -118,6 +127,7 @@ class ReaderWriterLock() {
             }
 
             this_program::read_key = read_key;
+            destruct(key);
             wants_to_read->broadcast();
 
             if (sizeof(a)) {
@@ -130,27 +140,45 @@ class ReaderWriterLock() {
     }
 
     Thread.MutexKey lock_read() {
+        Thread.MutexKey ret;
         object key = mutex->lock();
 
         while (num_writers) {
             wants_to_read->wait(key);
         }
 
-        return read_key;
+        ret = read_key;
+
+        destruct(key);
+
+        return ret;
     }
 
     Thread.MutexKey try_lock_read() {
+        Thread.MutexKey ret;
         object key = mutex->lock();
 
-        if (num_writers) return 0;
-        return read_key;
+        if (!num_writers) {
+            ret = read_key;
+        }
+
+        destruct(key);
+
+        return ret;
     }
 
     Thread.MutexKey lock_read_or_callback(function f, mixed ... args) {
         object key = mutex->lock();
 
-        if (num_writers) reader_queue += ({ ({ f, args }) });
-        else return read_key;
+        if (num_writers) {
+            reader_queue += ({ ({ f, args }) });
+            destruct(key);
+            return 0;
+        } else {
+            Thread.MutexKey ret = read_key;
+            destruct(key);
+            return ret;
+        }
     }
 
     void call_with_read_key(function f, mixed ... args) {
@@ -232,6 +260,11 @@ class Farm {
 
     Thread.MutexKey wait(Thread.MutexKey key) {
         threads += ({ Thread.this_thread() });
+        if (sizeof(threads)) {
+            while (max_threads > sizeof(threads) && sizeof(jobs) > sizeof(threads)) {
+                threads += ({ Thread.Thread(worker) });
+            }
+        }
         destruct(key);
         while (1) {
             mixed err = catch(handle(jobs->try_read));
