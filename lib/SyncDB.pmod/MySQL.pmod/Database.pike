@@ -1,5 +1,7 @@
 inherit .TableManager;
 
+#define SYNCDB_MIGRATION_DEBUG
+
 function sqlcb;
 string name;
 
@@ -83,6 +85,10 @@ void call_maintenance_callbacks(int(0..1) maintenance) {
 
 SyncDB.ReaderWriterLockKey get_maintenance_key(void|int(0..1) signal) {
     SyncDB.ReaderWriterLockKey key = rwlock->lock_write();
+
+    // we invalidate the version table here, assuming that maintenance might
+    // involve db restore, etc
+    version_table = 0;
     
     if (signal) {
         call_maintenance_callbacks(1);
