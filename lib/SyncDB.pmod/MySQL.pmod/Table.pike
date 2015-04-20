@@ -528,9 +528,17 @@ class PageIterator {
 
     void create(object filter, object order, int rows) {
         this_program::filter = filter;
+        if (!order) {
+            if (schema->id) {
+                order = .Select.OrderBy(.Select.ASC(schema->id));
+            } else if (schema->version) {
+                order = .Select.OrderBy(.Select.ASC(schema->version));
+            } else {
+                werror("Warning: no reliable ordering in PageIterator.\n");
+            }
+        }
         this_program::order = order;
         this_program::rows = rows;
-        fetch();
     }
 
     private void fetch() {
@@ -543,7 +551,7 @@ class PageIterator {
 
     int first() {
         page = 0;
-        return sizeof(data);
+        return !!this;
     }
 
     mixed value() {
