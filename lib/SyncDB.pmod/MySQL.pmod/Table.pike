@@ -138,17 +138,18 @@ class Table {
     }
 
     void update(mapping row, mapping oldrow, mapping new) {
+        string table_name = this == table_o ? 0 : name;
 	foreach (writable();; object type) {
 	    if (type == schema->id) continue;
-	    type->encode_sql(name, row, new);
+	    type->encode_sql(table_name, row, new);
 	}
     }
 
     mapping insert(mapping row) {
+        string table_name = this == table_o ? 0 : name;
 	mapping new = ([]);
 	foreach (writable();; object type) {
-	    if (type->is->automatic) continue;
-	    type->encode_sql(name, row, new);
+	    type->encode_sql(table_name, row, new);
 	}
 	return sizeof(new) ? new : 0;
     }
