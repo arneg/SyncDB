@@ -91,7 +91,10 @@ void type_versions(mapping(string:int) versions) {
 }
 
 object get_previous_type(string type_name, int version) {
-    return this_program(name, fields->get_previous_type(type_name, version), @_flags);
+    if (this_program::type_name() == type_name) {
+        if (type_version() > version) return previous_type()->get_previous_type(type_name, version);
+        else return this;
+    } else return this_program(name, fields->get_previous_type(type_name, version), @_flags);
 }
 
 object get_migration(string type_name, object from, object to) {
