@@ -212,22 +212,22 @@ void destroy() {
 }
 
 void after_delete(object table, mapping keys) {
+#if constant(Roxen)
+    invalidate_requests();
+#endif
     if (table == this) return;
     mixed id = get_unique_identifier(keys);
-#if constant(Roxen)
-    invalidate_requests(id);
-#endif
 
     object datum = m_delete(cache, id);
     if (datum) datum->mark_deleted();
 }
 
 void after_update(object table, mapping row, mapping changes) {
+#if constant(Roxen)
+    invalidate_requests();
+#endif
     if (table == this) return;
     mixed id = get_unique_identifier(row);
-#if constant(Roxen)
-    invalidate_requests(id);
-#endif
     object datum = cache[id];
     if (datum) {
         datum->update(copy_value(row));
