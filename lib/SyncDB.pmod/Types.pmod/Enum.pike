@@ -31,6 +31,10 @@ string type_name() {
     return "enum";
 }
 
+int(0..1) schema_equal(mixed b) {
+    return ::schema_equal(b) && equal(options, b->options);
+}
+
 int(0..1) _equal(mixed b) {
     return ::_equal(b) && equal(options, b->options);
 }

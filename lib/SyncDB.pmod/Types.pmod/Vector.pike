@@ -67,6 +67,16 @@ array(SyncDB.MySQL.Query) column_definitions(void|function(object:int(0..1)) fil
     return predef::`+(@((filter_cb ? filter(fields, filter_cb) : fields)->column_definitions()));
 }
 
+int(0..1) schema_equal(mixed b) {
+    if (!::schema_equal(b)) return 0;
+
+    foreach (fields; int i; object t) {
+        if (!t->schema_equal(b->fields[i])) return 0;
+    }
+
+    return 1;
+}
+
 int(0..1) _equal(mixed b) {
     return ::_equal(b) && equal(fields, b->fields);
 }

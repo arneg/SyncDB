@@ -6,10 +6,6 @@ object get_parser() {
 }
 #endif
 
-string encode_json() {
-    return ::encode_json("SyncDB.Types.Image");
-}
-
 string type_name() {
     return "image";
 }
