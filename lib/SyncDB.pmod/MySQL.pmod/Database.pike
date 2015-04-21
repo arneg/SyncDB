@@ -302,6 +302,8 @@ RETRY: do {
             }
 
             if (sizeof(migrations)) {
+                //werror("---- %s ----\ncurrent version: %d\ncurrent types: %O\n-----\n",
+                //       name, current_schema_version, current_type_versions);
                 int t1 = gethrtime();
 #ifdef SYNCDB_MIGRATION_DEBUG
                 werror("Table(%O): %s\n", name, migrations[0]->describe());
