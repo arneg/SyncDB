@@ -14,7 +14,7 @@ class Base {
 
             int c = 0;
 
-            foreach (sort(indices(to_type_version));; string name) {
+            foreach (sort(indices(to_type_version + from_type_version));; string name) {
                 if (to_type_version[name] != from_type_version[name]) {
                     if (c) ret += ", ";
                     ret += sprintf("type %O from %d to %d", name,
@@ -23,6 +23,8 @@ class Base {
                     c++;
                 }
             }
+
+            if (!c) ret += "initial";
         }
         return ret;
     }
