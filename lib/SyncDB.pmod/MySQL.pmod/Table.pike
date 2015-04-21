@@ -614,7 +614,7 @@ void select_complex(object filter, object order, object limit, mixed cb, mixed .
     }
 }
 
-void count_rows(object filter, function(int(0..1),mixed,mixed...:void) cb, mixed ... extra) {
+int(0..) low_count_rows(object filter) {
     object sql = this_program::sql;
     int(0..) count;
 
@@ -627,10 +627,21 @@ void count_rows(object filter, function(int(0..1),mixed,mixed...:void) cb, mixed
             count = (int)rows[0]->cnt;
     });
 
-    if (!err) {
-        cb(0, count, @extra);
+    if (err) throw(err);
+
+    return count;
+}
+
+void count_rows(object filter, function(int(0..1),mixed,mixed...:void) cb, mixed ... extra) {
+    object sql = this_program::sql;
+    int(0..) count;
+
+    mixed err = catch(count = low_count_rows(filter));
+
+    if (err) {
+        cb(1, err, @extra);
     } else {
-        cb(1, count, @extra);
+        cb(0, count, @extra);
     }
 }
 

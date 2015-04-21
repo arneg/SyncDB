@@ -51,85 +51,49 @@ object dummy(void|mapping data) {
 
 void select_complex(object filter, object order, object limit,
                     function(int, mixed...:void) cb, mixed ... extra) {
-    void _cb(int err, mixed v) {
-        if (err) {
-            cb(err, v, @extra);
-            return;
-        }
-        object key = mutex->lock();
+    array(object) rows;
+    
+    mixed err = catch(rows = fetch(filter, order, limit));
 
-        foreach(v;int i; mapping|object row) if (mappingp(row)) {
-            mixed id = get_unique_identifier(row);
-            object o;
-
-            if (!objectp(o = cache[id])) {
-                o = prog();
-                o->init(row, this);
-                cache[id] = o;
-            } else {
-                o->update(row);
-            }
-
-            v[i] = o;
-
-        }
-
-        cb(0, v, @extra);
-    };
-#if 0
-    if (object_program(filter) == SyncDB.MySQL.Filter.Equal && filter->type->is->key) {
-        object key = mutex->lock();
-        mixed id = filter->value;
-
-        if (has_index(cache, id)) {
-            object o = cache[id];
-            destruct(key);
-            cb(0, ({ o }));
-            return;
-        }
-
-        destruct(key);
+    if (err) {
+        cb(1, err, @extra);
+    } else {
+        cb(0, rows, @extra);
     }
-#endif
-    ::select_complex(filter, order, limit, _cb);
 }
 
 void insert(object|mapping row, function cb, mixed ... extra) {
-    void _cb(int err, mixed v) {
-        if (err) {
-            cb(err, v, @extra);
-        } else {
-            object key = mutex->lock();
-            string id = get_unique_identifier(v);
-            object o;
-            //mixed id = schema->get_unique_identifier(v);
-            if (o = cache[id]) {
-                o->update(v);
-            } else {
-                cache[id] = o = prog();
-                o->init(v, this);
-            }
-            call_out(cache[id]->onchange, 0);
-            cb(err, o, @extra);
-        }
-    };
-    if (objectp(row)) {
-        row = (mapping)row;
+    object o;
+    
+    mixed err = catch(o = put(row));
+
+    if (err) {
+        cb(1, err, @extra);
+    } else {
+        cb(0, o, @extra);
     }
-    ::insert(row, _cb);
 }
 
 array(object) fetch(void|object filter, void|object order, void|object limit) {
-    mixed ret;
-    void cb(int err, mixed v) {
-        if (!err) ret = v;
-        else {
-            werror("fetch failed:\n");
-            master()->handle_error(v);
+    array rows = low_select_complex(filter, order, limit);
+    object key = mutex->lock();
+
+    foreach(rows;int i; mapping|object row) if (mappingp(row)) {
+        mixed id = get_unique_identifier(row);
+        object o;
+
+        if (!objectp(o = cache[id])) {
+            o = prog();
+            o->init(row, this);
+            cache[id] = o;
+        } else {
+            o->update(row);
         }
-    };
-    select_complex(filter||SyncDB.MySQL.Filter.TRUE, order, limit, cb);
-    return ret;
+
+        rows[i] = o;
+
+    }
+    return rows;
 }
 
 array(object)|object put(array(mapping)|mapping row) {
@@ -144,16 +108,7 @@ void just_put(array(mapping)|mapping row) {
 }
 
 int(0..) count(void|object filter) {
-    int(0..) ret;
-    void cb(int err, mixed v) {
-        if (!err) ret = v;
-        else {
-            werror("count failed:\n");
-            master()->handle_error(v);
-        }
-    };
-    count_rows(filter||SyncDB.MySQL.Filter.TRUE, cb);
-    return ret;
+    return low_count_rows(filter);
 }
 
 mixed `->(string index) {
