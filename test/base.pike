@@ -11,29 +11,41 @@ string `sql_path() {
     return _sql_path;
 }
 
+int num_keys = 0;
 
 #ifdef CACHE_CONNECTIONS
 Thread.Local _sql = Thread.Local();
 #endif
 
-class SQLKey(Sql.Sql con) {
+class SQLKey {
+    private int num;
+
+    Sql.Sql con;
+
+    protected void create(Sql.Sql con) {
+        this_program::con = con;
+        num = num_keys;
+        num_keys++;
+    }
+
     mixed `->(string key) {
+        if (key == "num") return this_program::num;
         return predef::`->(con, key);
     }
 
     protected void destroy(int reason) {
         switch (reason) {
         case Object.DESTRUCT_EXPLICIT:
-            werror("explicit destruct.\n");
+    //        werror("explicit destruct %d.\n", num);
             break;
         case Object.DESTRUCT_NO_REFS:
             //werror("refcount destruct.\n");
             break;
         case Object.DESTRUCT_GC:
-            werror("gc destruct.\n");
+     //       werror("gc destruct %d.\n", num);
             break;
         case Object.DESTRUCT_CLEANUP:
-            werror("cleanup destruct.\n");
+      //      werror("cleanup destruct %d.\n", num);
             break;
         }
     }
@@ -63,7 +75,7 @@ Sql.Sql `sql() {
 mixed get_sample_data(string type_name, int n, void|object type) {
     mixed v;
 
-    if (type && type->is["default"] && n & 1) {
+    if (type && n & 1) {
         // test default values.
         return Val.null;
     }
