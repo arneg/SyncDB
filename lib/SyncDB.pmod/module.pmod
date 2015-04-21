@@ -132,7 +132,7 @@ class ReaderWriterLock() {
 
             if (sizeof(a)) {
                 foreach (a;; array c) {
-                    mixed err = catch(c[0](@a[1], read_key));
+                    mixed err = catch(c[0](@c[1], read_key));
                     if (err) master()->handle_error(err);
                 }
             }
