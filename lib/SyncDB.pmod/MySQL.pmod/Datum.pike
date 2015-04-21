@@ -214,10 +214,13 @@ mixed cast(string type) {
 
 void destroy(int reason) {
     if (save_id) {
-        werror("save_id != 0 in %O->destroy(%d).\n", this, reason);
-        if (find_call_out(save_id)) {
-            werror("Callout still active, refcounting bug?\n");
+        if (reason == Object.DESTRUCT_GC) {
+            werror("save_id != 0 in %O->destroy(%d).\n", this, reason);
+            if (find_call_out(save_id)) {
+                werror("Callout still active, refcounting bug?\n");
+            }
         }
+        remove_call_out(save_id);
     }
 }
 
