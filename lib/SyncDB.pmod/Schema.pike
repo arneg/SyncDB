@@ -47,7 +47,9 @@ this_program get_previous_schema(int schema_version, mapping(string:int)|void ve
         fields = fields->get_previous_type(name, requested_version);
     }
 
-    return this_program(@fields);
+    this_program prev = this_program(@fields);
+    prev->migrations = migrations;
+    return prev;
 }
 
 object get_migration(string type_name, object from) {
