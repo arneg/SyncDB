@@ -156,12 +156,20 @@ void unregister_trigger(string table, string trigger, function fun) {
 Thread.Mutex migration_mutex = Thread.Mutex();
 
 object register_view(string name, object type) {
-    object schema = type->schema;
-
-    object vtable = get_version_table();
     object table;
 
+    object key = migration_mutex->lock();
+
+    if (table = low_get_table(name, type)) {
+        return table;
+    }
+
+    destruct(key);
+
+    object vtable = get_version_table();
+
     if (vtable) {
+        object schema = type->schema;
         mapping type_versions = schema->type_versions();
         int schema_version = schema->get_schema_version();
         Sql.Sql sql;
@@ -355,17 +363,20 @@ RETRY: do {
         if (sql) sql->query("UNLOCK TABLES;");
 
         if (err) throw(err);
+    }
 
+    // all the above is meant to run in parallel
+
+    key = migration_mutex->lock();
+
+    if (table = low_get_table(name, type)) return table;
+
+    if (vtable) {
         table = type->get_table(sqlcb, name);
     } else {
         table = type->get_previous_table(sqlcb, name, 0, ([]));
     }
 
-    // all the above is meant to run in parallel
-
-    object key = migration_mutex->lock();
-
-    if (low_get_table(name, type)) error("table for %O %O already exists.\n", name, type);
     register_table(name, table);
 
     return table;
