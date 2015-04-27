@@ -7,6 +7,29 @@ void create(mixed dbname, mixed schema, void|mixed db) {
     this_program::dbname = dbname;
     this_program::db = db;
     this_program::schema = schema;
+    register_trigger("after_update", after_update);
+    register_trigger("after_delete", after_delete);
+    register_trigger("after_insert", after_insert);
+}
+
+void after_insert(object table, mapping row) {
+    if (table == this) return;
+    version = row->version;
+}
+
+void after_update(object table, mapping row, mapping changes) {
+    if (table == this) return;
+    version = row->version;
+}
+
+void after_delete(object table, mapping keys) {
+    if (table == this) return;
+    if (keys->version) {
+        version = -keys->version;
+    } else if (!version->is_deleted()) {
+        // FIXME: the table version remains here...
+        version = -version; 
+    }
 }
 
 mixed `->(string name) {

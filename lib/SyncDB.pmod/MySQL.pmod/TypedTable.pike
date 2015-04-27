@@ -9,12 +9,6 @@ void create(string dbname, function(void:Sql.Sql) cb, SyncDB.Schema schema, stri
     this_program::smart_type = smart_type;
     this_program::prog = smart_type->get_datum();
     ::create(dbname, cb, schema, table);
-
-    register_trigger("after_update", after_update);
-    register_trigger("after_delete", after_delete);
-#if constant(Roxen)
-    register_trigger("after_insert", after_insert);
-#endif
 }
 
 array(object) `fields() {
@@ -167,6 +161,7 @@ void destroy() {
 }
 
 void after_delete(object table, mapping keys) {
+    ::after_delete(table, keys);
 #if constant(Roxen)
     invalidate_requests();
 #endif
@@ -178,6 +173,7 @@ void after_delete(object table, mapping keys) {
 }
 
 void after_update(object table, mapping row, mapping changes) {
+    ::after_update(table, row, changes);
 #if constant(Roxen)
     invalidate_requests();
 #endif
@@ -191,6 +187,7 @@ void after_update(object table, mapping row, mapping changes) {
 
 #if constant(Roxen)
 void after_insert(object table, mapping row) {
+    ::after_insert(table, row);
     invalidate_requests();
 }
 #endif
