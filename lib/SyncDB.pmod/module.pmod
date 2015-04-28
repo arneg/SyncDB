@@ -101,6 +101,11 @@ class ReaderWriterLock() {
         // this looks racy, but in fact noone else will write to read_key
         // while we are at it.
 
+        // it seems to me that sometimes the previous read_key is not destructed
+        // early enough, we trigger a gc run here. this is bad for performance, but
+        // we dont care for our use cases. this is _not_ a general purpose rwlock
+        gc();
+
         Thread.MutexKey my_key = read_key = actual_mutex->lock();
 
         
