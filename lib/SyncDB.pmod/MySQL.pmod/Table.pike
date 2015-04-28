@@ -739,17 +739,17 @@ void delete(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
         break;
     }
 
+
     // if the primary key is not automatic, we do a real delete
     if (!real_delete) {
         mapping d = ([ ]);
         d["version"] = -version;
         t = schema->encode_sql(table, d);
 
-        trigger("before_delete", keys);
-
         err = sql_error(sql, catch {
             lock_tables(sql);
             locked = 1;
+            trigger("before_delete", keys);
             .Query q = update_sql(indices(t), values(t)) + uwhere;
             q(sql);
             if (sql->master_sql->info) {
@@ -764,6 +764,7 @@ void delete(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
         err = sql_error(sql, catch {
             lock_tables(sql);
             locked = 1;
+            trigger("before_delete", keys);
             .Query q = delete_sql + uwhere;
             q(sql);
             noerr = 1;
