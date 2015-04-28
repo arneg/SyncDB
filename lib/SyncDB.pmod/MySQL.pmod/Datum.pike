@@ -163,8 +163,8 @@ void mark_deleted() {
     _modified = ([]);
 }
 
-int(0..1) drop() {
-    if (is_deleted()) return 1;
+void drop_throw() {
+    if (is_deleted()) return;
     int(0..1) ret;
     mixed v;
     void cb(int(0..1) err, mixed b) {
@@ -172,14 +172,14 @@ int(0..1) drop() {
         v = b;
     };
     if (save_id) save();
+
     delete(cb);
-    if (!ret) {
-        return 1;
-    } else {
-        werror("delete failed\n");
-        master()->handle_error(v);
-        return 0;
-    }
+
+    if (ret) throw(v);
+}
+
+int(0..1) drop() {
+    return !catch(drop_throw());
 }
 
 void delete(function(int, mixed...:void)|void cb, mixed ... extra) {
