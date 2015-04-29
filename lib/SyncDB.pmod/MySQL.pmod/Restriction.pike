@@ -23,8 +23,8 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb2, mixed ... 
     table->insert(row, cb2, extra);
 }
 
-void drop(object(SyncDB.MySQL.Filter.Base) filter) {
-    table->drop(filter & restriction);
+array drop(object(SyncDB.MySQL.Filter.Base) filter) {
+    return table->drop(filter & restriction);
 }
 
 mixed `->(string name) {
@@ -37,4 +37,18 @@ mixed `->(string name) {
 
 void count_rows(object filter, function(int(0..1),mixed,mixed...:void) cb, mixed ... extra) {
     table->count_rows(filter & restriction, cb, @extra);
+}
+
+object(SyncDB.MySQL.Filter.Base) low_insert(array(mapping) rows) {
+    rows = copy_value(rows);
+    map(rows, restriction->insert);
+    return table->low_insert(rows);
+}
+
+object|array(mapping) low_select_complex(object filter, object order, object limit) {
+    return table->low_select_complex(filter & restriction, order, limit);
+}
+
+object PageIterator(object filter, object order, int rows) {
+    return table->PageIterator(filter & restriction, order, rows);
 }
