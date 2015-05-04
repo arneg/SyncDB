@@ -2,6 +2,11 @@ string dbname;
 SyncDB.Schema schema;
 SyncDB.Table db;
 SyncDB.Version version;
+int generation = 0;
+
+int table_generation() {
+    return generation;
+}
 
 void create(mixed dbname, mixed schema, void|mixed db) {
     this_program::dbname = dbname;
@@ -13,16 +18,19 @@ void create(mixed dbname, mixed schema, void|mixed db) {
 }
 
 void after_insert(object table, mapping row) {
+    generation++;
     if (table == this) return;
     version = row->version;
 }
 
 void after_update(object table, mapping row, mapping changes) {
+    generation++;
     if (table == this) return;
     version = row->version;
 }
 
 void after_delete(object table, mapping keys) {
+    generation++;
     if (table == this) return;
     if (keys->version) {
         version = -keys->version;
