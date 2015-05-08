@@ -1,5 +1,13 @@
 protected object table, restriction;
 
+object get_restriction() {
+    return restriction;
+}
+
+object get_table() {
+    return table;
+}
+
 void create(object table, object filter) {
     this_program::table = table;
     this_program::restriction = filter;
@@ -51,4 +59,8 @@ object|array(mapping) low_select_complex(object filter, object order, object lim
 
 object PageIterator(object filter, object order, int rows) {
     return table->PageIterator(filter & restriction, order, rows);
+}
+
+string _sprintf(int t) {
+    return sprintf("%O(%O, %O)", this_program, table, restriction);
 }
