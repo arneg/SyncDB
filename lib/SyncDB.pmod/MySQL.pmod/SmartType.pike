@@ -118,21 +118,23 @@ void create() {
         array schemata = allocate(sizeof(changes) + 1);
 
         for (int i = sizeof(changes)-1; i >= 0; i--) {
-            mapping m = changes[i];
+            program|mapping m = changes[i];
 
-            // TODO: add renames
+            if (mappingp(m)) {
+                // TODO: add renames
 
-            foreach (m; string name; object field) if (field) field->name = name;
+                foreach (m; string name; object field) if (field) field->name = name;
 
-            // overwrite with _previous_ fields
-            m = current_fields + m;
+                // overwrite with _previous_ fields
+                m = current_fields + m;
 
-            foreach (m; string name; object field) if (!field) m_delete(m, name);
+                foreach (m; string name; object field) if (!field) m_delete(m, name);
 
-            // ordering is lost here, is this a problem?
-            // FIXME: we can win back the ordering, by extracting the order from within
-            // fields, i.e. use filter(fields, mkmapping(values(m), values(m)));
-            current_fields = m;
+                // ordering is lost here, is this a problem?
+                // FIXME: we can win back the ordering, by extracting the order from within
+                // fields, i.e. use filter(fields, mkmapping(values(m), values(m)));
+                current_fields = m;
+            }
 
             schemata[i] = SyncDB.Schema(@values(current_fields)->syncdb_type());
         }
@@ -144,10 +146,13 @@ void create() {
         for (int i = 1; i < sizeof(schemata); i++) {
             object schema = schemata[i];
             object previous_schema = schemata[i-1];
+            program|mapping m = changes[i-1];
 
             // if default values have been added, we need to create a simple
             // migration, to make sure they are all being updated
-            if (sizeof(schema->default_row - previous_schema->default_row)) {
+            if (programp(m)) {
+                migrations[i-1] = m(previous_schema, schema);
+            } else if (sizeof(schema->default_row - previous_schema->default_row)) {
                 migrations[i-1] = SyncDB.Migration.Simple(previous_schema, schema);
             } else {
                 migrations[i-1] = SyncDB.Migration.Base(previous_schema, schema);
