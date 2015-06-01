@@ -243,6 +243,7 @@ class Base {
 
     mapping transform_row(mapping row);
     mapping update_row(mapping row);
+    void update_table(object table);
 
     //! Perform the migration. @expr{sql@} is expected to hold a WRITE lock on the table.
     //! The lock will be gone when this function returns.
@@ -294,8 +295,11 @@ class Base {
             .MySQL.Query alter = upgrade_table(table_name);
             if (alter) alter(sql);
 
-            if (update_row) {
-                object tbl = SyncDB.MySQL.Table(table_name, sql, to);
+            object tbl = SyncDB.MySQL.Table(table_name, sql, to);
+
+            if (update_table) {
+                update_table(tbl);
+            } else if (update_row) {
                 // fetch all rows and update
                 foreach (tbl->PageIterator(0, 0, 100);; array|object rows) {
                     foreach (rows;; mapping row) {
@@ -305,6 +309,8 @@ class Base {
                 }
             }
             if (after_alter) after_alter(sql, table_name);
+
+            sql->query("UNLOCK TABLES;");
         }
     }
 }
