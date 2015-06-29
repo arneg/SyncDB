@@ -6,7 +6,7 @@ protected program datum = .Datum;
 protected program real_datum;
 protected program table_program = .TypedTable;
 
-array(mapping(string:object)) changes;
+array changes;
 
 program get_datum() {
     return real_datum;
