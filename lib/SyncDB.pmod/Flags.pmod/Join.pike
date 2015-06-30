@@ -1,3 +1,0 @@
-inherit .Link;
-inherit .ReadOnly;
-
