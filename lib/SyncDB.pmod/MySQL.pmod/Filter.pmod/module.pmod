@@ -31,9 +31,7 @@ class Base {
         return this;
     }
 
-    void insert(mapping row) {
-        werror("%O does not properly work as a restriction on insert.\n", this);
-    }
+    void insert(mapping row) { }
 }
 
 class Combine {
