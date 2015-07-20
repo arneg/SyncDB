@@ -614,12 +614,12 @@ void select_complex(object filter, object order, object limit, mixed cb, mixed .
     }
 }
 
-int(0..) low_count_rows(object filter) {
+int(0..) low_count_rows(void|object filter) {
     object sql = this_program::sql;
     int(0..) count;
 
     mixed err = sql_error(sql, catch {
-            .Query index = filter->encode_sql(this);
+            .Query index = objectp(filter) ? filter->encode_sql(this) : .Query("TRUE");
             array(mapping) rows;
 
             rows = (count_sql + index)(sql);
@@ -632,7 +632,7 @@ int(0..) low_count_rows(object filter) {
     return count;
 }
 
-void count_rows(object filter, function(int(0..1),mixed,mixed...:void) cb, mixed ... extra) {
+void count_rows(void|object filter, function(int(0..1),mixed,mixed...:void) cb, mixed ... extra) {
     object sql = this_program::sql;
     int(0..) count;
 
