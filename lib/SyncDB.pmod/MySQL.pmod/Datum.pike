@@ -94,13 +94,12 @@ void force_update() {
     object f = tid->Equal(_data[tid->name]);
     mapping ret;
 
-    table->low_select(f, lambda (int err, mixed v) {
-        if (err) {
-            error("we really cannot recover from this! db seems to be broken\n");
-        } else {
-            ret = v[0];
-        }
-    });
+    mixed err = catch {
+        ret = table->low_select_complex(f)[0];
+    };
+    if (err)
+        error("we really cannot recover from this! db seems to be broken\n");
+
     update(ret);
 }
 
@@ -232,7 +231,6 @@ mapping clone() {
 object get_remote_table(string name, void|program type) {
     return table->update_manager && table->update_manager->get_table(name, type);
 }
-
 
 object remote_table(string name, void|program type) {
     if (name == table->table_name() && (!type || type == object_program(table->smart_type))) return table;
