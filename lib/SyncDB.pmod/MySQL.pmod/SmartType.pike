@@ -63,6 +63,8 @@ protected class Field {
     array flags;
     string name;
 
+    private object _syncdb_type;
+
     void create(program syncdb_class, mixed ... flags) {
         this_program::syncdb_class = syncdb_class;
         this_program::flags = flags;
@@ -75,7 +77,11 @@ protected class Field {
     }
     
     object syncdb_type() {
-        return syncdb_class(name, @flags);
+        if (!_syncdb_type || _syncdb_type->name != name) {
+            _syncdb_type = syncdb_class(name, @flags);
+        }
+
+        return _syncdb_type;
     }
 };
 
