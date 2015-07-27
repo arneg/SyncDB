@@ -97,8 +97,10 @@ void force_update() {
     mixed err = catch {
         ret = table->low_select_complex(f)[0];
     };
-    if (err)
-        error("we really cannot recover from this! db seems to be broken\n");
+    if (err) {
+        werror("we really cannot recover from this! db seems to be broken:\n");
+        throw(err);
+    }
 
     update(ret);
 }
