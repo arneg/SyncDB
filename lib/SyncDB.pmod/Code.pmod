@@ -31,15 +31,7 @@ class Base(void|object parent) {
     }
 
     string _sprintf(int type) {
-        if (type == 'O') {
-            String.Buffer buf = String.Buffer();
-            buf->add("Base():\n");
-            render(buf);
-            buf->add("\n)\n");
-            return buf->get();
-        } else {
-            return sprintf("%O()", this_program);
-        }
+        return sprintf("%O(%d entries)", this_program, data && sizeof(data));
     }
 
     void clear() {
