@@ -227,19 +227,6 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
     count_sql += vf;
     select_sql += vf;
     select_sql_count += vf;
-
-    // Initialize version
-    update_table_version();
-}
-
-void update_table_version(void|object con) {
-    if (!con) con = sql;
-
-    array r = con->query(sprintf("SELECT ABS(MAX(version)) AS version FROM `%s`;", table_name()));
-
-    if (!sizeof(r)) {
-        version = 0;
-    } else version = (int)r[0]->version;
 }
 
 //! @decl void select(object filter, object|function(int(0..1), array(mapping)|mixed:void) cb,
@@ -465,6 +452,7 @@ void update(mapping keys, mapping|int version, function(int(0..1),mixed,mixed...
         }
 	if (affected_rows == 1) {
             mapping new = sanitize_result(rows[0]);
+            trigger("after_change");
             trigger("after_update", new, keys);
 	    cb(0, new, @extra);
 	} else {
@@ -539,6 +527,7 @@ void delete(mapping keys, mapping|int version, function(int(0..1),mixed,mixed...
     if (locked) unlock_tables(sql);
 
     if (noerr) {
+        trigger("after_change");
         trigger("after_delete", keys);
         cb(0, 0, @extra);
     } else {
@@ -555,6 +544,7 @@ array drop(void|object(SyncDB.MySQL.Filter.Base) filter) {
         foreach (rows;; mapping row) trigger("before_delete", row);
         .Query q = delete_sql + filter->encode_sql(this);
         q(sql);
+        trigger("after_change");
         foreach (rows;; mapping row) {
             trigger("after_delete", row);
             row->version = 0;
@@ -564,10 +554,6 @@ array drop(void|object(SyncDB.MySQL.Filter.Base) filter) {
 
     throw(err);
 }
-
-// INSERT INTO table1(c1, c2, c3), table2(c4, c5, c6) VALUES ('v1', 'v2', 
-// 'v3',v4, 'v5', 'v6'); 
-//
 
 .Query `lock_tables() {
     return .Query(sprintf("LOCK TABLES `%s` WRITE;", table_name()));
@@ -625,9 +611,9 @@ object(SyncDB.MySQL.Filter.Base) low_insert(array(mapping) rows) {
             }
         }
 
-        update_table_version(sql);
-
         unlock_tables(sql); locked = 0;
+
+        trigger("after_change");
 
         foreach (rows;; mapping row)
             trigger("after_insert", row);
