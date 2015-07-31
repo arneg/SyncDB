@@ -149,9 +149,13 @@ void _test2() {
         inherit SyncDB.Migration.Simple;
 
         mapping transform_row(mapping row) {
+            mixed b = row->bar;
+            mixed f = row->foo;
+            if (intp(b)) b = get_sample_data("string", b);
+            if (intp(f)) f = get_sample_data("string", f);
             return ([
-                "bar" : get_sample_data("string", row->bar),
-                "foo" : get_sample_data("string", row->foo),
+                "bar" : b,
+                "foo" : f,
                 "flu" : row->flu,
             ]);
         }
@@ -173,8 +177,10 @@ void _test3() {
         inherit SyncDB.Migration.Simple;
 
         mapping transform_row(mapping row) {
+            mixed b = row->bar;
+            if (intp(b)) b = get_sample_data("string", b);
             return row + ([
-                "bar" : get_sample_data("string", row->bar),
+                "bar" : b,
             ]);
         }
     })(a, b));
