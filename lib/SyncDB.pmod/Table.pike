@@ -1,7 +1,7 @@
 string dbname; 
 SyncDB.Schema schema;
 SyncDB.Table db;
-SyncDB.Version version;
+int version;
 int generation = 0;
 
 int table_generation() {
@@ -116,7 +116,7 @@ void trigger(string event, mixed ... args) {
     }
 }
 
-SyncDB.Version table_version() {
+int table_version() {
     return version;
 }
 

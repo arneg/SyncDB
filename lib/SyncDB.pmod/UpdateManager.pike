@@ -34,7 +34,7 @@ void destroy() {
     remove_call_out(request_updates);
 }
 
-void signal_updates(object table, SyncDB.Version version, array(mapping) rows) {
+void signal_updates(object table, int version, array(mapping) rows) {
     foreach (tables;; object o) {
         if (o && o != table) {
             o->handle_update(version, rows);

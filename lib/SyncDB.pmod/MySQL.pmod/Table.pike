@@ -645,13 +645,13 @@ void count_rows(void|object filter, function(int(0..1),mixed,mixed...:void) cb, 
     }
 }
 
-void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mixed,mixed...:void) cb,
+void update(mapping keys, mapping|int version, function(int(0..1),mixed,mixed...:void) cb,
             mixed ... extra) {
     mixed err;
     array|mapping rows;
     object sql = this_program::sql;
     mapping t = ([]);
-    SyncDB.Version oversion, nversion;
+    int oversion, nversion;
 
     object where = get_where(keys);
 
@@ -714,11 +714,11 @@ void update(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
 //! @note
 //!     Does not currently work on linked tables.
 void cleanup() {
-    .Query index = .Filter.And(@schema["version"]->fields->Le(0))->encode_sql(this);
+    .Query index = .Filter.And(schema["version"]->Le(0))->encode_sql(this);
     (delete_sql + index)(sql);
 }
 
-void delete(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mixed,mixed...:void) cb,
+void delete(mapping keys, mapping|int version, function(int(0..1),mixed,mixed...:void) cb,
             mixed ... extra) {
     int(0..1) noerr;
     mixed err;
@@ -781,7 +781,7 @@ void delete(mapping keys, mapping|SyncDB.Version version, function(int(0..1),mix
 }
 
 array drop(object(SyncDB.MySQL.Filter.Base) filter) {
-    filter &= schema["version"]->fields[0]->Gt(0);
+    filter &= schema["version"]->Gt(0);
 
     mixed err = sql_error(sql, catch {
         array rows = low_select_complex(filter, 0, 0);

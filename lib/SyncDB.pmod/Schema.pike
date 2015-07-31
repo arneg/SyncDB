@@ -107,13 +107,11 @@ string _sprintf(int t) {
 void create(object ... m) {
     this_program::m = ([ ]);
     map(m, add_type);
-    add_type(version = SyncDB.Types.Version("version", tables(),
-					    SyncDB.Flags.Unique(),
-					    SyncDB.Flags.Index()));
+    add_type(version = SyncDB.Types.Integer("version", SyncDB.Flags.Unique(), SyncDB.Flags.Index()));
 }
 
 mixed get_unique_identifier(mapping row) {
-    return (string)row->version;
+    return row->version;
 }
 
 this_program `+(this_program o) {
