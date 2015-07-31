@@ -23,8 +23,8 @@ Sql.Sql `sql=(Sql.Sql|function(void:Sql.Sql) o) {
     }
 }
 
-string table;
-Table table_o;
+private string table;
+private Table table_o;
 
 object sql_error(object sql, mixed err) {
     string state;
@@ -45,31 +45,7 @@ object sql_error(object sql, mixed err) {
     return SyncDB.MySQL.Error(state, this, err[0], err[1]);
 }
 
-/*
- * JOIN (using INNER JOIN)
- *  - join id in secondary table has to be automatic
- *    either explicit or doing it by hand/with triggers
- *  - join id in main table is read-only
- *  - insert new row in secondary tables on insert
- * LINK (using JOIN)
- *  - join id in main table can only be set to NULL or 
- *    an existing id in the other table
- *  - join id is rw
- * REFERENCE (using JOIN) inherits LINK
- *  - members in secondary table are read-only
- *    and optional.
- */
-
-string mapping_implode(mapping m, string s1, string s2) {
-    array(string) t = allocate(sizeof(m));
-    int i = 0;
-    foreach (m; string n; string v) {
-	t[i++] = n + s1 + v;
-    }
-    return t*s2;
-}
-
-class Table {
+private class Table {
     array(SyncDB.Types.Base) fields = ({});
     mapping sql_schema = ([]);
 
@@ -110,27 +86,8 @@ class Table {
             return predef::`+(@fields->escaped_sql_names(name));
     }
 
-    array(SyncDB.Types.Base) readable() {
-	return filter(fields, fields->is->readable);
-    }
-
     array(SyncDB.Types.Base) writable() {
 	return filter(fields, fields->is->writable);
-    }
-
-    string index(mapping row) {
-	mapping new = ([ ]);
-	foreach (readable();; object type) {
-	    if (!type->is->index) continue;
-	    // TODO: this will only work for single field types
-	    // later we somehow have to use filters, Equal by default
-	    type->encode_sql(name, row, new);
-	}
-	return sizeof(new) ? mapping_implode(new, "=", " AND ") : 0;
-    }
-
-    string select(mapping row) {
-	return index(row);
     }
 
     void update(mapping row, mapping oldrow, mapping new) {
@@ -147,16 +104,8 @@ class Table {
 	foreach (writable();; object type) {
 	    type->encode_sql(table_name, row, new);
 	}
-	return sizeof(new) ? new : 0;
+	return new;
     }
-}
-
-array(Table) table_objects() {
-    return ({ table_o });
-}
-
-array(string) table_names() {
-    return table_objects()->name;
 }
 
 object restrict(object filter) {
@@ -264,18 +213,15 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
     select_sql_count = .Query(sprintf("SELECT SQL_CALC_FOUND_ROWS %s FROM `%s`",
                                       sizeof(t) ? t*"," : "*", table));
     select_sql = .Query(sprintf("SELECT %s FROM `%s`", sizeof(t) ? t*"," : "*", table));
-    _update_sql = .Query(sprintf("UPDATE `%s` SET ", table_names()*"`,`"));
+    _update_sql = .Query(sprintf("UPDATE `%s` SET ", table_name()));
     delete_sql = .Query(sprintf("DELETE FROM `%s` WHERE ", table));
 
     count_sql = .Query(sprintf("SELECT COUNT(*) as cnt from `%s` WHERE ", table));
 
-    t = ({});
     install_triggers(table);
 
     select_sql += " WHERE ";
     select_sql_count += " WHERE ";
-
-    t = table_names();
 
     string vf = sprintf("`%s`.version > 0 AND ", table_name());
     count_sql += vf;
@@ -288,19 +234,12 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
 
 void update_table_version(void|object con) {
     if (!con) con = sql;
-    array t = table_names();
 
-    foreach (t; int i; string name) {
-	t[i] = sprintf("ABS(MAX(`%s`.version)) AS '%<s.version'", name);
-    }
+    array r = con->query(sprintf("SELECT ABS(MAX(version)) AS version FROM `%s`;", table_name()));
 
-    array r = con->query(sprintf("SELECT "+t*", "+" FROM `%s` WHERE 1;", table_names()*"`,`"));
-
-    foreach (table_names();; string name) {
-        if (!r[0][name+".version"]) r[0][name+".version"] = "0";
-    }
-
-    version = schema["version"]->decode_sql(table, r[0]);
+    if (!sizeof(r)) {
+        version = 0;
+    } else version = (int)r[0]->version;
 }
 
 //! @decl void select(object filter, object|function(int(0..1), array(mapping)|mixed:void) cb,
@@ -503,7 +442,7 @@ void update(mapping keys, mapping|int version, function(int(0..1),mixed,mixed...
 	lock_tables(sql);
 	locked = 1;
 	mapping new = ([]);
-	table_objects()->update(keys, rows, new);
+	table_o->update(keys, rows, new);
 	.Query q = update_sql(indices(new), values(new)) + uwhere;
 
 	q(sql);
@@ -631,7 +570,7 @@ array drop(void|object(SyncDB.MySQL.Filter.Base) filter) {
 //
 
 .Query `lock_tables() {
-    return .Query(sprintf("LOCK TABLES %s WRITE;", table_names()*" WRITE,"));
+    return .Query(sprintf("LOCK TABLES `%s` WRITE;", table_name()));
 }
 
 .Query `unlock_tables() {
@@ -640,10 +579,6 @@ array drop(void|object(SyncDB.MySQL.Filter.Base) filter) {
 
 object(SyncDB.MySQL.Filter.Base) low_insert(array(mapping) rows) {
     object sql = this_program::sql;
-
-    if (sizeof(table_objects()) > 1) error("low_insert does not support remote table.\n");
-
-    object table = table_objects()[0];
 
     mapping def = schema->default_row;
 
@@ -659,13 +594,13 @@ object(SyncDB.MySQL.Filter.Base) low_insert(array(mapping) rows) {
     foreach (rows;; mapping row)
         trigger("before_insert", row);
 
-    array data = map(rows, table->insert);
+    array data = map(rows, table_o->insert);
 
     array(string) fields = indices(data[0]);
 
     data = Array.flatten(map(data, Function.curry(map)(fields)));
 
-    object insert_sql = .Query("INSERT INTO `" + table->name + "` (" + fields * "," + ") VALUES (" +
+    object insert_sql = .Query("INSERT INTO `" + table_name() + "` (" + fields * "," + ") VALUES (" +
                                allocate(sizeof(rows), allocate(sizeof(fields), "%s") * ",") * "),(" +
                                ")");
     insert_sql->args = data;
@@ -704,88 +639,21 @@ object(SyncDB.MySQL.Filter.Base) low_insert(array(mapping) rows) {
     throw(err);
 }
 
-void insert(array(mapping)|mapping row, function(int(0..1),mixed,mixed...:void) cb, mixed ... extra) {
+void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb, mixed ... extra) {
     mixed err;
     array rows;
     object sql = this_program::sql;
 
-    // TODO:
-    // 	schema->key != shcema-»automatic
-    if (!schema->automatic) {
-	if (!row[schema->key]) {
-	    cb(1, "Could not insert your row, because it misses an indexed & unique field.\n",
-               @extra);
-	    return;
-	}
-    } else if (schema->key != schema->automatic) {
-	error("RETARDO! (%O != %O)\n", schema->key, schema->automatic);
-    }
-
     mapping def = schema->default_row;
 
-    foreach (def; string s; mixed v) {
-        if (!has_index(row, s) || objectp(row[s]) && row[s]->is_val_null)
-            row[s] = v;
-    }
 
-    trigger("before_insert", row);
-
-    err = sql_error(sql, catch {
-
-	lock_tables(sql);
-
-	// first do the ones which have the fid AUTO_INCREMENT
-	// use those automatic values to populate the link ids
-	// in the main table
-	// insert the main one
-	// insert the others
-        //
-        // TODO: turn this into _one_ insert into several tables. or else turn this into
-        // a transaction
-        //
-	foreach (table_objects(); ; Table t) {
-	    mapping new = t->insert(row);
-	    if (!new) {
-		if (t->is->automatic && sizeof(t->writable())) {
-		    new = ([]);
-		    // DEAD
-		}
-		continue;
-	    }
-	    string into = indices(new)*",";
-	    object insert_sql = .Query("INSERT INTO " + t->name + " (" + indices(new)*"," + ") VALUES ("
-				       + allocate(sizeof(new), "%s")*"," + ");", @values(new));
-
-	    insert_sql(sql);
-	    // we need todo this potentially for all automatic fields (not only
-	    // mysql auto increment).
-	    if (t->is_automatic && t->is_ass_on_fire && t->is_link) {
-		mapping last = sql->query("SELECT * FROM %s WHERE %s=LAST_INSERT_ID()", t->name, t->fid)[0];
-		row[t->id] = (int)last[t->fid];
-	    }
-	    
-	    if (t == table_o && schema[schema->key]->is->automatic) {
-		mixed last = sql->query("SELECT LAST_INSERT_ID() as id;");
-		if (sizeof(last)) last = last[0];
-		row[schema->key] = (int)last->id;
-	    }
-	}
-
-	.Query where = select_sql + get_where(row);
-	rows = where(sql);
-	if (sizeof(rows) != 1) {
-            if (!sizeof(rows)) {
-                error("Trigger on insert not working on table %s\n", table_name());
-            } else error("Got more than one row: %O\n", rows);
-        }
-        rows = sanitize_result(rows);
+    err = catch {
+        object f = low_insert(({ row }));
+        rows = low_select_complex(f, 0, 0);
         row = rows[0];
-    });
-
-    unlock_tables(sql);
+    };
 
     if (!err) {
-        trigger("after_insert", row);
 	cb(0, row, @extra);
     } else {
 	cb(1, err, @extra);
