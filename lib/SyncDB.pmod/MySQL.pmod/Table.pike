@@ -60,10 +60,6 @@ object sql_error(object sql, mixed err) {
  *    and optional.
  */
 
-private mixed query(mixed ... args) {
-    return .Query(@args)(sql);
-}
-
 string mapping_implode(mapping m, string s1, string s2) {
     array(string) t = allocate(sizeof(m));
     int i = 0;
@@ -155,131 +151,8 @@ class Table {
     }
 }
 
-class Foreign {
-    inherit Table;
-
-    string id;
-    string fid;
-
-    void create(string name, string id, string fid) {
-	this_program::id = id;
-	this_program::fid = fid;
-	::create(name);
-    }
-
-    mapping insert(mapping row) {
-	mapping new = ::insert(row);
-	if (new) {
-	    if (row[id]) {
-		new[sprintf("%s.%s", name, fid)]
-		    = schema[id]->encode_sql_value(row[id]);
-	    } else if (!is_automatic) {
-		error("join id needs to be either automatic or specified."); 
-	    } 
-	}
-	return new;
-    }
-
-    int(0..1) `is_automatic() {
-	werror("auto_increment: %O %O %O\n", sql_schema[fid], sql_schema[fid]->flags, sql_schema[fid]->flags->auto_increment);
-	return sql_schema[fid]->is->automatic;
-    }
-}
-
-class Join {
-    inherit Foreign;
-
-    mapping insert(mapping row) {
-	mapping new = ::insert(row);
-	if (!new) {
-	    new = ([]);
-	    if (row[id]) {
-		new[sprintf("%s.%s", name, fid)]
-		    = schema[id]->encode_sql_value(row[id]);
-	    } else if (!is_automatic) {
-		error("join id needs to be either automatic or specified."); 
-	    } 
-	    // TODO: we somehow have to signal that we want to insert here
-	    // anyways.
-	}
-	return new;
-    }
-
-    void update(mapping row, mapping oldrow, mapping new) {
-	int i = sizeof(new);
-	::update(row, oldrow, new);
-	if (sizeof(new) - i) { // need to add the corresponding link id
-	    if (has_index(row, id)) {
-		schema[id]->encode_sql(name, row, new);
-	    } else {
-		if (!oldrow[id]) {
-		    if (is_automatic) {
-			mapping new = insert(row);
-			// insert data
-			// change row[id] to the auto incremented value
-			query(sprintf("INSERT INTO %s (%s) VALUES (%s)",  name, indices(row)*",", values(new)*","));
-			mapping r = query(sprintf("SELECT %s,version FROM %s WHERE %s=LAST_INSERT_ID();", fid, name, fid))[0];
-			row[id] = r[fid];
-			return 0;
-		    }
-
-		    error("fooobar");
-		}
-	    }
-	}
-    }
-
-    string join(string table) {
-	return sprintf(" INNER JOIN %s ON %s.%s=%s.%s", name,
-		      name, fid, table, id);
-    }
-}
-
-// think: country_id where country table is writable by user
-class Link {
-    inherit Foreign;
-
-    void update(mapping row, mapping oldrow, mapping new) {
-	int i = sizeof(new);
-	::update(row, oldrow, new);
-	if (sizeof(new) - i) { // need to add the corresponding link id
-	    if (has_index(row, id)) {
-		if (row[id] != Val.null) {
-		}
-		// check if the new link id has a corresponding field in the other table
-		// or Sql.Null
-	    }
-	}
-    }
-
-    string join(string table) {
-	return sprintf(" JOIN %s ON %s.%s=%s.%s", name,
-		      name, fid, table, id);
-    }
-}
-
-// think: country_id where country table is readonly by user
-class Reference {
-    inherit Link;
-
-    array(string) writable() {
-	return ({});
-    }
-
-    string insert(mapping row, function fun) {
-	if (sizeof(row & fields->name)) {
-	    error("Trying to change referenced an hence readonly fields: %O.\n", row & fields->name);
-	}
-    }
-}
-
 array(Table) table_objects() {
-    // TODO: move sorting to create
-    array a = values(tables), r;
-    sort(indices(tables), a);
-    r = filter(a, a->is_automatic) + ({ table_o });
-    r += filter(a, map(a->is_automatic, `!));
-    return r;
+    return ({ table_o });
 }
 
 array(string) table_names() {
@@ -290,7 +163,6 @@ object restrict(object filter) {
     return .Restriction(this, filter);
 }
 
-mapping tables = ([ ]);
 .Query select_sql, select_sql_count, _update_sql, delete_sql, count_sql;
 
 .Query update_sql(array(string) fields, array(mixed) values) {
@@ -376,50 +248,14 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
     sql = con;
     table_o = Table(table);
     ::create(dbname, schema);
-    // try to generate all the SQL queries and stored procedures
     //
-    // BULLSHIT:
-    // 1. determine all tables. if its more than one with complex sum queries,
-    //    generate transaction. otherwise if its just one table, we can do with
-    //    selects
     array t = ({
     });
-
-#define CASE(x) if (Program.inherits(object_program(type), (x)))
-    foreach (schema;; object type) {
-	string field = type->name;
-	if (type->is->link) {
-	    mapping type = type->flags->link;
-	    foreach (type->tables; string name; string fid) {
-		program p;
-		CASE(SyncDB.Flags.Join) {
-		    p = Join;
-		} else CASE(SyncDB.Flags.Reference) {
-		    p = Reference;
-		} else CASE(SyncDB.Flags.Link) {
-		    p = Link;
-		} else {
-		    error("Unsupported link flag.\n");
-		}
-		tables[name] = p(name, field, fid);
-		if (table_o->sql_schema[field]->is->automatic && tables[name]->is->automatic && schema[fid]->is->writable) {
-		    error("Link fields cannot be both automatic in %s and %s (%O, %O).\n", table, name, fid, schema[fid]->flags);
-		}
-	    }
-	}
-    }
 
     array table_fields = sql->list_fields(table);
 
     foreach (schema;; object type) {
-        if (type->is->foreign) {
-            string t2 = type->flags->foreign->table;
-            if (!has_index(tables, t2))
-                tables[t2] = Table(t2);
-            tables[t2]->add_field(type);
-        } else {
-            table_o->add_field(type);
-        }
+        table_o->add_field(type);
     }
 
     if (sizeof(table_fields) != sizeof(table_o->sql_names()))
@@ -435,25 +271,16 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
 
     t = ({});
     install_triggers(table);
-    foreach (tables; string foreign_table; Table t) {
-	// generate the version triggers
-	select_sql += t->join(table);
-        select_sql_count += t->join(table);
-	// generate proper selects/inserts
-	install_triggers(foreign_table);
-    }
 
     select_sql += " WHERE ";
     select_sql_count += " WHERE ";
 
     t = table_names();
 
-    foreach (t; int i; string name) {
-        string vf = sprintf("`%s`.version > 0 AND ", name);
-        count_sql += vf;
-        select_sql += vf;
-        select_sql_count += vf;
-    }
+    string vf = sprintf("`%s`.version > 0 AND ", table_name());
+    count_sql += vf;
+    select_sql += vf;
+    select_sql_count += vf;
 
     // Initialize version
     update_table_version();

@@ -149,41 +149,6 @@ class Range {
     inherit Base;
 }
 
-class Link {
-    inherit Base;
-
-    mapping(string:string) tables;
-
-    void create(void|mapping tables) {
-        this_program::tables = tables;
-    }
-
-    constant is_link = 1;
-}
-
-class Reference {
-    inherit Link;
-}
-
-class Foreign {
-    inherit Base;
-
-    constant is_foreign = 1;
-
-    string table;
-    string field;
-
-    void create(void|string table, string|void field) {
-        this_program::table = table;
-        this_program::field = field;
-    }
-}
-
-class Join {
-    inherit Link;
-    inherit _ReadOnly;
-}
-
 class Default {
     inherit Base;
 
