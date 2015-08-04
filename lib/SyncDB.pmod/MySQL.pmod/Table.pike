@@ -780,7 +780,7 @@ void delete(mapping keys, mapping|int version, function(int(0..1),mixed,mixed...
     }
 }
 
-array drop(object(SyncDB.MySQL.Filter.Base) filter) {
+array drop(void|object(SyncDB.MySQL.Filter.Base) filter) {
     filter &= schema["version"]->Gt(0);
 
     mixed err = sql_error(sql, catch {

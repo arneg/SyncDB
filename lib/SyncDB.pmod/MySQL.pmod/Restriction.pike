@@ -31,7 +31,7 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb2, mixed ... 
     table->insert(row, cb2, extra);
 }
 
-array drop(object(SyncDB.MySQL.Filter.Base) filter) {
+array drop(void|object(SyncDB.MySQL.Filter.Base) filter) {
     return table->drop(filter & restriction);
 }
 
