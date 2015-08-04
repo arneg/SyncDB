@@ -12,22 +12,26 @@ class Base {
     }
 
     mixed `&(mixed o) {
-        if (o) return And(o);
+        if (objectp(o)) return And(o);
+        if (o) error("Bad argument.\n");
         return this;
     }
 
     mixed ``&(mixed o) {
-        if (o) return And(o);
+        if (objectp(o)) return And(o);
+        if (o) error("Bad argument.\n");
         return this;
     }
 
     mixed `|(mixed o) {
-        if (o) return Or(o);
+        if (objectp(o)) return Or(o);
+        if (o) error("Bad argument.\n");
         return this;
     }
 
     mixed ``|(mixed o) {
-        if (o) return Or(o);
+        if (objectp(o)) return Or(o);
+        if (o) error("Bad argument.\n");
         return this;
     }
 
@@ -42,6 +46,7 @@ class Combine {
     void create(object ... filters) {
         array a = ({ });
         foreach (filters; int i; object o) {
+            if (!objectp(o)) error("Bad argument.\n");
             if (object_program(o) == this_program) {
                 a += o->filters;
                 filters[i] = 0;
