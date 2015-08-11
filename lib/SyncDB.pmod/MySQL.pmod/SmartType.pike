@@ -154,11 +154,11 @@ void create() {
             object previous_schema = schemata[i-1];
             program|mapping m = changes[i-1];
 
-            // if default values have been added, we need to create a simple
+            // if default values have been changed, we need to create a simple
             // migration, to make sure they are all being updated
             if (programp(m)) {
                 migrations[i-1] = m(previous_schema, schema);
-            } else if (sizeof(schema->default_row - previous_schema->default_row)) {
+            } else if (!equal(schema->default_row, previous_schema->default_row)) {
                 migrations[i-1] = SyncDB.Migration.Simple(previous_schema, schema);
             } else {
                 migrations[i-1] = SyncDB.Migration.Base(previous_schema, schema);
