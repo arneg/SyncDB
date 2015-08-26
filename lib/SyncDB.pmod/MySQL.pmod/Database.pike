@@ -160,7 +160,8 @@ object register_view(string name, object type) {
 
     object key = migration_mutex->lock();
 
-    if (table = low_get_table(name, type)) {
+    if ((table = low_get_table(name, type)) ||
+        (table = low_get_table(name, object_program(type)))) {
         return table;
     }
 
