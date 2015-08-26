@@ -155,6 +155,15 @@ void unregister_trigger(string table, string trigger, function fun) {
 
 Thread.Mutex migration_mutex = Thread.Mutex();
 
+
+object get_table(string name, void|object|program type) {
+    if (objectp(type)) {
+        return low_get_table(name, type) || low_get_table(name, object_program(type)) || ::get_table(name, type);
+    }
+
+    return ::get_table(name, type);
+}
+
 object register_view(string name, object type) {
     object table;
 
