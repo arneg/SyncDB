@@ -137,6 +137,10 @@ mapping sample_data(SyncDB.Schema a, int n) {
     return data;
 }
 
+variant mapping sample_data(int n, SyncDB.Schema a) {
+    return sample_data(a, n);
+}
+
 void run(string path, string name, function(mixed...:void) r, mixed ... args) {
     sql_path = path;
 
