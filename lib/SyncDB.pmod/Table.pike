@@ -74,6 +74,11 @@ void set_database(void|object o) {
 // before_delete ( keys )
 // after_delete ( keys )
 
+int(0..1) has_triggers(string name) {
+    array triggers = get_triggers(name);
+    return triggers && sizeof(triggers);
+}
+
 array get_triggers(string name) {
     if (database) return database->get_triggers(dbname, name);
     return triggers[name] || ({ });

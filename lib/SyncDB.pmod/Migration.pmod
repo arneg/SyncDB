@@ -303,8 +303,13 @@ class Base {
                 // fetch all rows and update
                 foreach (tbl->PageIterator(0, 0, 100);; array|object rows) {
                     foreach (rows;; mapping row) {
-                        row = update_row(row);
-                        if (row) tbl->update(row, row->version, lambda(int n, mixed ... bar) {});
+                        mapping changes = update_row(row);
+                        if (changes) {
+                            object filter = tbl->schema->get_versioned_filter(row);
+                            if (!tbl->update(changes, filter)) {
+                                error("Updating row %O during migration failed.\n", row);
+                            }
+                        }
                     }
                 }
             }

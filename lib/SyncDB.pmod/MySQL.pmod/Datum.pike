@@ -84,14 +84,17 @@ void update(mapping _data) {
     }
 }
 
+void apply_changes(mapping changes) {
+    _data += changes;
+}
+
 string describe() {
     // this will always be there
     return (string)this->id;
 }
 
 void force_update() {
-    object tid = table->schema->id;
-    object f = tid->Equal(_data[tid->name]);
+    object f = my_filter();
     mapping ret;
 
     mixed err = catch {
@@ -118,39 +121,60 @@ protected mapping id_data() {
     return m;
 }
 
-void save_unlocked(function(int, mixed...:void)|void cb, mixed ... extra) {
+protected object my_versioned_filter() {
+    object schema = table->schema;
+    object id_type = schema->id;
+
+    mixed id = _data[id_type->name];
+    int old_version = _data->version;
+
+    return id_type->Equal(id) & schema->version->Equal(old_version);
+}
+
+protected object my_filter() {
+    object id_type = table->schema->id;
+
+    mixed id = _data[id_type->name];
+
+    return id_type->Equal(id);
+}
+
+void save_unlocked() {
     if (save_id) {
         remove_call_out(save_id);
         save_id = 0;
     }
     if (is_deleted()) error("Modifying deleted record.\n");
-    if (!cb) cb = generic_cb;
-    if (!sizeof(_modified)) {
-        cb(0);
-        return;
-    }
 
-    void _cb(int err, mixed v) {
-        if (err) {
-            if (object_program(err) == SyncDB.Error.Collision) {
-                // this is a syncdb collision. lets update _data and see from there
-                werror("WARNING: recovering from SyncDB collision. Data might get overwritten.\n");
-                force_update();
-            }
-            cb(1, v, @extra);
-        } else {
-            // this is an explicit update, and it should bypass the update() method which is supposed
-            // to be overloaded to handle change events.
-            call_out(onchange, 0);
-            if (!v->version) error("version set to zero.\n");
-            _data = v;
-            _modified = ([]);
-            //werror("updated %O to %O\n", this, _data);
-            cb(0, 0, @extra);
-        }
+    int affected;
+
+    object schema = table->schema;
+    object id_type = schema->id;
+
+    mixed id = _data[id_type->name];
+    int old_version = _data->version;
+
+    object filter = id_type->Equal(id) &
+                    schema["version"]->Equal(old_version);
+
+    mixed err = catch {
+        affected = table->update(_modified, filter, id);
     };
 
-    table->update(_modified + id_data(), _data->version, _cb);
+    if (err) {
+        master()->handle_error(err);
+    }
+
+    if (!affected) {
+        force_update();
+        throw(SyncDB.Error.Collision(table, _data->version, old_version));
+    }
+
+    _data += _modified;
+    _data->version = old_version + 1;
+    _modified = ([]);
+
+    return;
 }
 
 protected mixed save_id;
@@ -166,31 +190,20 @@ void mark_deleted() {
 
 void drop_throw() {
     if (is_deleted()) return;
-    int(0..1) ret;
-    mixed v;
-    void cb(int(0..1) err, mixed b) {
-        ret = err;
-        v = b;
-    };
-    if (save_id) save();
-
-    delete(cb);
-
-    if (ret) throw(v);
+    if (save_id) {
+        remove_call_out(save_id);
+        save_id = 0;
+    }
+    table->drop(my_filter());
 }
 
 int(0..1) drop() {
     return !catch(drop_throw());
 }
 
-void delete(function(int, mixed...:void)|void cb, mixed ... extra) {
+void save() {
     object key = mutex->lock();
-    table->delete(_data, _data->version, cb||generic_cb);
-}
-
-void save(function(int, mixed...:void)|void cb, mixed ... extra) {
-    object key = mutex->lock();
-    save_unlocked(cb, @extra);
+    save_unlocked();
 }
 
 void save_later(void|int s) {

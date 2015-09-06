@@ -4,6 +4,10 @@ array(object) fetch(void|object filter, void|object order, void|object limit) {
     return table->fetch(filter & restriction, order, limit);
 }
 
+int(0..) update(mapping changes, object filter, mixed ... extra) {
+    return table->update(changes, filter & restriction, @extra);
+}
+
 object put(array(mapping)|mapping row) {
     if (arrayp(row)) {
         mapping tmp = ([]);

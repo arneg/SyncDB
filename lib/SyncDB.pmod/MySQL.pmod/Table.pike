@@ -90,7 +90,7 @@ private class Table {
 	return filter(fields, fields->is->writable);
     }
 
-    void update(mapping row, mapping oldrow, mapping new) {
+    void update(mapping row, mapping new) {
         string table_name = this == table_o ? 0 : name;
 	foreach (writable();; object type) {
 	    if (type == schema->id) continue;
@@ -148,18 +148,14 @@ void install_triggers(string table) {
 
     array a = sql->query("SHOW TRIGGERS WHERE `Table` = %s AND `Event` = 'INSERT';", table);
 
-    if (!sizeof(a) || a[0]->Statement != insertt) {
-        if (sizeof(a))
-            sql->query(sprintf("DROP TRIGGER %s;", a[0]->Trigger));
-        sql->query(sprintf("CREATE TRIGGER insert_%s BEFORE INSERT ON %<s FOR EACH ROW %s ;", table, insertt));
+    if (sizeof(a) && a[0]->Statement == insertt) {
+        sql->query(sprintf("DROP TRIGGER %s;", a[0]->Trigger));
     }
 
     a = sql->query("SHOW TRIGGERS WHERE `Table` = %s AND `Event` = 'UPDATE';", table);
 
-    if (!sizeof(a) || a[0]->Statement != updatet) {
-        if (sizeof(a))
-            sql->query(sprintf("DROP TRIGGER %s;", a[0]->Trigger));
-        sql->query(sprintf("CREATE TRIGGER update_%s BEFORE UPDATE ON %<s FOR EACH ROW %s ;", table, updatet));
+    if (sizeof(a) && a[0]->Statement == updatet) {
+        sql->query(sprintf("DROP TRIGGER %s;", a[0]->Trigger));
     }
 
     unlock_tables(sql);
@@ -213,7 +209,7 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
     select_sql_count = .Query(sprintf("SELECT SQL_CALC_FOUND_ROWS %s FROM `%s`",
                                       sizeof(t) ? t*"," : "*", table));
     select_sql = .Query(sprintf("SELECT %s FROM `%s`", sizeof(t) ? t*"," : "*", table));
-    _update_sql = .Query(sprintf("UPDATE `%s` SET ", table_name()));
+    _update_sql = .Query(sprintf("UPDATE `%s` SET `version` = `version` + 1, ", table_name()));
     delete_sql = .Query(sprintf("DELETE FROM `%s` WHERE ", table));
 
     count_sql = .Query(sprintf("SELECT COUNT(*) as cnt from `%s` WHERE ", table));
@@ -398,69 +394,31 @@ void count_rows(void|object filter, function(int(0..1),mixed,mixed...:void) cb, 
     }
 }
 
-void update(mapping keys, mapping|int version, function(int(0..1),mixed,mixed...:void) cb,
-            mixed ... extra) {
-    mixed err;
-    array|mapping rows;
-    object sql = this_program::sql;
-    mapping t = ([]);
-    int oversion, nversion;
-
-    object where = get_where(keys);
-
-    schema["version"]->encode_sql(table, ([ "version" : version ]), t);
-
-    object uwhere = where + " AND " + gen_where(t);
-
-    int locked = 0;
-    int affected_rows = 0;
+int(0..) update(mapping changes, object filter, mixed ... extra) {
+    mapping data = ([]);
 
     foreach (schema->default_row; string s; mixed v) {
-        if (has_index(keys, s) && objectp(keys[s]) && keys[s]->is_val_null)
-            keys[s] = v;
+        mixed tmp;
+        if (has_index(changes, s) && objectp(tmp = changes[s]) && changes[s]->is_val_null)
+            changes[s] = v;
     }
 
-    err = sql_error(sql, catch {
-	rows = (select_sql + where)(sql);
-	if (sizeof(rows) != 1) error("%O\nCannot find 1 row, found %O\n", select_sql + where, rows);
-	rows = rows[0];
-        trigger("before_update", rows, keys);
-	oversion = schema["version"]->decode_sql(table, rows);
-	lock_tables(sql);
-	locked = 1;
-	mapping new = ([]);
-	table_o->update(keys, rows, new);
-	.Query q = update_sql(indices(new), values(new)) + uwhere;
+    trigger("before_update", filter, changes, @extra);
 
-	q(sql);
+    table_o->update(changes, data);
 
-        affected_rows = sql->master_sql->affected_rows();
+    .Query q = update_sql(indices(data), values(data)) + filter->encode_sql(this);
+    object sql = this_program::sql;
 
-        rows = (select_sql + where)(sql);
-
-        nversion = schema["version"]->decode_sql(table, rows[0]);
+    mixed err = sql_error(sql, catch {
+        q(sql);
+        int affected = sql->master_sql->affected_rows();
+        trigger("after_change");
+        trigger("after_update", filter, changes, @extra);
+        return affected;
     });
 
-    if (locked) unlock_tables(sql);
-
-    if (!err) {
-        if (oversion >= nversion) {
-            werror("trigger did not increase version. %O >= %O\n%O\n",
-                    oversion, nversion,
-                    sql->query("SELECT MAX(ABS(version)) FROM "+table_name())
-            );
-        }
-	if (affected_rows == 1) {
-            mapping new = sanitize_result(rows[0]);
-            trigger("after_change");
-            trigger("after_update", new, keys);
-	    cb(0, new, @extra);
-	} else {
-	    cb(1, SyncDB.Error.Collision(this, nversion, oversion), @extra);
-        }
-    } else {
-	cb(1, err, @extra);
-    }
+    throw(err);
 }
 
 //! Remove deleted entries from db.
@@ -472,84 +430,31 @@ void cleanup() {
     (delete_sql + index)(sql);
 }
 
-void delete(mapping keys, mapping|int version, function(int(0..1),mixed,mixed...:void) cb,
-            mixed ... extra) {
-    int(0..1) noerr;
-    mixed err;
-    object sql = this_program::sql;
-
-    int locked = 0;
-    object where = get_where(keys);
-    mapping t = ([]);
-
-    schema["version"]->encode_sql(table, ([ "version" : version ]), t);
-
-    object uwhere = where + " AND " + gen_where(t);
-
-    int(0..1) real_delete = 0;
-
-    foreach (schema->unique_fields();; object f) if (!f->is->automatic) {
-        real_delete = 1;
-        break;
-    }
-
-    trigger("before_delete", keys);
-
-    // if the primary key is not automatic, we do a real delete
-    if (!real_delete) {
-        mapping d = ([ ]);
-        d["version"] = -version;
-        t = schema->encode_sql(table, d);
-
-        err = sql_error(sql, catch {
-            lock_tables(sql);
-            locked = 1;
-            .Query q = update_sql(indices(t), values(t)) + uwhere;
-            q(sql);
-            if (sql->master_sql->info) {
-                string info = sql->master_sql->info();
-                if (!info || -1 != search(info, "Changed: 0")) {
-                    error("Collision: %O\n", info);
-                }
-            }
-            noerr = 1;
-        });
-    } else {
-        err = sql_error(sql, catch {
-            lock_tables(sql);
-            locked = 1;
-            .Query q = delete_sql + uwhere;
-            q(sql);
-            noerr = 1;
-        });
-    }
-
-    if (locked) unlock_tables(sql);
-
-    if (noerr) {
-        trigger("after_change");
-        trigger("after_delete", keys);
-        cb(0, 0, @extra);
-    } else {
-	cb(1, err, @extra);
-    }
-}
-
-array drop(void|object(SyncDB.MySQL.Filter.Base) filter) {
+void drop(object(SyncDB.MySQL.Filter.Base) filter) {
     filter &= schema["version"]->Gt(0);
 
     mixed err = sql_error(sql, catch {
-        array rows = low_select_complex(filter, 0, 0);
-        if (!sizeof(rows)) return rows;
-        foreach (rows;; mapping row) trigger("before_delete", row);
+        int has_before_trigger = has_triggers("before_delete");
+        int has_after_trigger = has_triggers("after_delete");
+        array rows;
+        
+        if (has_before_trigger || has_after_trigger) {
+            rows = low_select_complex(filter, 0, 0);
+            if (has_before_trigger)
+                foreach (rows;; mapping row) trigger("before_delete", row);
+        }
+
         .Query q = delete_sql + filter->encode_sql(this);
         q(sql);
         trigger("after_change");
-        foreach (rows;; mapping row) {
-            trigger("after_delete", row);
-            row->version = 0;
-        }
-        return rows;
+
+        if (has_after_trigger)
+            foreach (rows;; mapping row) {
+                trigger("after_delete", row);
+                row->version = 0;
+            }
+
+        return;
     });
 
     throw(err);
@@ -577,8 +482,9 @@ object(SyncDB.MySQL.Filter.Base) low_insert(array(mapping) rows) {
         }
     }
 
-    foreach (rows;; mapping row)
-        trigger("before_insert", row);
+    if (has_triggers("before_insert"))
+        foreach (rows;; mapping row)
+            trigger("before_insert", row);
 
     array data = map(rows, table_o->insert);
 
@@ -591,11 +497,8 @@ object(SyncDB.MySQL.Filter.Base) low_insert(array(mapping) rows) {
                                ")");
     insert_sql->args = data;
 
-    int locked = 0;
-
     mixed err = sql_error(sql, catch {
         object filter;
-	lock_tables(sql); locked = 1;
 
         insert_sql(sql);
 
@@ -611,16 +514,13 @@ object(SyncDB.MySQL.Filter.Base) low_insert(array(mapping) rows) {
             }
         }
 
-        unlock_tables(sql); locked = 0;
-
         trigger("after_change");
 
-        foreach (rows;; mapping row)
-            trigger("after_insert", row);
+        if (has_triggers("after_insert"))
+            foreach (rows;; mapping row)
+                trigger("after_insert", row);
         return filter;
     });
-
-    if (locked) unlock_tables(sql);
 
     throw(err);
 }
@@ -629,9 +529,6 @@ void insert(mapping row, function(int(0..1),mixed,mixed...:void) cb, mixed ... e
     mixed err;
     array rows;
     object sql = this_program::sql;
-
-    mapping def = schema->default_row;
-
 
     err = catch {
         object f = low_insert(({ row }));

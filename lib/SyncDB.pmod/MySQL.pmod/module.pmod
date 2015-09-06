@@ -75,6 +75,8 @@ object(SyncDB.ReaderWriterLock) register_database(string name, object db) {
 }
 
 void unregister_database(string name, object db) {
+    if (!this) return;
+
     object key = database_mutex->lock();
 
     if (has_index(all_databases, name)) {

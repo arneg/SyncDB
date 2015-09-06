@@ -295,11 +295,8 @@ RETRY: do {
             // lets mark ourselves in v
             v->migration_started = Calendar.now();
             v->migration_stopped = Val.null;
-            v->save_unlocked(lambda(int err) { 
-                fail = err;
-            });
 
-            if (fail) { // a collision happened.
+            if (catch(v->save_unlocked())) {
                 sql->query("UNLOCK TABLES;");
                 sql = 0;
                 destruct(key);
@@ -354,9 +351,7 @@ RETRY: do {
                 v->migration_stopped = Calendar.now();
             }
 
-            v->save_unlocked(lambda(int err) {
-                fail = err;
-            });
+            fail = !!catch(v->save_unlocked());
 
             sql->query("UNLOCK TABLES;");
 

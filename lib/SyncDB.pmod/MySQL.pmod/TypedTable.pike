@@ -87,8 +87,8 @@ array(object) fetch(void|object filter, void|object order, void|object limit) {
         }
 
         rows[i] = o;
-
     }
+
     return rows;
 }
 
@@ -172,15 +172,15 @@ void after_delete(object table, mapping keys) {
     if (datum) datum->mark_deleted();
 }
 
-void after_update(object table, mapping row, mapping changes) {
-#if constant(Roxen)
-    invalidate_requests();
-#endif
+void after_update(object table, object filter, mapping changes, void|mixed id) {
     if (table == this) return;
-    mixed id = get_unique_identifier(row);
-    object datum = cache[id];
-    if (datum) {
-        datum->update(copy_value(row));
+    if (id) {
+        object datum = cache[id];
+        if (datum) {
+            datum->apply_changes(changes);
+        }
+    } else {
+        fetch(filter);
     }
 }
 
