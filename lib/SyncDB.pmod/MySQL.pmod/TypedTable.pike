@@ -9,6 +9,8 @@ void create(string dbname, function(void:Sql.Sql) cb, SyncDB.Schema schema, stri
     this_program::smart_type = smart_type;
     this_program::prog = smart_type->get_datum();
     ::create(dbname, cb, schema, table);
+    register_trigger("after_update", after_update);
+    register_trigger("after_delete", after_delete);
 }
 
 array(object) `fields() {
@@ -151,20 +153,18 @@ void invalidate_requests(void|mixed id) {
     //map(keys, roxen.invalidate);
     map(keys, destruct);
 }
+
+void after_change(object table) {
+    ::after_change(table);
+    invalidate_requests();
+}
 #endif
 
 void destroy() {
-#if constant(Roxen)
-    invalidate_requests();
-#endif
     map(values(cache), destruct);
 }
 
 void after_delete(object table, mapping keys) {
-    ::after_delete(table, keys);
-#if constant(Roxen)
-    invalidate_requests();
-#endif
     if (table == this) return;
     mixed id = get_unique_identifier(keys);
 
@@ -173,7 +173,6 @@ void after_delete(object table, mapping keys) {
 }
 
 void after_update(object table, mapping row, mapping changes) {
-    ::after_update(table, row, changes);
 #if constant(Roxen)
     invalidate_requests();
 #endif
@@ -184,13 +183,6 @@ void after_update(object table, mapping row, mapping changes) {
         datum->update(copy_value(row));
     }
 }
-
-#if constant(Roxen)
-void after_insert(object table, mapping row) {
-    ::after_insert(table, row);
-    invalidate_requests();
-}
-#endif
 
 string _sprintf(int type) {
     return sprintf("%O(%O, %O)", this_program, table_name(), smart_type);
