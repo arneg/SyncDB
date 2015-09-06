@@ -58,7 +58,7 @@ void _test_insert() {
     void writer() {
         array(object) res = tbl->put(a);
 
-        for (int i = 0; i < 1000; i++) {
+        for (int i = 0; i < 300; i++) {
             object o = random(res);
             o->n++;
             o->save();
@@ -78,6 +78,49 @@ void _test_insert() {
     object w = Thread.Thread(writer);
 
     w->wait();
+    r->kill();
+
+    werror("Managed to do %d reads.\n", num_reads);
+}
+
+void _test_parallel_torture() {
+    int N = 100;
+    object db1 = SyncDB.MySQL.Database(`sql, "test");
+
+    db1->create_version_table();
+
+    object db2 = SyncDB.MySQL.Database(`sql, "test");
+
+    object tbl1 = db1->register_view("table1", A());
+    object tbl2 = db2->register_view("table1", A());
+
+    void writer(object tbl, int n) {
+        array(object) res = ({ });
+
+        for (int i = 0; i < N; i++) {
+            object o = tbl->put(sample_data(tbl->schema, i + n*N));
+            res += ({ o });
+        }
+    };
+
+    array t = ({ });
+
+    for (int n = 0; n < 10; n++) {
+        t += ({ Thread.Thread(writer, n & 1 ? tbl1 : tbl2, n) });
+    }
+
+    int num_reads = 0;
+
+    void reader(object tbl) {
+        while (1) {
+            array(object) tmp = tbl->fetch(tbl->id->Equal(random(10 * N)));
+            num_reads++;
+        }
+    };
+
+    array r = ({ Thread.Thread(reader, tbl1), Thread.Thread(reader, tbl2) });
+
+    t->wait();
     r->kill();
 
     werror("Managed to do %d reads.\n", num_reads);
