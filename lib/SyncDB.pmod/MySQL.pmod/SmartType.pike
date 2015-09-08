@@ -158,8 +158,22 @@ void create() {
             // migration, to make sure they are all being updated
             if (programp(m)) {
                 migrations[i-1] = m(previous_schema, schema);
-            } else if (!equal(schema->default_row, previous_schema->default_row)) {
-                migrations[i-1] = SyncDB.Migration.Simple(previous_schema, schema);
+            } else if (!equal(schema->default_row - previous_schema->default_row)) {
+                int need_full_migration = 0;
+                mapping new_defaults = schema->default_row - previous_schema->default_row;
+
+                foreach (new_defaults; string name;) {
+                    if (!previous_schema[name] || !previous_schema[name]->is->mandatory) {
+                        need_full_migration = 1;
+                        break;
+                    }
+                }
+
+                if (need_full_migration) {
+                    migrations[i-1] = SyncDB.Migration.Simple(previous_schema, schema);
+                } else {
+                    migrations[i-1] = SyncDB.Migration.Base(previous_schema, schema);
+                }
             } else {
                 migrations[i-1] = SyncDB.Migration.Base(previous_schema, schema);
             }

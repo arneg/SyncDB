@@ -36,6 +36,115 @@ protected void create(function sqlcb, void|string name, void|function(int(0..1):
     this_program::sqlcb = sqlcb;
     this_program::maintenance_callback = maintenance_callback;
     set_name(name);
+
+    catch(has_version_table());
+}
+
+private mapping initiate_table_creation(string name, int schema_version, mapping type_versions) {
+    //werror("initiate_table_creation(%O, %O, %O)\n", name, schema_version, type_versions);
+    object sql = sqlcb();
+    int now = time();
+    // this throws an error if there is a collision on insert, due to the unique key table_name
+    mixed err = catch {
+        sql->query("INSERT INTO `syncdb_versions` "
+                   "(table_name, schema_version, type_versions, created, migration_started) VALUES "
+                   "(:table_name, :schema_version, :type_versions, :time, :time)",
+                   ([
+                    ":table_name" : name,
+                    ":schema_version" : (string)schema_version,
+                    ":type_versions" : Standards.JSON.encode(type_versions),
+                    ":time" : format_datetime(now),
+                    ]));
+    };
+
+    if (err) {
+        if (sql->sqlstate && sql->sqlstate() == "23000") {
+            return 0;
+        } else {
+            throw(err);
+        }
+    }
+
+    return fetch_table_info(name);
+}
+
+private int parse_datetime(string|object s) {
+    if (stringp(s)) {
+        return Calendar.parse("%Y-%M-%D %h:%m:%s %z", s + " UTC")->unix_time();
+    }
+
+    return 0;
+}
+
+private string format_datetime(int ux) {
+    return Calendar.Second("unix", ux)->set_timezone("UTC")->format_time();
+}
+
+private mapping fetch_table_info(string name) {
+    object sql = sqlcb();
+    array(mapping) tmp = sql->query("SELECT * from syncdb_versions where table_name = %s;", name);
+
+    if (!sizeof(tmp)) return 0;
+    return ([
+        "table_name" : tmp[0]->table_name,
+        "schema_version" : (int)tmp[0]->schema_version,
+        "type_versions" : Standards.JSON.decode(tmp[0]->type_versions),
+        "created" : parse_datetime(tmp[0]->created),
+        "migration_started" : parse_datetime(tmp[0]->migration_started),
+        "migration_stopped" : parse_datetime(tmp[0]->migration_stopped),
+        "version" : (int)tmp[0]->version,
+    ]);
+}
+
+private int start_table_migration(mapping v) {
+    //werror("start_table_creation(%O)\n", v);
+    object sql = sqlcb();
+    int now = time();
+    sql->query("UPDATE syncdb_versions "
+               "SET migration_stopped = NULL, migration_started = %s, version = version + 1 "
+               "WHERE table_name = %s AND version = %s",
+               format_datetime(now), v->table_name, (string)v->version);
+    int affected = sql->master_sql->affected_rows(); 
+    if (affected) {
+        v->migration_started = now;
+        v->migration_stopped = 0;
+        v->version ++;
+    }
+    return affected;
+}
+
+private int stop_table_migration(mapping v) {
+    //werror("stop_table_creation(%O)\n", v);
+    object sql = sqlcb();
+    int now = time();
+    sql->query("UPDATE syncdb_versions SET migration_stopped = %s, version = version + 1 "
+               "WHERE table_name = %s AND version = %s",
+               format_datetime(now), v->table_name, (string)v->version);
+    int affected = sql->master_sql->affected_rows(); 
+    if (affected) {
+        v->migration_stopped = now;
+        v->version ++;
+    }
+    return affected;
+}
+
+private int finish_table_migration(mapping v, int schema_version, mapping type_versions) {
+    //werror("finish_table_creation(%O, %O, %O)\n", v, schema_version, type_versions);
+    object sql = sqlcb();
+    int now = time();
+    sql->query("UPDATE syncdb_versions "
+               "SET migration_stopped = %s, schema_version = %s, type_versions = %s, version = version + 1 "
+               "WHERE table_name = %s AND version = %s",
+               format_datetime(now), (string)schema_version, Standards.JSON.encode(type_versions),
+               v->table_name, (string)v->version);
+    int affected = sql->master_sql->affected_rows(); 
+    if (affected) {
+        v->migration_stopped = now;
+        v->version ++;
+        v->type_versions = type_versions;
+        v->schema_version = schema_version;
+    }
+    return affected;
 }
 
 void set_name(string name) {
@@ -106,7 +215,33 @@ void call_with_database_key(function f, mixed ... args) {
 int(0..1) has_version_table() {
     Sql.Sql sql = sqlcb();
 
-    return sql && has_value(sql->list_tables(version_table_name), version_table_name);
+    if (!sql) error("Cannot connect to SQL server.\n");
+
+    int has = has_value(sql->list_tables(version_table_name), version_table_name);
+
+    if (!has) return 0;
+
+    Thread.MutexKey key = mutex->lock();
+
+    mapping info = fetch_table_info(version_table_name);
+
+    if (!info) {
+        object schema = TableVersion()->schema;
+        info = initiate_table_creation(version_table_name, schema->get_schema_version(),
+                                            schema->type_versions());
+
+        if (info) {
+            object mig = SyncDB.Migration.Base(schema->get_previous_schema(0, ([])), schema);
+            mig->upgrade_table(version_table_name)(sql);
+
+            stop_table_migration(info);
+        } else while (info && !info->migration_stopped) {
+            info = fetch_table_info(version_table_name);
+            sleep(0.5);
+        }
+    }
+
+    return 1;
 }
 
 object get_version_table() {
@@ -120,7 +255,12 @@ object get_version_table() {
 }
 
 void create_version_table() {
-    SyncDB.Migration.Base(0, TableVersion()->schema)->create_table(version_table_name)(sqlcb());
+    object schema = TableVersion()->schema;
+    SyncDB.Migration.Base(0, schema)->create_table(version_table_name)(sqlcb());
+
+    mapping v = initiate_table_creation(version_table_name, schema->get_schema_version(),
+                                        schema->type_versions());
+    if (v) stop_table_migration(v);
 }
 
 void destroy() {
@@ -176,83 +316,48 @@ object register_view(string name, object type) {
 
     destruct(key);
 
-    object vtable = get_version_table();
+    Sql.Sql sql = sqlcb();
+
+    int vtable = has_version_table();
 
     if (vtable) {
         object schema = type->schema;
         mapping type_versions = schema->type_versions();
         int schema_version = schema->get_schema_version();
-        Sql.Sql sql;
 
-        mixed err = catch {
 RETRY: do {
-            array(object) tmp = vtable->fetch_by_table_name(name);
-            object v = sizeof(tmp) && tmp[0];
+            mapping v = fetch_table_info(name);
             array(object) migrations = ({ });
-
-            // protecting v
-            Thread.MutexKey key;
 
             if (!v) {
                 // does the table even exist?
-                mixed err = catch {
-                    Sql.Sql sql = sqlcb();
+                if (!has_value(sql->list_tables(name), name)) {
+                    v = initiate_table_creation(name, schema_version, type_versions);
 
-                    if (!has_value(sql->list_tables(name), name)) {
-                        v = vtable->put(([
-                            "table_name" : name,
-                            "type_versions" : type_versions,
-                            "schema_version" : schema_version,
-                            "created" : Calendar.now(),
-                            "migration_started" : Calendar.now(),
-                        ]));
-
-                        key = v->lock();
-
+                    if (v) {
                         SyncDB.Migration.Base(0, schema)->create_table(name)(sql);
-                        v->migration_stopped = Calendar.now();
-                        v->save_unlocked();
-                        destruct(key);
-                        break RETRY;
-                    } else {
-                        object now = Calendar.now();
-                        v = vtable->put(([
-                            "table_name" : name,
-                            "type_versions" : ([]),
-                            "schema_version" : -1,
-                            "created" : now,
-                            "migration_started" : now,
-                            "migration_stopped" : now,
-                        ]));
-
-                        key = v->lock();
+                        if (stop_table_migration(v)) {
+                            break RETRY;
+                        } else error("Could not stop migration %O.\n", v);
                     }
-                };
-
-                // sql_state 23000
-                if (objectp(err) && err->sqlstate == "23000") {
-                    // insert collision on table->put above.
                     continue;
-                }
-                if (err) throw(err);
-            } else {
-                key = v->lock();
+                } else {
+                    v = initiate_table_creation(name, -1, ([]));
 
-                if (v->migration_stopped->is_val_null) {
-                    int since = time() - v->migration_started->unix_time();
+                    if (!v) {
+                        continue;
+                    }
+                }
+            } else {
+                if (!v->migration_stopped) {
+                    int since = time() - v->migration_started;
                     // 5 minutes seems fair?
                     if (since > 5 * 60)
                         error("A Migration has been running since %d seconds ago. Probably died. Fix manually!\n", since);
 #ifdef SYNCDB_MIGRATION_DEBUG
                     //werror("Observing a migration in flight on %O. wait for it.\n", name);
 #endif
-                    Sql.Sql sql = sqlcb();
-                    if (has_value(sql->list_tables(name), name)) {
-                        sql->query(sprintf("LOCK TABLES `%s` WRITE;", name));
-                        sql->query("UNLOCK TABLES;");
-                    }
                     sleep(0.5);
-                    destruct(key);
                     continue;
                 }
             }
@@ -264,14 +369,10 @@ RETRY: do {
             if (schema_version == current_schema_version &&
                 equal(type_versions, current_type_versions)) break;
 
-            // v exists and is locked here.
-
-            sql = sqlcb();
-            sql->query(sprintf("LOCK TABLES `%s` WRITE;", name));
             
             int fail;
 
-            v->force_update();
+            v = fetch_table_info(name);
 
             // we have locked the table, v cannot change anymore
             current_schema_version = v->schema_version;
@@ -280,26 +381,16 @@ RETRY: do {
             // nothing to do.
             if (schema_version == current_schema_version &&
                 equal(type_versions, current_type_versions)) {
-                sql->query("UNLOCK TABLES;");
-                sql = 0;
                 break;
             }
 
-            if (v->migration_stopped->is_val_null) {
+            if (!v->migration_stopped) {
                 // there is another migration running, which is not done yet
-                sql->query("UNLOCK TABLES;");
-                sql = 0;
                 continue;
             }
 
-            // lets mark ourselves in v
-            v->migration_started = Calendar.now();
-            v->migration_stopped = Val.null;
-
-            if (catch(v->save_unlocked())) {
-                sql->query("UNLOCK TABLES;");
-                sql = 0;
-                destruct(key);
+            if (!start_table_migration(v)) {
+                // we got raced
                 continue;
             }
 
@@ -329,9 +420,7 @@ RETRY: do {
                 };
 
                 if (err) {
-                    v->migration_stopped = Calendar.now();
-                    // best effort
-                    v->save_unlocked();
+                    stop_table_migration(v);
                     throw(err);
                 }
 
@@ -339,35 +428,21 @@ RETRY: do {
                 werror("Table(%O): DONE in %f seconds\n", name, (gethrtime() - t1)/1E6);
 #endif
 
-                sql->query(sprintf("LOCK TABLES `%s` WRITE;", name));
-
-                v->type_versions = migrations[0]->to->type_versions();
-                v->schema_version = migrations[0]->to->get_schema_version();
-                v->migration_stopped = Calendar.now();
+                fail = !finish_table_migration(v, 
+                                               migrations[0]->to->get_schema_version(),
+                                               migrations[0]->to->type_versions());
             } else {
                 // nothing at all to do. for instance for "empty" tables
-                v->type_versions = schema->type_versions();
-                v->schema_version = schema->get_schema_version();
-                v->migration_stopped = Calendar.now();
+                fail = !finish_table_migration(v,
+                                               schema->get_schema_version(),
+                                               schema->type_versions());
             }
 
-            fail = !!catch(v->save_unlocked());
-
-            sql->query("UNLOCK TABLES;");
 
             if (fail) {
                 error("Could not register the migration end.\n");
             }
-
-            sql = 0;
-            destruct(key);
-            continue;
         } while (1);
-        };
-
-        if (sql) sql->query("UNLOCK TABLES;");
-
-        if (err) throw(err);
     }
 
     // all the above is meant to run in parallel
