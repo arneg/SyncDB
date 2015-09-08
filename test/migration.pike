@@ -9,10 +9,9 @@ void populate_table(Sql.Sql sql, string table_name, SyncDB.Schema schema) {
     array a = tbl->low_select_complex();
 
     foreach (a; int i; mapping row) {
-        m_delete(row, "version");
         m_delete(row, schema->automatic);
         if (!equal(row, schema->default_row + rows[i]))
-            error("Data does not survive insert/select:\n%O vs %O\n", row, rows[i]);
+            error("Data does not survive insert/select:\n%O vs %O\n", row, schema->default_row + rows[i]);
     }
 }
 
@@ -134,12 +133,14 @@ void _test1() {
 
 void _test2() {
     SyncDB.Schema a = SyncDB.Schema(
+        SyncDB.Types.Integer("id", SyncDB.Flags.Key(), SyncDB.Flags.Automatic()),
         SyncDB.Types.Integer("bar"),
         SyncDB.Types.Integer("foo"),
         SyncDB.Types.Integer("flu"),
     );
 
     SyncDB.Schema b = SyncDB.Schema(
+        SyncDB.Types.Integer("id", SyncDB.Flags.Key(), SyncDB.Flags.Automatic()),
         SyncDB.Types.String("bar"),
         SyncDB.Types.String("foo"),
         SyncDB.Types.Integer("flu"),
@@ -164,11 +165,13 @@ void _test2() {
 
 void _test3() {
     SyncDB.Schema a = SyncDB.Schema(
+        SyncDB.Types.Integer("id", SyncDB.Flags.Key(), SyncDB.Flags.Automatic()),
         SyncDB.Types.Integer("bar", SyncDB.Flags.Index()),
         SyncDB.Types.Integer("foo"),
     );
 
     SyncDB.Schema b = SyncDB.Schema(
+        SyncDB.Types.Integer("id", SyncDB.Flags.Key(), SyncDB.Flags.Automatic()),
         SyncDB.Types.String("bar"),
         SyncDB.Types.Integer("foo", SyncDB.Flags.Index()),
     );
@@ -188,11 +191,13 @@ void _test3() {
 
 void _test4() {
     SyncDB.Schema a = SyncDB.Schema(
+        SyncDB.Types.Integer("id", SyncDB.Flags.Key(), SyncDB.Flags.Automatic()),
         SyncDB.Types.String("bar"),
         SyncDB.Types.String("foo", 64),
     );
 
     SyncDB.Schema b = SyncDB.Schema(
+        SyncDB.Types.Integer("id", SyncDB.Flags.Key(), SyncDB.Flags.Automatic()),
         SyncDB.Types.String("bar", 64),
         SyncDB.Types.String("foo"),
     );
@@ -202,10 +207,12 @@ void _test4() {
 
 void _test5() {
     SyncDB.Schema a = SyncDB.Schema(
+        SyncDB.Types.Integer("id", SyncDB.Flags.Key(), SyncDB.Flags.Automatic()),
         SyncDB.Types.Datetime("bar"),
     );
 
     SyncDB.Schema b = SyncDB.Schema(
+        SyncDB.Types.Integer("id", SyncDB.Flags.Key(), SyncDB.Flags.Automatic()),
         SyncDB.Types.Date("bar"),
     );
 
