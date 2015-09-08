@@ -37,7 +37,7 @@ this_program get_previous_schema(int schema_version, mapping(string:int)|void ve
     if (!versions) return this;
 
     mapping my_versions = type_versions();
-    array fields = (this_program::fields - ({ version }));
+    array fields = this_program::fields;
 
     foreach (my_versions; string name; int version) {
         int requested_version = (int)versions[name];
@@ -107,7 +107,8 @@ string _sprintf(int t) {
 void create(object ... m) {
     this_program::m = ([ ]);
     map(m, add_type);
-    add_type(version = SyncDB.Types.Integer("version", SyncDB.Flags.Index(), SyncDB.Flags.Default(1)));
+    if (!this_program::m->version)
+        add_type(version = SyncDB.Types.Version("version"));
 }
 
 mixed get_unique_identifier(mapping row) {
@@ -152,12 +153,11 @@ void add_type(object type) {
         error("Restriction support has been removed.\n");
     }
     foreach (type->get_column_fields();; object type) {
-        if (type->is->index && !type->is->key && !type->is->unique) {
-            index_list += ({ .Indices.Btree(type->name, type) });
-        }
         if (type->is->key) {
             if (id) error("Defined two different keys in one schema.\n");
             id = type;
+        } else if (type->is->index) {
+            index_list += ({ .Indices.Btree(type->name, type) });
         }
         if (type->is->automatic) {
             if (automatic) error("Defined two different auto-increment values in one schema\n");
