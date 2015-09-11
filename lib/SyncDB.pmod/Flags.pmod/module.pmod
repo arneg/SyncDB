@@ -92,20 +92,12 @@ class _Trivial {
 LAZY(Trivial, _Trivial)
 
 class _Unique {
-    inherit _Mandatory;
+    inherit _Index;
 
     constant is_unique = 1;
 
     string encode_json() {
         return "(new SyncDB.Types.Unique())";
-    }
-
-    string sql_type(function(mixed:string) encode) {
-        return "UNIQUE";
-    }
-
-    array(SyncDB.MySQL.Query) flag_definitions(object type) {
-        return ({ SyncDB.MySQL.Query("UNIQUE") });
     }
 }
 

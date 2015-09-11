@@ -18,11 +18,16 @@ class Index {
 
     .MySQL.Query create_definitions(void|string table_name) {
         string s;
+        string constraint = "";
+
+        if (has_value(fields->is->unique, 1)) {
+            constraint = "UNIQUE";
+        }
 
         if (table_name) {
-            s = sprintf("CREATE INDEX `%s` USING %s ON `%s` (", name, type, table_name);
+            s = sprintf("CREATE %s INDEX `%s` USING %s ON `%s` (", constraint, name, type, table_name);
         } else {
-            s = sprintf("INDEX `%s` USING %s (", name, type);
+            s = sprintf("%s INDEX `%s` USING %s (", constraint, name, type);
         }
 
         s += escaped_column_names() * ", " + ") " + option();
@@ -32,6 +37,11 @@ class Index {
 
     string option() {
         return "";
+    }
+
+    protected int(0..1) _equal(mixed o) {
+        return objectp(o) && object_program(o) == this_program &&
+                o->name == name && equal(o->fields, fields);
     }
 }
 
