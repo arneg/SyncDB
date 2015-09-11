@@ -144,8 +144,6 @@ void install_triggers(string table) {
             END IF;
 	END", table);
 
-    lock_tables(sql);
-
     array a = sql->query("SHOW TRIGGERS WHERE `Table` = %s AND `Event` = 'INSERT';", table);
 
     if (sizeof(a) && a[0]->Statement == insertt) {
@@ -157,8 +155,6 @@ void install_triggers(string table) {
     if (sizeof(a) && a[0]->Statement == updatet) {
         sql->query(sprintf("DROP TRIGGER %s;", a[0]->Trigger));
     }
-
-    unlock_tables(sql);
 }
 
 object gen_where(mapping t) {
