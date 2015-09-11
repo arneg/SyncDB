@@ -8,6 +8,10 @@ void populate_table(Sql.Sql sql, string table_name, SyncDB.Schema schema) {
 
     array a = tbl->low_select_complex();
 
+    if (sizeof(a) != sizeof(rows)) {
+        error("Data got lost on insert. Inserted %d rows, found %d\n", sizeof(rows), sizeof(a));
+    }
+
     foreach (a; int i; mapping row) {
         m_delete(row, schema->automatic);
         if (!equal(row, schema->default_row + rows[i]))
