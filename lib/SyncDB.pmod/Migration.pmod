@@ -309,19 +309,21 @@ class Base {
             .MySQL.Query alter = upgrade_table(table_name);
             if (alter) alter(sql);
 
-            object tbl = SyncDB.MySQL.Table(table_name, sql, to);
+            if (update_table || update_row) {
+                object tbl = SyncDB.MySQL.Table(table_name, sql, to);
 
-            if (update_table) {
-                update_table(tbl);
-            } else if (update_row) {
-                // fetch all rows and update
-                foreach (tbl->PageIterator(0, 0, 100);; array|object rows) {
-                    foreach (rows;; mapping row) {
-                        mapping changes = update_row(row);
-                        if (changes) {
-                            object filter = tbl->schema->get_versioned_filter(row);
-                            if (!tbl->update(changes, filter)) {
-                                error("Updating row %O during migration failed.\n", row);
+                if (update_table) {
+                    update_table(tbl);
+                } else if (update_row) {
+                    // fetch all rows and update
+                    foreach (tbl->PageIterator(0, 0, 100);; array|object rows) {
+                        foreach (rows;; mapping row) {
+                            mapping changes = update_row(row);
+                            if (changes) {
+                                object filter = tbl->schema->get_versioned_filter(row);
+                                if (!tbl->update(changes, filter)) {
+                                    error("Updating row %O during migration failed.\n", row);
+                                }
                             }
                         }
                     }
