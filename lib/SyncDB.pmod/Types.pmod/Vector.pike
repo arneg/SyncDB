@@ -112,3 +112,11 @@ string _sprintf(int t) {
     if (sizeof(f)) f = ", "+f;
     return sprintf("%O(%O, %O%s)", this_program, name, fields, f);
 }
+
+int(0..1) supports_native_default() {
+    foreach (fields;; object f) {
+        if (!f->supports_native_default()) return 0;
+    }
+
+    return 1;
+}

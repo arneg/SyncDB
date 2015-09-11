@@ -174,3 +174,7 @@ object get_migration(string type_name, object from, object to) {
 void type_versions(mapping(string:int) versions) {
     versions[type_name()] = type_version();
 }
+
+int(0..1) supports_native_default() {
+    return 1;
+}

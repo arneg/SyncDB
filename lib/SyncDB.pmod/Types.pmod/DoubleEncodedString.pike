@@ -62,3 +62,7 @@ void create(string name, mixed ... args) {
 string type_name() {
     return "string";
 }
+
+int(0..1) supports_native_default() {
+    return !!length;
+}

@@ -25,3 +25,7 @@ array(SyncDB.MySQL.Query) column_definitions(void|function(object:int(0..1)) fil
 string type_name() {
     return "binary";
 }
+
+int(0..1) supports_native_default() {
+    return 0;
+}

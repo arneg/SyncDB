@@ -40,3 +40,7 @@ void generate_encode_value(object buf, string val) {
 string type_name() {
     return "json";
 }
+
+int(0..1) supports_native_default() {
+    return 0;
+}
