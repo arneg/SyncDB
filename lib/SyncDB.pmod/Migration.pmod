@@ -220,13 +220,27 @@ class Base {
     }
 
     array(.MySQL.Query) drop_indices() {
-        mapping to_drop = from_indices() - to_indices();
+        mapping to_drop = ([ ]);
+        mapping to = to_indices();
+
+        foreach (from_indices(); string name; object index) {
+            if (!equal(to[name], index)) {
+                to_drop[name] = index;
+            }
+        }
 
         return map(map(indices(to_drop), Function.curry(sprintf)("DROP INDEX `%s`")), .MySQL.Query);
     }
 
     array(.MySQL.Query) add_indices() {
-        mapping to_add = to_indices() - from_indices();
+        mapping to_add = ([]);
+        mapping from = from_indices();
+
+        foreach (to_indices(); string name; object index) {
+            if (!equal(from[name], index)) {
+                to_add[name] = index;
+            }
+        }
 
         array(.MySQL.Query) ret = ({ });
 
