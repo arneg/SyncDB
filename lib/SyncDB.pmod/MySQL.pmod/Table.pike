@@ -218,11 +218,6 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
 
     select_sql += " WHERE ";
     select_sql_count += " WHERE ";
-
-    string vf = sprintf("`%s`.version > 0 AND ", table_name());
-    count_sql += vf;
-    select_sql += vf;
-    select_sql_count += vf;
 }
 
 //! @decl void select(object filter, object|function(int(0..1), array(mapping)|mixed:void) cb,
@@ -280,8 +275,6 @@ class PageIterator {
         if (!order) {
             if (schema->id) {
                 order = .Select.OrderBy(.Select.ASC(schema->id));
-            } else if (schema->version) {
-                order = .Select.OrderBy(.Select.ASC(schema->version));
             } else {
                 werror("Warning: no reliable ordering in PageIterator.\n");
             }
@@ -431,8 +424,6 @@ void cleanup() {
 }
 
 void drop(object(SyncDB.MySQL.Filter.Base) filter) {
-    filter &= schema["version"]->Gt(0);
-
     mixed err = sql_error(sql, catch {
         int has_before_trigger = has_triggers("before_delete");
         int has_after_trigger = has_triggers("after_delete");
