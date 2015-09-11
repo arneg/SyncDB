@@ -168,7 +168,11 @@ object get_previous_type(string type_name, int version) {
 object get_migration(string type_name, object from, object to) {
     if (type_name != this_program::type_name()) return 0;
     if (!previous_type) return 0;
-    return master()->resolv("SyncDB.Migration.Simple")(from, to);
+    return get_migration_program()(from, to);
+}
+
+program get_migration_program() {
+    return  master()->resolv("SyncDB.Migration.Simple");
 }
 
 void type_versions(mapping(string:int) versions) {

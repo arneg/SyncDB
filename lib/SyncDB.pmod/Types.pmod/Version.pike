@@ -1,7 +1,7 @@
 inherit .Integer;
 
 void create(string name) {
-    ::create(name, SyncDB.Flags.Default(1));
+    ::create(name, SyncDB.Flags.Default(1), SyncDB.Flags.Index());
 }
 
 object previous_type() {
@@ -10,4 +10,8 @@ object previous_type() {
 
 string type_name() {
     return "version";
+}
+
+program get_migration_program() {
+    return master()->resolv("SyncDB.Migration.Base");
 }
