@@ -106,7 +106,7 @@ class ReaderWriterLock() {
         // we dont care for our use cases. this is _not_ a general purpose rwlock
         gc();
 
-        Thread.MutexKey my_key = read_key = actual_mutex->lock();
+        Thread.MutexKey my_key = read_key = actual_mutex->lock(1);
 
         
         return ReaderWriterLockKey(this, my_key);
