@@ -226,6 +226,7 @@ int(0..1) has_version_table() {
     mapping info = fetch_table_info(version_table_name);
 
     if (!info) {
+        .remove_version_triggers(sql, version_table_name);
         object schema = TableVersion()->schema;
         info = initiate_table_creation(version_table_name, schema->get_schema_version(),
                                             schema->type_versions());

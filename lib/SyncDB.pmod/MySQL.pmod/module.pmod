@@ -89,3 +89,37 @@ void unregister_database(string name, object db) {
 }
 
 
+void remove_version_triggers(Sql.Sql sql, string table) {
+    string insertt = sprintf(#"BEGIN
+            DECLARE v INT;
+	    SELECT MAX(ABS(%s.version)) INTO v FROM %<s WHERE 1;
+	    IF v IS NULL THEN
+		SET NEW.version=1;
+	    ELSE 
+		SET NEW.version=v + 1;
+	    END IF;
+	END", table);
+    string updatet = sprintf(#"BEGIN
+            DECLARE v INT;
+            IF NEW.version > 0 THEN
+                SELECT MAX(ABS(%s.version)) INTO v FROM %<s WHERE 1;
+                IF v IS NULL THEN
+                    SET NEW.version=1;
+                ELSE 
+                    SET NEW.version=v + 1;
+                END IF;
+            END IF;
+	END", table);
+
+    array a = sql->query("SHOW TRIGGERS WHERE `Table` = %s AND `Event` = 'INSERT';", table);
+
+    if (sizeof(a) && a[0]->Statement == insertt) {
+        sql->query(sprintf("DROP TRIGGER %s;", a[0]->Trigger));
+    }
+
+    a = sql->query("SHOW TRIGGERS WHERE `Table` = %s AND `Event` = 'UPDATE';", table);
+
+    if (sizeof(a) && a[0]->Statement == updatet) {
+        sql->query(sprintf("DROP TRIGGER %s;", a[0]->Trigger));
+    }
+}

@@ -210,7 +210,7 @@ void create(string dbname, Sql.Sql|function(void:Sql.Sql) con, SyncDB.Schema sch
 
     count_sql = .Query(sprintf("SELECT COUNT(*) as cnt from `%s` WHERE ", table));
 
-    install_triggers(table);
+    .remove_version_triggers(this_program::sql, table);
 
     select_sql += " WHERE ";
     select_sql_count += " WHERE ";
