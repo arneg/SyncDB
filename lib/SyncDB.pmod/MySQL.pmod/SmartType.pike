@@ -158,7 +158,7 @@ void create() {
             // migration, to make sure they are all being updated
             if (programp(m)) {
                 migrations[i-1] = m(previous_schema, schema);
-            } else if (!equal(schema->default_row - previous_schema->default_row)) {
+            } else if (!equal(schema->default_row, previous_schema->default_row)) {
                 int need_full_migration = 0;
                 mapping new_defaults = schema->default_row - previous_schema->default_row;
 
