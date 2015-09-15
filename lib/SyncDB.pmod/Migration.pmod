@@ -2,7 +2,7 @@ class Base {
     .Schema from, to;
 
     string describe() {
-        string ret = "Migrating ";
+        string ret = sprintf("Migrating(%O) ", this_program);
         if (from->get_schema_version() != to->get_schema_version()) {
             ret += sprintf("schema version from %d to %d", 
                            from->get_schema_version(),
