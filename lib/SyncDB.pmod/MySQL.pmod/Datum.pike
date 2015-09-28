@@ -203,7 +203,8 @@ int(0..1) drop() {
 
 void save() {
     object key = mutex->lock();
-    save_unlocked();
+    if (sizeof(_modified))
+        save_unlocked();
 }
 
 void save_later(void|int s) {

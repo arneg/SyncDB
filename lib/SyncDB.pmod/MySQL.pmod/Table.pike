@@ -115,8 +115,11 @@ object restrict(object filter) {
 .Query select_sql, select_sql_count, _update_sql, delete_sql, count_sql;
 
 .Query update_sql(array(string) fields, array(mixed) values) {
-    .Query q = (_update_sql + fields*"=%s, ") + "=%s WHERE ";
-    q += values;
+    .Query q = _update_sql;
+    if (sizeof(fields)) {
+        q += fields*"=%s, " + "=%s WHERE ";
+        q += values;
+    }
     return q;
 }
 
