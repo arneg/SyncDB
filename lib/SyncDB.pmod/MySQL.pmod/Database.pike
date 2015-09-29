@@ -80,20 +80,43 @@ private string format_datetime(int ux) {
     return Calendar.Second("unix", ux)->set_timezone("UTC")->format_time();
 }
 
+private mapping decode_syncdb_version_entry(mapping m) {
+    return ([
+        "table_name" : m->table_name,
+        "schema_version" : (int)m->schema_version,
+        "type_versions" : Standards.JSON.decode(m->type_versions),
+        "created" : parse_datetime(m->created),
+        "migration_started" : parse_datetime(m->migration_started),
+        "migration_stopped" : parse_datetime(m->migration_stopped),
+        "version" : (int)m->version,
+    ]);
+}
+
 private mapping fetch_table_info(string name) {
     object sql = sqlcb();
+
     array(mapping) tmp = sql->query("SELECT * from syncdb_versions where table_name = %s;", name);
 
     if (!sizeof(tmp)) return 0;
-    return ([
-        "table_name" : tmp[0]->table_name,
-        "schema_version" : (int)tmp[0]->schema_version,
-        "type_versions" : Standards.JSON.decode(tmp[0]->type_versions),
-        "created" : parse_datetime(tmp[0]->created),
-        "migration_started" : parse_datetime(tmp[0]->migration_started),
-        "migration_stopped" : parse_datetime(tmp[0]->migration_stopped),
-        "version" : (int)tmp[0]->version,
-    ]);
+    return decode_syncdb_version_entry(tmp[0]);
+}
+
+array(mapping) fetch_running_migrations() {
+    if (!has_version_table()) return 0;
+
+    object sql = sqlcb();
+
+    array(mapping) tmp = sql->query("SELECT * from syncdb_versions where migration_stopped is NULL;");
+
+    return map(tmp, decode_syncdb_version_entry);
+}
+
+void stop_failed_migration(string name) {
+    object sql = sqlcb();
+    int now = time();
+    sql->query("UPDATE syncdb_versions SET migration_stopped = %s, version = version + 1 "
+               "WHERE table_name = %s AND migration_stopped is NULL",
+               format_datetime(now), name);
 }
 
 private int start_table_migration(mapping v) {
