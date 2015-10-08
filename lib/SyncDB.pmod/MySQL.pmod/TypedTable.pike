@@ -71,7 +71,7 @@ void insert(object|mapping row, function cb, mixed ... extra) {
 }
 
 array(object) fetch(void|object filter, void|object order, void|object limit) {
-    if (!order && !limit) {
+    if (filter && !order && !limit) {
         array values = filter->get_all_field_values(schema->key);
 
         if (values) {
