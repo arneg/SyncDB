@@ -36,6 +36,14 @@ class Base {
     }
 
     void insert(mapping row) { }
+
+    array get_all_field_values(string field) {
+        return 0;
+    }
+
+    int(-1..1) test(mapping|object row) {
+        return -1;
+    }
 }
 
 class Combine {
@@ -71,6 +79,23 @@ class Or {
 	if (!sizeof(filters)) error("empty filter!");
 	return SyncDB.MySQL.Query("(", filters->encode_sql(table), " OR ") + ")";
     }
+
+    int(-1..1) test(mapping|object row) {
+        foreach (filters;; object f) {
+            if (f->test(row)) return 1;
+        }
+
+        return 0;
+    }
+
+    array get_all_field_values(string field) {
+        array a = filters->get_all_field_values(field);
+
+        // There is one which is not compatible
+        if (Array.any(a, `!)) return 0;
+
+        return predef::`+(@a);
+    }
 }
 
 class And(object ... filters) {
@@ -83,6 +108,25 @@ class And(object ... filters) {
 
     void insert(mapping row) {
         filters->insert(row);
+    }
+
+    int(-1..1) test(mapping|object row) {
+        foreach (filters;; object f) {
+            if (!f->test(row)) return 0;
+        }
+
+        return 1;
+    }
+
+    array get_all_field_values(string field) {
+        array a = filters->get_all_field_values(field);
+
+        // There is one which is not compatible
+        a = filter(a, arrayp);
+
+        if (!sizeof(a)) return 0;
+
+        return predef::`+(@a);
     }
 }
 
@@ -109,7 +153,7 @@ class FieldFilter {
         return objectp(b) && object_program(b) == this_program && type == b->type && value == b->value;
     }
 
-    int(0..1) _equal(mixed b) {
+    int(-1..1) _equal(mixed b) {
         return objectp(b) && object_program(b) == this_program && type == b->type && equal(value, b->value);
     }
 }
@@ -145,6 +189,18 @@ class Equal {
     void insert(mapping new) {
         new[field] = value;
     }
+
+    int(-1..1) test(mapping|object row) {
+        return row[field] == value;
+    }
+
+    array get_all_field_values(string field) {
+        if (field == this_program::field) {
+            return ({ value });
+        } else {
+            return 0;
+        }
+    }
 }
 
 class Ne {
@@ -166,6 +222,10 @@ class Ne {
     string _sprintf(int type) {
 	return sprintf("Ne(%O, %O)", field, value);
     }
+
+    int(-1..1) test(mapping|object row) {
+        return row[field] != value;
+    }
 }
 
 class Not(object filter) {
@@ -177,6 +237,10 @@ class Not(object filter) {
 
     int(0..1) `==(mixed b) {
         return objectp(b) && object_program(b) == this_program && b->filter == filter;
+    }
+
+    int(-1..1) test(mapping|object row) {
+        return !filter->test(row);
     }
 }
 
@@ -192,6 +256,18 @@ class _In {
 
     string _sprintf(int type) {
 	return sprintf("In(%O, %O)", field, value);
+    }
+
+    int(-1..1) test(mapping|object row) {
+        return has_value(value, row[field]);
+    }
+
+    array get_all_field_values(string field) {
+        if (field == this_program::field) {
+            return value + ({ });
+        } else {
+            return 0;
+        }
     }
 }
 
@@ -237,7 +313,6 @@ class Unary(object type, string op) {
 
 	return SyncDB.MySQL.Query("(" + a * " AND " + ")");
     }
-
 }
 
 class Constant(SyncDB.MySQL.Query q) {
@@ -248,13 +323,32 @@ class Constant(SyncDB.MySQL.Query q) {
     }
 }
 
-object `FALSE() {
-    return Constant(SyncDB.MySQL.Query("FALSE"));
+class _FALSE {
+    inherit Constant;
+
+    void create() {
+        ::create(SyncDB.MySQL.Query("FALSE"));
+    }
+
+    int(-1..1) test(mapping|object row) {
+        return 1;
+    }
 }
 
-object `TRUE() {
-    return Constant(SyncDB.MySQL.Query("TRUE"));
+class _TRUE {
+    inherit Constant;
+
+    void create() {
+        ::create(SyncDB.MySQL.Query("TRUE"));
+    }
+
+    int(-1..1) test(mapping|object row) {
+        return 0;
+    }
 }
+
+object FALSE = _FALSE();
+object TRUE = _TRUE();
 
 class True {
     inherit Unary;
@@ -265,6 +359,11 @@ class True {
 
     string _sprintf(int type) {
 	return sprintf("True(%O)", field);
+    }
+
+    int(-1..1) test(mapping|object row) {
+        mixed v = row[field];
+        return !objectp(v) || !v->is_val_null;
     }
 }
 
@@ -282,6 +381,11 @@ class False {
     void insert(mapping row) {
         row[field] = Val.null;
     }
+
+    int(-1..1) test(mapping|object row) {
+        mixed v = row[field];
+        return objectp(v) && v->is_val_null;
+    }
 }
 
 class Gt {
@@ -291,6 +395,11 @@ class Gt {
 
     string _sprintf(int type) {
 	return sprintf("Gt(%O, %O)", field, value);
+    }
+
+    int(-1..1) test(mapping|object row) {
+        mixed v = row[field];
+        return v > value;
     }
 }
 
@@ -302,6 +411,11 @@ class Ge {
     string _sprintf(int type) {
 	return sprintf("Ge(%O, %O)", field, value);
     }
+
+    int(-1..1) test(mapping|object row) {
+        mixed v = row[field];
+        return v >= value;
+    }
 }
 
 class Lt {
@@ -312,6 +426,11 @@ class Lt {
     string _sprintf(int type) {
 	return sprintf("Lt(%O, %O)", field, value);
     }
+
+    int(-1..1) test(mapping|object row) {
+        mixed v = row[field];
+        return v < value;
+    }
 }
 
 class Le {
@@ -321,5 +440,10 @@ class Le {
 
     string _sprintf(int type) {
 	return sprintf("Le(%O, %O)", field, value);
+    }
+
+    int(-1..1) test(mapping|object row) {
+        mixed v = row[field];
+        return v <= value;
     }
 }
