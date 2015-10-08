@@ -80,13 +80,13 @@ array(object) fetch(void|object f, void|object order, void|object limit) {
             if (Array.all(values, objectp)) {
                 array hits = map(values, f->test);
 
-                int min = min(@hits);
+                int tmp = min(@hits);
 
                 // they all match
-                if (min == 1) return values;
+                if (tmp == 1) return values;
 
                 // some don't, but we know for sure
-                if (min == 0) {
+                if (tmp == 0) {
                     return filter(values, hits);
                 }
 
@@ -192,7 +192,6 @@ void destroy() {
 }
 
 void after_delete(object table, mapping keys) {
-    if (table == this) return;
     mixed id = get_unique_identifier(keys);
 
     object datum = m_delete(cache, id);
