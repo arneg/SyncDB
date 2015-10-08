@@ -71,6 +71,30 @@ void insert(object|mapping row, function cb, mixed ... extra) {
 }
 
 array(object) fetch(void|object filter, void|object order, void|object limit) {
+    if (!order && !limit) {
+        array values = filter->get_all_field_values(schema->key);
+
+        if (values) {
+            values = map(values, cache);
+            
+            if (Array.all(values, objectp)) {
+                array hits = map(values, filter->test);
+
+                int min = min(@hits);
+
+                // they all match
+                if (min == 1) return values;
+
+                // some don't, but we know for sure
+                if (min == 0) {
+                    return filter(values, hits);
+                }
+
+                // we don't know, some might not match
+            }
+        }
+    }
+
     array rows = low_select_complex(filter, order, limit);
     object key = mutex->lock();
 
@@ -114,6 +138,9 @@ mixed `->(string index) {
             if (arrayp(v)) {
                 return fetch(schema[field]->In(v), order, limit);
             } else {
+                if (field == schema->key) {
+                    if (has_index(cache, v)) return ({ cache[v] });
+                }
                 return fetch(schema[field]->Equal(v), order, limit);
             }
         };
