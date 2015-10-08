@@ -70,15 +70,15 @@ void insert(object|mapping row, function cb, mixed ... extra) {
     }
 }
 
-array(object) fetch(void|object filter, void|object order, void|object limit) {
-    if (filter && !order && !limit) {
-        array values = filter->get_all_field_values(schema->key);
+array(object) fetch(void|object f, void|object order, void|object limit) {
+    if (f && !order && !limit) {
+        array values = f->get_all_field_values(schema->key);
 
         if (values) {
             values = map(values, cache);
             
             if (Array.all(values, objectp)) {
-                array hits = map(values, filter->test);
+                array hits = map(values, f->test);
 
                 int min = min(@hits);
 
@@ -95,7 +95,7 @@ array(object) fetch(void|object filter, void|object order, void|object limit) {
         }
     }
 
-    array rows = low_select_complex(filter, order, limit);
+    array rows = low_select_complex(f, order, limit);
     object key = mutex->lock();
 
     foreach(rows;int i; mapping|object row) if (mappingp(row)) {
