@@ -186,6 +186,11 @@ int(0..1) is_deleted() {
 void mark_deleted() {
     m_delete(_data, "version");
     _modified = ([]);
+
+    if (save_id) {
+        remove_call_out(save_id);
+        save_id = 0;
+    }
 }
 
 void drop_throw() {
