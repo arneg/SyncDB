@@ -21,6 +21,14 @@ void compile_datum(object gen, object blueprint) {
     fields->compile_datum(gen, blueprint);
 }
 
+void create_dependencies(object table, object database) {
+    fields->create_dependencies(table, database);
+}
+
+void remove_dependencies(object table, object database) {
+    fields->remove_dependencies(table, database);
+}
+
 void before_insert(object(.Table) table, mapping row);
 void after_insert(object(.Table) table, mapping row);
 void before_update(object(.Table) table, mapping row, mapping changes);

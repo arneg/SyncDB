@@ -489,17 +489,20 @@ RETRY: do {
 array(function) get_triggers(string table, string event) {
     // we do not allow before_ events for external dbs, and in particular we dont let them
     // cancel events in other dbs
-    if (name && has_prefix(event, "after_")) {
-        array(object) dbs = .all_databases[name];
-        // this db is registered
-        array ret = ({});
-        if (dbs) foreach (dbs->dependencies;; mapping m) {
-            ret += (m[?table][?event] || ({}));
+    array ret = ({});
+
+    foreach (({ table, 0 });; string table_name) {
+        if (name && has_prefix(event, "after_")) {
+            array(object) dbs = .all_databases[name];
+            // this db is registered
+            if (dbs) foreach (dbs->dependencies;; mapping m) {
+                ret += (m[?table_name][?event] || ({}));
+            }
+        } else {
+            ret += dependencies[?table_name][?event] || ({ });
         }
-        return ret;
-    } else {
-        return dependencies[?table][?event] || ({ });
     }
+    return ret;
 }
 
 void unregister_view(string name, object type) {

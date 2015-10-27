@@ -22,13 +22,11 @@ mapping(string:object) `nfields() {
 }
 
 void set_database(void|object o) {
-    array(object) fields = this_program::fields;
-
-    if (database) fields->remove_dependencies(this, database);
+    if (database) smart_type->remove_dependencies(this, database);
 
     ::set_database(o);
 
-    if (database) fields->create_dependencies(this, database);
+    if (database) smart_type->create_dependencies(this, database);
 }
 
 void low_select(mixed ... args) {
