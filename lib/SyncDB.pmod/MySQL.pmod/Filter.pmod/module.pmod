@@ -447,3 +447,18 @@ class Le {
         return v <= value;
     }
 }
+
+class BitAnd {
+    inherit BinaryFilter;
+
+    string operator = " & ";
+
+    string _sprintf(int type) {
+	return sprintf("BitAnd(%O, %O)", field, value);
+    }
+
+    int(-1..1) test(mapping|object row) {
+        mixed v = row[field];
+        return !!(v & value);
+    }
+}
