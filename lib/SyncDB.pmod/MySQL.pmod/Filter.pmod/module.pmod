@@ -44,6 +44,10 @@ class Base {
     int(-1..1) test(mapping|object row) {
         return -1;
     }
+
+    this_program remove_field(string field) {
+        return this;
+    }
 }
 
 class Combine {
@@ -69,6 +73,16 @@ class Combine {
 
     int(0..1) `==(mixed b) {
         return objectp(b) && object_program(b) == this_program && equal(filters, b->filters);
+    }
+
+    this_program remove_field(string field) {
+        array(object) nf = filters->remove_field(field);
+
+        nf = filter(nf, objectp);
+
+        if (sizeof(nf) == filters) return this;
+
+        return this_program(@nf);
     }
 }
 
@@ -155,6 +169,11 @@ class FieldFilter {
 
     int(-1..1) _equal(mixed b) {
         return objectp(b) && object_program(b) == this_program && type == b->type && equal(value, b->value);
+    }
+
+    this_program remove_field(string field) {
+        if (field == this_program::field) return 0;
+        return this;
     }
 }
 

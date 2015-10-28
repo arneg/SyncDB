@@ -405,8 +405,12 @@ int(0..) update(mapping changes, object filter, mixed ... extra) {
     mixed err = sql_error(sql, catch {
         q(sql);
         int affected = sql->master_sql->affected_rows();
-        trigger("after_change");
-        trigger("after_update", filter, changes, @extra);
+
+        if (affected) {
+            trigger("after_change");
+            trigger("after_update", filter->remove_field("version"), changes, @extra);
+        }
+
         return affected;
     });
 
