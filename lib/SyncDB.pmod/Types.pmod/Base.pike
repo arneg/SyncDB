@@ -182,3 +182,63 @@ void type_versions(mapping(string:int) versions) {
 int(0..1) supports_native_default() {
     return 1;
 }
+
+string solr_type_name() {
+    return "syncdb_"+type_name();
+}
+
+mapping solr_field_type() {
+    return 0;
+}
+
+void add_solr_fields(mapping fields, void|mapping field_defaults) {
+    int skip_base_type = 0;
+    if (!field_defaults) {
+        field_defaults = ([]);
+    }
+
+    foreach (_flags;; object f) {
+        if (f->get_solr_settings) {
+            mapping settings = f->get_solr_settings();
+            if (!settings) skip_base_type = 1;
+            else field_defaults += settings;
+        }
+    }
+
+    if (!skip_base_type && solr_field_type()) {
+        string type = solr_type_name();
+        fields[name] = field_defaults + ([
+            "name" : name,
+            "type" : type,
+            "multiValued" : Val.false,
+        ]);
+
+        if (is->key) {
+            fields[name] += ([
+                "stored" : Val.true,
+                "required" : Val.true,
+            ]);
+        }
+    }
+
+    foreach (_flags;; object f) {
+        if (f->add_solr_fields) {
+            f->add_solr_fields(fields, field_defaults);
+        }
+    }
+}
+
+void add_solr_field_types(mapping types) {
+    mapping type = solr_field_type();
+    string type_name = solr_type_name();
+
+    if (type && !types[type_name]) {
+        types[type] = type + ([ "name" : type_name ]);
+    }
+
+    foreach (_flags;; object f) {
+        if (f->add_solr_field_types) {
+            f->add_solr_field_types(types);
+        }
+    }
+}

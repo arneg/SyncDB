@@ -1,7 +1,8 @@
 inherit .Integer;
 
 void create(string name) {
-    ::create(name, SyncDB.Flags.Default(1), SyncDB.Flags.Index());
+    ::create(name, SyncDB.Flags.Default(1), SyncDB.Flags.Index(),
+             SyncDB.Flags.SolRSettings(([ "stored" : Val.true ])));
 }
 
 object previous_type() {

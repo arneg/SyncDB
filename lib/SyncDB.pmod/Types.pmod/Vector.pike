@@ -120,3 +120,10 @@ int(0..1) supports_native_default() {
 
     return 1;
 }
+
+void add_solr_field_types(mapping types) {
+    fields->add_solr_field_types(types);
+}
+void add_solr_fields(mapping f, void|mapping field_defaults) {
+    fields->add_solr_fields(f, field_defaults);
+}

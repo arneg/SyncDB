@@ -268,3 +268,25 @@ mapping encode_sql(string table, mapping row) {
 
     return coder->encode_sql(row);
 }
+
+mapping get_solr_schema(void|mapping field_default) {
+    mapping ret = ([]);
+    if (!field_default) {
+        field_default = ([
+            "indexed" : Val.true,
+            "stored" : Val.false,
+        ]);
+    }
+
+    mapping types = ([]);
+    fields->add_solr_field_types(types);
+
+    mapping f = ([]);
+    fields->add_solr_fields(f, field_default);
+
+    return ([
+        "fields" : map(sort(indices(f)), f),
+        "fieldTypes" : map(sort(indices(types)), types),
+        "uniqueKey" : key,
+    ]);
+}

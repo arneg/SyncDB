@@ -54,3 +54,10 @@ string type_name() {
 int(0..1) supports_native_default() {
     return !!length;
 }
+
+mapping solr_field_type() {
+    return ([
+        "name" : solr_type_name(),
+        "class" : "org.apache.solr.schema.TextField",
+    ]);
+}

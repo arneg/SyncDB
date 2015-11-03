@@ -53,3 +53,13 @@ array(SyncDB.MySQL.Query) column_definitions(void|function(object:int(0..1)) fil
 string type_name() {
     return "float";
 }
+
+mapping solr_field_type() {
+    return ([
+        "name" : solr_type_name(),
+        "class" : "org.apache.solr.schema.TrieDoubleField",
+        "positionIncrementGap" : "0",
+        "precisionStep" : "0",
+    ]);
+}
+

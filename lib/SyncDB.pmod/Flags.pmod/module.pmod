@@ -229,3 +229,38 @@ class _WriteOnly {
 }
 
 LAZY(WriteOnly, _WriteOnly);
+
+class SolRField {
+    inherit Base;
+
+    constant is_schema_relevant = 0;
+
+    array(mapping) fields;
+
+    void create(mapping ... fields) {
+        this_program::fields = fields;
+    }
+
+    void add_solr_fields(mapping m, mapping def) {
+        foreach (fields;; mapping field) {
+            if (def) field = def + field;
+            m[field->name] = field;
+        }
+    }
+}
+
+class SolRSettings {
+    inherit Base;
+
+    constant is_schema_relevant = 0;
+
+    mapping settings;
+
+    void create(mapping settings) {
+        this_program::settings = settings;
+    }
+
+    mapping get_solr_settings() {
+        return settings;
+    }
+}
