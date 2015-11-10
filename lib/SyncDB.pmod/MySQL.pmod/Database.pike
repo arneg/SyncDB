@@ -486,6 +486,24 @@ RETRY: do {
     return table;
 }
 
+private void _remote_trigger(string event, object table, mixed ... args) {
+    string table_name = table->table_name();
+    array(function) triggers = dependencies[?table_name][?event];
+
+    table = low_get_table(table_name);
+
+    if (table && triggers) foreach (triggers;; function f) {
+        mixed err = catch(f(table, @args));
+        if (err) master()->handle_error(err);
+    }
+}
+
+function get_remote_trigger(string table_name, string event) {
+    if (dependencies[?table_name][?event]) {
+        return Function.curry(_remote_trigger)(event);
+    } else return 0;
+}
+
 array(function) get_triggers(string table, string event) {
     // we do not allow before_ events for external dbs, and in particular we dont let them
     // cancel events in other dbs
@@ -493,14 +511,15 @@ array(function) get_triggers(string table, string event) {
 
     foreach (({ table, 0 });; string table_name) {
         if (name && has_prefix(event, "after_")) {
-            array(object) dbs = .all_databases[name];
             // this db is registered
-            if (dbs) foreach (dbs->dependencies;; mapping m) {
-                ret += (m[?table_name][?event] || ({}));
+            array dbs = .all_databases[name];
+            if (arrayp(dbs)) {
+                dbs -= ({ this });
+                dbs = filter(dbs->get_remote_trigger(table_name, event), functionp);
+                ret += dbs;
             }
-        } else {
-            ret += dependencies[?table_name][?event] || ({ });
         }
+        ret += dependencies[?table_name][?event] || ({ });
     }
     return ret;
 }
