@@ -91,9 +91,11 @@ class SyncTableIndex {
                 core->schema->add_field_type(type, e->get_cb(), type);
             }
 
+            /*
             foreach (types - indices(my_types);; mapping type) {
                 werror("Need to remove: %O\n", type);
             }
+            */
 
             foreach (my_types & indices(types); string name; mapping type) {
                 if (!equal(type, types[name])) {
@@ -109,29 +111,33 @@ class SyncTableIndex {
     }
 
     private void schema_update_done(mapping my_schema, mapping schema, mixed ... results) {
+        int err = 0;
         foreach (results;; array tmp) {
             [int ok, mixed response, mapping type] = tmp;
 
             if (!ok) {
                 werror("Could not create field type: %O\n", type);
+                err = 1;
             }
         }
 
-        update_fields(my_schema, schema);
+        if (!err) update_fields(my_schema, schema);
+    }
+
+    array deep_and(array a, array b) {
+        array ret = ({ });
+        foreach (a;; mixed va) {
+            foreach (b;; mixed vb) {
+                if (equal(va, vb)) ret += ({ va });
+            }
+        }
+
+        return ret;
     }
 
     private void update_fields(mapping my_schema, mapping schema) {
         mapping my_fields = mkmapping(my_schema->fields->name, my_schema->fields);
         mapping fields = mkmapping(schema->fields->name, schema->fields);
-
-        my_fields->timestamp = ([
-            "type" : "syncdb_integer",
-            "name" : "timestamp",
-            "required" : Val.true,
-            "stored" : Val.true,
-            "indexed" : Val.true,
-            "multiValued" : Val.false,
-        ]);
 
         object e = EventAggregator(fields_update_cb, my_schema, schema);
 
@@ -139,9 +145,13 @@ class SyncTableIndex {
             core->schema->add_field(type, e->get_cb(), type);
         }
 
+        /*
         foreach (fields - indices(my_fields);; mapping type) {
-            werror("Need to remove: %O\n", type);
+            if (type->name != "_version_") {
+                core->schema->delete_field(type->name, e->get_cb(), type);
+            }
         }
+        */
 
         foreach (my_fields & indices(fields); string name; mapping type) {
             if (!equal(type, fields[name])) {
@@ -149,43 +159,44 @@ class SyncTableIndex {
             }
         }
 
+        array my_copy_fields = my_schema->copyFields;
+        array copy_fields = schema->copyFields;
+
+        foreach (my_copy_fields - deep_and(my_copy_fields, copy_fields);; mapping conf) {
+            core->schema->add_copy_field(conf->source, conf->dest, e->get_cb(), conf);
+        }
+
+        foreach (copy_fields - deep_and(copy_fields, my_copy_fields);; mapping conf) {
+            core->schema->delete_copy_field(conf->source, conf->dest, e->get_cb(), conf);
+        }
+
         if (!sizeof(e)) synchronize_index();
         else needs_resync = 1;
     }
 
     private void fields_update_cb(mapping my_schema, mapping schema, mixed ... results) {
+        int err = 0;
         foreach (results;; array tmp) {
             [int ok, mixed response, mapping type] = tmp;
 
             if (!ok) {
-                werror("Could not create field: %O\n", type);
+                werror("Could not create field %s: %O\n", type->name, response);
+                err = 1;
             }
         }
 
-        synchronize_index();
+        if (!err) synchronize_index();
     }
 
-    object last_modification_filter(int timestamp);
+    object last_modification_filter();
 
     private void synchronize_index() {
         if (needs_resync || !last_modification_filter) {
             synchronize_all();
         } else {
-            core->select(([ "sort" : "timestamp desc", "q" : "*:*", "rows" : 1 ]),
-                         synchronize_since_cb);
+            synchronize_filter(last_modification_filter());
         }
         werror("starting to synchronize index.\n");
-    }
-
-    private void synchronize_since_cb(int ok, mixed results) {
-        mixed docs;
-        if (!ok || !arrayp(docs = results?->response?->docs) || !sizeof(docs)) {
-            synchronize_all();
-        } else {
-            int timestamp = docs[0]->timestamp;
-
-            synchronize_filter(last_modification_filter(timestamp));
-        }
     }
 
     private ADT.Queue sync_filters = ADT.Queue();
@@ -199,33 +210,57 @@ class SyncTableIndex {
         }
     }
 
+    private void commit_cb(int ok, mixed result) {
+        if (!ok) {
+            werror("Commit failed: %O\n", result);
+        }
+    }
+
+    void sync_done() {
+        core->commit(commit_cb);
+        werror("Sync done.\n");
+    }
+
     private void do_sync() {
         while (1) {
+            object smart_type = table->smart_type;
+
+            if (!smart_type->solr_transform) {
+                error("%O is missing solr_transform callback.\n", smart_type);
+            }
+
             if (sync_iterator) {
                 if (sync_iterator->next()) {
-                    array(object) docs = sync_iterator->value();
+                    array docs = sync_iterator->value();
+
+                    docs = map(docs, smart_type->solr_transform);
 
                     if (sizeof(docs)) {
-                        core->update((array(mapping))docs, update_cb);
+                        core->update(docs, update_cb);
                         return;
                     }
                 }
             }
 
-            if (sync_filters->is_empty()) return;
+            if (sync_filters->is_empty()) {
+                sync_done();
+                return;
+            }
 
             object filter = sync_filters->get();
 
             sync_iterator = table->PageIterator(filter, 0, 100);
 
-            array(object) docs = sync_iterator->value();
+            array docs = sync_iterator->value();
 
             if (!sizeof(docs)) {
                 sync_iterator = 0;
                 continue;
             }
 
-            core->update((array(mapping))docs, update_cb);
+            docs = map(docs, smart_type->solr_transform);
+
+            core->update(docs, update_cb);
             return;
         }
     }
