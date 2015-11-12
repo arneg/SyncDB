@@ -264,3 +264,20 @@ class SolRSettings {
         return settings;
     }
 }
+
+class SolRCopy {
+    inherit Base;
+
+    constant is_schema_relevant = 0;
+    constant is_solr_copy = 1;
+
+    mapping|string|array(string) dst;
+
+    void create(string|array(string) dst) {
+        this_program::dst = dst;
+    }
+
+    mapping|string|array(string) get_destination() {
+        return dst;
+    }
+}

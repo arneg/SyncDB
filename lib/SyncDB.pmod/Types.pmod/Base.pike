@@ -242,3 +242,22 @@ void add_solr_field_types(mapping types) {
         }
     }
 }
+
+array(mapping) get_solr_copy_fields() {
+    array(mapping) ret = ({ });
+    foreach (_flags;; object f) {
+        if (f->is_solr_copy) {
+            mixed v = f->get_destination();
+
+            if (!mappingp(v)) {
+                v = ([
+                    "source" : name,
+                    "dest" : v
+                ]);
+            }
+
+            ret += ({ v });
+        }
+    }
+    return ret;
+}

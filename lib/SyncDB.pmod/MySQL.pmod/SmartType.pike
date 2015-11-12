@@ -208,6 +208,7 @@ MAP_FLAG(COLLATE, Collate);
 MAP_FLAG(CHARSET, Charset);
 MAP_FLAG(SOLR_FIELD, SolRField);
 MAP_FLAG(SOLR_SETTINGS, SolRSettings);
+MAP_FLAG(SOLR_COPY, SolRCopy);
 
 #define MAP_CFLAG(name, rname)   protected object name = SyncDB.Flags. ## rname ( );
 
