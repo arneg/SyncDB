@@ -38,3 +38,10 @@ int(0..1) schema_equal(mixed b) {
 int(0..1) _equal(mixed b) {
     return ::_equal(b) && equal(options, b->options);
 }
+
+mapping solr_field_type() {
+    return ([
+        "name" : solr_type_name(),
+        "class" : "org.apache.solr.schema.StrField",
+    ]);
+}
