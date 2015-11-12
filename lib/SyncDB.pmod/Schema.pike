@@ -20,7 +20,6 @@ string `key() {
 array(object) migrations = ({ });
 private array(object) index_list = ({ });
 
-
 mapping(string:int) type_versions() {
     mapping(string:int) m = ([]);
     fields->type_versions(m);
@@ -269,6 +268,17 @@ mapping encode_sql(string table, mapping row) {
     return coder->encode_sql(row);
 }
 
+mapping solr_field_types = ([]);
+mapping solr_fields = ([]);
+
+void add_solr_field_type(mapping config) {
+    solr_field_types[config->name] = config;
+}
+
+void add_solr_field(mapping config) {
+    solr_fields[config->name] = config;
+}
+
 mapping get_solr_schema(void|mapping field_default) {
     mapping ret = ([]);
     if (!field_default) {
@@ -278,15 +288,28 @@ mapping get_solr_schema(void|mapping field_default) {
         ]);
     }
 
-    mapping types = ([]);
+    mapping types = solr_field_types + ([]);
     fields->add_solr_field_types(types);
 
-    mapping f = ([]);
-    fields->add_solr_fields(f, field_default);
+    mapping normal_fields = solr_fields + ([]);
+    fields->add_solr_fields(normal_fields, field_default);
+
+    mapping dynamic_fields = ([]);
+
+    foreach (normal_fields; string name; mapping conf) {
+        if (has_suffix(name, "*")) {
+            dynamic_fields[name] = conf;
+            m_delete(normal_fields, name);
+        }
+    }
+
+    array(mapping) copy_fields = Array.flatten(fields->get_solr_copy_fields());
 
     return ([
-        "fields" : map(sort(indices(f)), f),
+        "fields" : map(sort(indices(normal_fields)), normal_fields),
         "fieldTypes" : map(sort(indices(types)), types),
+        "copyFields" : copy_fields, 
+        "dynamicFields" : dynamic_fields,
         "uniqueKey" : key,
     ]);
 }
